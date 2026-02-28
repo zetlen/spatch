@@ -1,0 +1,392 @@
+/* style.css — 80s synthwave aesthetic for Sigil Synth */
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+:root {
+  --bg-dark: #0a0a1a;
+  --bg-panel: #12122a;
+  --bg-toolbar: #161633;
+  --neon-pink: #ff2d95;
+  --neon-cyan: #00f0ff;
+  --neon-purple: #b44dff;
+  --neon-yellow: #ffe156;
+  --text-primary: #e0e0ff;
+  --text-muted: #7878a0;
+  --border-glow: rgba(0, 240, 255, 0.3);
+  --btn-hover: rgba(255, 45, 149, 0.15);
+  --btn-active: rgba(255, 45, 149, 0.3);
+  --danger: #ff3355;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: 'Share Tech Mono', monospace;
+  overflow: hidden;
+  height: 100vh;
+  user-select: none;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ---- Toolbars ---- */
+
+#toolbar-top, #toolbar-bottom {
+  background: var(--bg-toolbar);
+  border-bottom: 1px solid var(--border-glow);
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+  z-index: 10;
+}
+
+#toolbar-bottom {
+  border-bottom: none;
+  border-top: 1px solid var(--border-glow);
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  margin-right: 4px;
+}
+
+.separator {
+  width: 1px;
+  height: 24px;
+  background: var(--border-glow);
+  margin: 0 6px;
+}
+
+.logo {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 16px;
+  background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan), var(--neon-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+/* ---- Buttons ---- */
+
+.tool-btn, .action-btn, .pattern-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-primary);
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.15s;
+}
+
+.tool-btn:hover, .action-btn:hover, .pattern-btn:hover {
+  background: var(--btn-hover);
+  border-color: var(--neon-pink);
+}
+
+.tool-btn.active, .pattern-btn.active {
+  background: var(--btn-active);
+  border-color: var(--neon-pink);
+  box-shadow: 0 0 8px rgba(255, 45, 149, 0.4);
+}
+
+.action-btn.danger {
+  color: var(--danger);
+}
+
+.action-btn.danger:hover {
+  background: rgba(255, 51, 85, 0.15);
+  border-color: var(--danger);
+}
+
+.play-btn {
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-purple));
+  border: none;
+  color: white;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 2px;
+  transition: all 0.2s;
+}
+
+.play-btn:hover {
+  box-shadow: 0 0 20px rgba(255, 45, 149, 0.5), 0 0 40px rgba(180, 77, 255, 0.3);
+  transform: scale(1.02);
+}
+
+.play-btn.playing {
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+  animation: pulse-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-glow {
+  from { box-shadow: 0 0 10px rgba(0, 240, 255, 0.3); }
+  to   { box-shadow: 0 0 25px rgba(0, 240, 255, 0.6), 0 0 50px rgba(180, 77, 255, 0.3); }
+}
+
+/* ---- Swatch ---- */
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.2);
+  cursor: pointer;
+  background: hsl(200, 80%, 50%);
+  transition: border-color 0.15s;
+}
+
+.swatch:hover {
+  border-color: var(--neon-cyan);
+}
+
+/* ---- Select ---- */
+
+select {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ---- Text input ---- */
+
+.text-input {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  width: 140px;
+}
+
+.text-input:focus {
+  border-color: var(--neon-cyan);
+  outline: none;
+}
+
+/* ---- Canvas Area ---- */
+
+#canvas-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(180, 77, 255, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(255, 45, 149, 0.04) 0%, transparent 50%),
+    var(--bg-dark);
+}
+
+#canvas-wrap {
+  position: relative;
+  /* dynamically sized by JS to maintain square aspect ratio */
+}
+
+#sigil-canvas {
+  display: block;
+  background: #1a1a2e;
+  /* ADSR corners will be set via JS */
+  box-shadow:
+    0 0 30px rgba(0, 240, 255, 0.08),
+    0 0 60px rgba(180, 77, 255, 0.05),
+    inset 0 0 60px rgba(0, 0, 0, 0.3);
+  image-rendering: auto;
+}
+
+/* ---- Color Picker Panel ---- */
+
+.panel {
+  position: fixed;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glow);
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.panel.hidden {
+  display: none;
+}
+
+.panel-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.panel-tab {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-muted);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.panel-tab.active {
+  color: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.1);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.hsl-inputs, .linear-stops {
+  display: flex;
+  gap: 8px;
+}
+
+.hsl-inputs label, .linear-stops label {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hsl-inputs input, .linear-stops input {
+  width: 50px;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  text-align: center;
+}
+
+.lab-picker {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.lab-picker input[type="range"] {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  height: 160px;
+  accent-color: var(--neon-cyan);
+}
+
+.lab-stop-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.linear-stops {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.linear-stop {
+  display: flex;
+  gap: 6px;
+}
+
+#angle-dial {
+  cursor: crosshair;
+}
+
+/* ---- Scanline overlay on canvas (pure CSS) ---- */
+
+#canvas-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 3px,
+    rgba(0, 0, 0, 0.03) 3px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  z-index: 1;
+}
+
+/* ---- Hidden utility ---- */
+
+.hidden {
+  display: none !important;
+}
+
+/* ---- Responsive ---- */
+
+@media (max-width: 700px) {
+  #toolbar-top, #toolbar-bottom {
+    padding: 4px 6px;
+    gap: 4px;
+  }
+  .logo {
+    font-size: 12px;
+  }
+  .tool-btn, .action-btn, .pattern-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+  .play-btn {
+    padding: 6px 14px;
+    font-size: 11px;
+  }
+}

@@ -1,0 +1,172 @@
+// shapes.js — Hit testing, selection, drag/resize/rotate
+
+const HANDLE_SIZE = 8;
+const ROT_HANDLE_OFFSET = 25;
+
+// Hit test against all shapes (back-to-front, return topmost)
+export function hitTestShapes(state, mx, my, canvasSize) {
+  // Iterate in reverse (front shapes first)
+  for (let i = state.shapes.length - 1; i >= 0; i--) {
+    const shape = state.shapes[i];
+    if (isPointInShape(shape, mx, my, canvasSize)) {
+      return shape.id;
+    }
+  }
+  return null;
+}
+
+function isPointInShape(shape, mx, my, canvasSize) {
+  const cx = shape.x * canvasSize;
+  const cy = shape.y * canvasSize;
+  const r = (shape.size / 2) * canvasSize;
+  const rotRad = shape.rotation * Math.PI / 180;
+
+  // Transform mouse point into shape-local coordinates
+  const dx = mx - cx;
+  const dy = my - cy;
+  const cos = Math.cos(-rotRad);
+  const sin = Math.sin(-rotRad);
+  const lx = dx * cos - dy * sin;
+  const ly = dx * sin + dy * cos;
+
+  switch (shape.type) {
+    case 'circle':
+      return (lx * lx + ly * ly) <= r * r;
+
+    case 'square':
+      return Math.abs(lx) <= r && Math.abs(ly) <= r;
+
+    case 'triangle': {
+      // Equilateral triangle inscribed in circle of radius r
+      const verts = [];
+      for (let i = 0; i < 3; i++) {
+        const angle = (i * 2 * Math.PI / 3) - Math.PI / 2;
+        verts.push([Math.cos(angle) * r, Math.sin(angle) * r]);
+      }
+      return pointInTriangle(lx, ly, verts[0], verts[1], verts[2]);
+    }
+
+    default:
+      return false;
+  }
+}
+
+function pointInTriangle(px, py, v0, v1, v2) {
+  const d00 = dot(v0, v1, v0, v1);
+  const d01 = dot(v0, v1, v0, v2);
+  const d02 = dot(v0, v1, [0, 0], [px - v0[0], py - v0[1]]);
+  const d11 = dot(v0, v2, v0, v2);
+  const d12 = dot(v0, v2, [0, 0], [px - v0[0], py - v0[1]]);
+
+  // Use barycentric coordinates
+  const denom = (v1[0] - v0[0]) * (v2[1] - v0[1]) - (v2[0] - v0[0]) * (v1[1] - v0[1]);
+  if (Math.abs(denom) < 0.001) return false;
+  const u = ((v2[1] - v0[1]) * (px - v0[0]) + (v0[0] - v2[0]) * (py - v0[1])) / denom;
+  const v = ((v0[1] - v1[1]) * (px - v0[0]) + (v1[0] - v0[0]) * (py - v0[1])) / denom;
+  return u >= 0 && v >= 0 && (u + v) <= 1;
+}
+
+function dot(a0, a1, b0, b1) {
+  return (a1[0] - a0[0]) * (b1[0] - b0[0]) + (a1[1] - a0[1]) * (b1[1] - b0[1]);
+}
+
+// Hit test selection handles. Returns handle type or null.
+export function hitTestHandles(shape, mx, my, canvasSize) {
+  if (!shape) return null;
+  const cx = shape.x * canvasSize;
+  const cy = shape.y * canvasSize;
+  const r = (shape.size / 2) * canvasSize;
+  const rotRad = shape.rotation * Math.PI / 180;
+
+  // Transform to local coords
+  const dx = mx - cx;
+  const dy = my - cy;
+  const cos = Math.cos(-rotRad);
+  const sin = Math.sin(-rotRad);
+  const lx = dx * cos - dy * sin;
+  const ly = dx * sin + dy * cos;
+
+  // Rotation handle
+  const rotY = -r - ROT_HANDLE_OFFSET;
+  if (Math.abs(lx) < 8 && Math.abs(ly - rotY) < 8) {
+    return 'rotate';
+  }
+
+  // Resize handles (corners and midpoints)
+  const handles = [
+    { x: -r, y: -r, type: 'nw' },
+    { x:  r, y: -r, type: 'ne' },
+    { x:  r, y:  r, type: 'se' },
+    { x: -r, y:  r, type: 'sw' },
+    { x:  0, y: -r, type: 'n' },
+    { x:  r, y:  0, type: 'e' },
+    { x:  0, y:  r, type: 's' },
+    { x: -r, y:  0, type: 'w' },
+  ];
+
+  for (const h of handles) {
+    if (Math.abs(lx - h.x) < HANDLE_SIZE && Math.abs(ly - h.y) < HANDLE_SIZE) {
+      return h.type;
+    }
+  }
+
+  return null;
+}
+
+// Hit test ADSR corner handles. Returns corner name or null.
+export function hitTestADSRCorner(envelope, mx, my, canvasSize) {
+  const maxR = canvasSize * 0.15;
+  const corners = [
+    { name: 'attack',  val: envelope.attack / 2.0,   cx: 0,          cy: canvasSize, ox: 1,  oy: -1 },
+    { name: 'decay',   val: envelope.decay / 2.0,    cx: 0,          cy: 0,          ox: 1,  oy: 1 },
+    { name: 'sustain', val: envelope.sustain,         cx: canvasSize, cy: 0,          ox: -1, oy: 1 },
+    { name: 'release', val: envelope.release / 3.0,   cx: canvasSize, cy: canvasSize, ox: -1, oy: -1 },
+  ];
+
+  for (const corner of corners) {
+    const r = corner.val * maxR;
+    // The handle is at the midpoint of the arc
+    const handleX = corner.cx + corner.ox * r * 0.7;
+    const handleY = corner.cy + corner.oy * r * 0.7;
+    const dist = Math.hypot(mx - handleX, my - handleY);
+    if (dist < 12) return corner.name;
+  }
+
+  return null;
+}
+
+// Calculate new size from a resize handle drag
+export function calcResize(shape, handleType, localDx, localDy, canvasSize) {
+  const r = (shape.size / 2) * canvasSize;
+  let newR = r;
+
+  switch (handleType) {
+    case 'nw': case 'se':
+      newR = r + (handleType === 'se' ? 1 : -1) * (localDx + localDy) / 2;
+      break;
+    case 'ne': case 'sw':
+      newR = r + (handleType === 'ne' ? 1 : -1) * (localDx - localDy) / 2;
+      break;
+    case 'n': case 's':
+      newR = r + (handleType === 's' ? 1 : -1) * localDy;
+      break;
+    case 'e': case 'w':
+      newR = r + (handleType === 'e' ? 1 : -1) * localDx;
+      break;
+  }
+
+  // Clamp
+  newR = Math.max(10, Math.min(canvasSize * 0.45, newR));
+  return (newR * 2) / canvasSize; // return normalized size
+}
+
+// Calculate rotation from mouse position relative to shape center
+export function calcRotation(shape, mx, my, canvasSize) {
+  const cx = shape.x * canvasSize;
+  const cy = shape.y * canvasSize;
+  const angle = Math.atan2(my - cy, mx - cx);
+  // Convert to degrees, offset so "up" = 0
+  let deg = (angle * 180 / Math.PI) + 90;
+  if (deg < 0) deg += 360;
+  return deg % 360;
+}
