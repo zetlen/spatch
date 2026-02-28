@@ -55,45 +55,6 @@
     <canvas id="c" width="800" height="800"></canvas>
     <button id="play-btn">&#9654; PLAY</button>
   </div>
-  <script type="module">
-    import { render } from './js/canvas.js';
-    import { AudioEngine } from './js/audio.js';
-    import { deserializeState } from './js/serialize.js';
-    import { updateCanvasBorderRadius } from './js/envelope.js';
-
-    const hash = window.location.hash.slice(1);
-    if (!hash) {
-      document.body.innerHTML = '<p style="color:#e0e0ff;text-align:center;padding:2em;">No sigil data found.</p>';
-    } else {
-      const state = deserializeState(hash);
-      if (!state) {
-        document.body.innerHTML = '<p style="color:#e0e0ff;text-align:center;padding:2em;">Invalid sigil data.</p>';
-      } else {
-        const canvas = document.getElementById('c');
-        const ctx = canvas.getContext('2d');
-        const audio = new AudioEngine();
-
-        render(ctx, state, 800, null, null);
-        updateCanvasBorderRadius(canvas, state.envelope, 800);
-
-        const btn = document.getElementById('play-btn');
-
-        btn.addEventListener('mousedown', async () => {
-          if (state.shapes.length === 0) return;
-          await audio.play(state, state.envelope);
-          btn.classList.add('playing');
-          btn.textContent = '■ STOP';
-        });
-
-        btn.addEventListener('mouseup', () => {
-          if (audio.isPlaying) {
-            audio.release(state.envelope);
-            btn.classList.remove('playing');
-            btn.innerHTML = '&#9654; PLAY';
-          }
-        });
-      }
-    }
-  </script>
+  <script type="module" src="js/embed-entry.js"></script>
 </body>
 </html>
