@@ -113,23 +113,20 @@ export function hitTestHandles(shape, mx, my, canvasSize) {
   return null;
 }
 
-// Hit test ADSR corner handles. Returns corner name or null.
+// Hit test ADSR corners. Returns corner name if mouse is near a canvas corner.
 export function hitTestADSRCorner(envelope, mx, my, canvasSize) {
-  const maxR = canvasSize * 0.15;
+  const hitRadius = canvasSize * 0.08;
   const corners = [
-    { name: 'attack',  val: envelope.attack / 2.0,   cx: 0,          cy: canvasSize, ox: 1,  oy: -1 },
-    { name: 'decay',   val: envelope.decay / 2.0,    cx: 0,          cy: 0,          ox: 1,  oy: 1 },
-    { name: 'sustain', val: envelope.sustain,         cx: canvasSize, cy: 0,          ox: -1, oy: 1 },
-    { name: 'release', val: envelope.release / 3.0,   cx: canvasSize, cy: canvasSize, ox: -1, oy: -1 },
+    { name: 'attack',  cx: 0,          cy: canvasSize },
+    { name: 'decay',   cx: 0,          cy: 0 },
+    { name: 'sustain', cx: canvasSize, cy: 0 },
+    { name: 'release', cx: canvasSize, cy: canvasSize },
   ];
 
   for (const corner of corners) {
-    const r = corner.val * maxR;
-    // The handle is at the midpoint of the arc
-    const handleX = corner.cx + corner.ox * r * 0.7;
-    const handleY = corner.cy + corner.oy * r * 0.7;
-    const dist = Math.hypot(mx - handleX, my - handleY);
-    if (dist < 12) return corner.name;
+    if (Math.hypot(mx - corner.cx, my - corner.cy) < hitRadius) {
+      return corner.name;
+    }
   }
 
   return null;

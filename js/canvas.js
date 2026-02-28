@@ -16,9 +16,6 @@ export function render(ctx, state, canvasSize, selectedId, playingShapeIds) {
   // Chromatic pitch guide lines
   drawChromaticGuides(ctx, canvasSize);
 
-  // ADSR corner arcs
-  drawADSRCorners(ctx, canvasSize, state.envelope);
-
   // Shapes (back to front)
   for (let i = 0; i < state.shapes.length; i++) {
     const shape = state.shapes[i];
@@ -55,57 +52,6 @@ function drawChromaticGuides(ctx, size) {
   ctx.restore();
 }
 
-export function drawADSRCorners(ctx, size, envelope) {
-  const maxR = size * 0.15;
-  const corners = [
-    { x: 0,    y: size, param: 'attack',  val: envelope.attack / 2.0 },   // bottom-left
-    { x: 0,    y: 0,    param: 'decay',   val: envelope.decay / 2.0 },    // top-left
-    { x: size, y: 0,    param: 'sustain', val: envelope.sustain },         // top-right
-    { x: size, y: size, param: 'release', val: envelope.release / 3.0 },   // bottom-right
-  ];
-
-  ctx.save();
-  for (const corner of corners) {
-    const r = corner.val * maxR;
-    if (r < 2) continue;
-
-    // Determine arc angles based on corner position
-    let startAngle, endAngle;
-    if (corner.x === 0 && corner.y === size) {      // bottom-left
-      startAngle = -Math.PI / 2; endAngle = 0;
-      ctx.save(); ctx.translate(corner.x + r, corner.y - r);
-    } else if (corner.x === 0 && corner.y === 0) {  // top-left
-      startAngle = 0; endAngle = Math.PI / 2;
-      ctx.save(); ctx.translate(corner.x + r, corner.y + r);
-    } else if (corner.x === size && corner.y === 0) { // top-right
-      startAngle = Math.PI / 2; endAngle = Math.PI;
-      ctx.save(); ctx.translate(corner.x - r, corner.y + r);
-    } else {                                           // bottom-right
-      startAngle = Math.PI; endAngle = Math.PI * 1.5;
-      ctx.save(); ctx.translate(corner.x - r, corner.y - r);
-    }
-
-    // Glow arc
-    ctx.beginPath();
-    ctx.arc(0, 0, r, startAngle, endAngle);
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#00f0ff';
-    ctx.shadowBlur = 10;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // Handle dot
-    const midAngle = (startAngle + endAngle) / 2;
-    ctx.beginPath();
-    ctx.arc(Math.cos(midAngle) * r, Math.sin(midAngle) * r, 4, 0, Math.PI * 2);
-    ctx.fillStyle = '#00f0ff';
-    ctx.fill();
-
-    ctx.restore();
-  }
-  ctx.restore();
-}
 
 function drawShape(ctx, shape, canvasSize, isSelected, isPlaying) {
   const cx = shape.x * canvasSize;

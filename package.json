@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "bun run build.ts",
-    "dev": "bun run build.ts --dev",
+    "dev": "bun run build.ts --dev --watch --serve",
     "clean": "rm -rf dist",
     "serve": "cd dist && bunx serve"
   },
