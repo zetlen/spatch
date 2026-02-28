@@ -59,6 +59,9 @@ let needsRender = true;
 state.onChange(() => {
   needsRender = true;
   debouncedSave();
+  if (audio.isPlaying) {
+    audio.updateVoices(state.data);
+  }
 });
 
 function renderLoop() {
@@ -159,6 +162,9 @@ canvas.addEventListener('mousedown', (e) => {
   // Shape placement tools
   if (tool === 'triangle' || tool === 'square' || tool === 'circle') {
     state.addShape(tool, nx, ny);
+    toolbar.currentTool = 'select';
+    toolbar._updateToolActive();
+    decoTool.setTool(null);
     toolbar.syncToSelectedShape();
     needsRender = true;
     return;
@@ -375,26 +381,74 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// ---- Play button ----
+// ---- Latch & Play button ----
 
 const playBtn = document.getElementById('btn-play');
+const latchBtn = document.getElementById('btn-latch');
+const latchSlider = document.getElementById('latch-position');
+const canvasWrap = document.getElementById('canvas-wrap');
+
+let latchMode = false;
+
+function stopPlayback() {
+  audio.release(state.data.envelope);
+  playBtn.classList.remove('playing');
+  playBtn.textContent = '\u25B6 PLAY';
+  latchSlider.classList.add('hidden');
+  const releaseMs = state.data.envelope.release * 1000 + 100;
+  setTimeout(() => {
+    canvasWrap.classList.remove('playing');
+    needsRender = true;
+  }, releaseMs);
+}
+
+latchBtn.addEventListener('click', () => {
+  latchMode = !latchMode;
+  latchBtn.classList.toggle('active', latchMode);
+  if (!latchMode && audio.isPlaying) {
+    stopPlayback();
+  }
+});
 
 playBtn.addEventListener('mousedown', async (e) => {
   e.preventDefault();
+  if (latchMode) return; // latch uses click, not mousedown
   if (state.data.shapes.length === 0) return;
 
   await audio.play(state.data, state.data.envelope);
   playBtn.classList.add('playing');
-  playBtn.textContent = '■ STOP';
+  canvasWrap.classList.add('playing');
+  playBtn.textContent = '\u25A0 STOP';
   needsRender = true;
 });
 
 playBtn.addEventListener('mouseup', () => {
+  if (latchMode) return; // latch uses click, not mouseup
   if (audio.isPlaying) {
-    audio.release(state.data.envelope);
-    playBtn.classList.remove('playing');
-    playBtn.innerHTML = '&#9654; PLAY';
-    setTimeout(() => { needsRender = true; }, state.data.envelope.release * 1000 + 100);
+    stopPlayback();
+  }
+});
+
+playBtn.addEventListener('click', async () => {
+  if (!latchMode) return; // non-latch handled by mousedown/mouseup
+  if (state.data.shapes.length === 0) return;
+
+  if (audio.isPlaying) {
+    stopPlayback();
+  } else {
+    await audio.play(state.data, state.data.envelope);
+    playBtn.classList.add('playing');
+    canvasWrap.classList.add('playing');
+    playBtn.textContent = '\u25A0 STOP';
+    latchSlider.value = 1;
+    latchSlider.classList.remove('hidden');
+    needsRender = true;
+  }
+});
+
+latchSlider.addEventListener('input', () => {
+  if (audio.isPlaying) {
+    audio.setEnvelopePosition(parseFloat(latchSlider.value), state.data.envelope);
   }
 });
 

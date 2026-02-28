@@ -234,6 +234,42 @@ select {
   image-rendering: auto;
 }
 
+/* ---- Latch button & slider ---- */
+
+#btn-latch.active {
+  background: rgba(0, 240, 255, 0.2);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+  color: var(--neon-cyan);
+}
+
+.latch-slider {
+  width: 80px;
+  height: 4px;
+  accent-color: var(--neon-cyan);
+  cursor: pointer;
+}
+
+/* ---- Canvas playing glow ---- */
+
+#canvas-wrap.playing #sigil-canvas {
+  animation: canvas-glow 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes canvas-glow {
+  from {
+    box-shadow:
+      0 0 20px rgba(0, 240, 255, 0.2),
+      0 0 40px rgba(180, 77, 255, 0.1);
+  }
+  to {
+    box-shadow:
+      0 0 40px rgba(0, 240, 255, 0.4),
+      0 0 80px rgba(180, 77, 255, 0.25),
+      0 0 120px rgba(0, 240, 255, 0.1);
+  }
+}
+
 /* ---- Color Picker Panel ---- */
 
 .panel {

@@ -12,7 +12,7 @@ for (let octave = 0; octave < 3; octave++) {
 }
 PENTATONIC_SEMITONES.push(36); // top: 3 octaves above root
 
-const BASE_MIDI = 48; // C3
+export const BASE_MIDI = 48; // C3
 
 function midiToFreq(midi) {
   return 440 * Math.pow(2, (midi - 69) / 12);
@@ -275,6 +275,40 @@ export class AudioEngine {
     }, 650);
   }
 
+  setEnvelopePosition(t, envelope) {
+    if (!this.isPlaying || !this.envelopeGain) return;
+    const attack = Math.max(0.01, envelope.attack);
+    const decay = Math.max(0.01, envelope.decay);
+    const sustain = Math.max(0, Math.min(1, envelope.sustain));
+    const totalTime = attack + decay;
+    const actualTime = t * totalTime;
+    let gain;
+    if (actualTime <= attack) {
+      gain = actualTime / attack;
+    } else {
+      gain = 1.0 - ((actualTime - attack) / decay) * (1.0 - sustain);
+    }
+    const ctx = this.audioCtx;
+    const now = ctx.currentTime;
+    this.envelopeGain.gain.cancelScheduledValues(now);
+    this.envelopeGain.gain.setValueAtTime(this.envelopeGain.gain.value, now);
+    this.envelopeGain.gain.linearRampToValueAtTime(gain, now + 0.05);
+  }
+
+  updateVoices(sigilState) {
+    if (!this.isPlaying || !this.audioCtx) return;
+    const now = this.audioCtx.currentTime;
+    for (const voice of this.activeVoices) {
+      const shape = sigilState.shapes.find(s => s.id === voice.shapeId);
+      if (!shape) continue;
+      voice.oscillator.frequency.setValueAtTime(yToFrequency(shape.y), now);
+      voice.oscillator.detune.setValueAtTime(rotationToDetune(shape.rotation), now);
+      voice.gain.gain.setValueAtTime(sizeToGain(shape.size), now);
+      voice.panner.pan.setValueAtTime(xToPan(shape.x), now);
+      applyColorFilter(voice.filter, shape.fill);
+    }
+  }
+
   stop() {
     if (!this.isPlaying) return;
     this._cleanup();
@@ -343,6 +377,6 @@ export class AudioEngine {
     layerEQ.connect(panner);
     panner.connect(this.masterGain || ctx.destination);
 
-    return { oscillator: osc, outputNode: panner, effectDispose };
+    return { oscillator: osc, outputNode: panner, effectDispose, shapeId: shape.id, gain, filter, panner };
   }
 }
