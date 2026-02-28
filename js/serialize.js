@@ -1,6 +1,6 @@
 // serialize.js — URL encode/decode sigil state with lz-string
 
-// LZString is loaded globally from lib/lz-string.min.js
+import LZString from 'lz-string';
 
 export function serializeState(state) {
   const compact = compactify(state);

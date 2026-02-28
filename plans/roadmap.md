@@ -39,6 +39,45 @@
 - [ ] **ADSR corner drag reference point mismatch** — `js/app.js:432-440` vs `js/shapes.js:117-136` — **M**
   `getCornerPosition` returns the exact canvas corner, but the visual handle dot is drawn at the arc midpoint, and hit testing uses yet another offset. Drag distance is calculated from the wrong point, causing unintuitive behavior. Fix requires unifying the three coordinate systems.
 
+- [ ] **Latch mode doesn't play newly added shapes** — `js/audio.js`, `js/app.js` — **M**
+  When latch/lock mode is active and audio is playing, adding a new shape doesn't add it to the playing voices. `updateVoices` only updates existing voices by shape ID; it doesn't create new voices for shapes added after playback started.
+
+- [ ] **Volume inconsistent across shape types** — `js/audio.js` — **S**
+  Circle (sine), square, and triangle (sawtooth) oscillators have different perceived loudness at the same `sizeToGain` value. Square and sawtooth are inherently louder than sine. Needs per-waveform gain normalization.
+
+- [ ] **Radial and linear gradient colors not choosable** — `js/toolbar.js`, `js/colors.js` — **M**
+  The radial (Lab) and linear (HSL pair) color picker tabs don't allow intuitive color selection. The Lab picker canvas and linear stop inputs aren't properly wired to update shape fill in all modes.
+
+- [ ] **Rotation has no audible effect** — `js/audio.js` — **M**
+  Rotation currently maps to 0–50 cents of detune, which is barely perceptible. For triangle shapes (sawtooth osc), rotation should crossfade toward a triangle wave at 180°. For square shapes, rotation should adjust pulse width / phase. Circle (sine) could modulate harmonic content.
+
+- [ ] **Curlicues and text decorations have no audio effect** — `js/decorations.js`, `js/audio.js` — **M**
+  Decorations are visual-only. Text should trigger text-to-speech or vocoder synthesis. Curlicues should map to some audio parameter. The `vocoder.js` module exists but is never wired up.
+
+- [ ] **Layer buttons have unclear icons** — `index.html` — **XS**
+  The bring-to-front (⇧) and send-to-back (⇩) buttons use generic arrow symbols. Should use overlapping-square icons like Photoshop's "arrange" buttons to indicate layer ordering.
+
+- [ ] **Text labels in toolbar should be symbols only** — `index.html`, `css/style.css` — **S**
+  Toolbar labels ("Fill", "Pattern", "Layers") take up space and clutter the UI. All labels should be removed from visible text; use only icons/symbols with `title` and `alt` attributes for accessibility.
+
+- [ ] **Patterns should be a dropdown menu** — `index.html`, `js/toolbar.js`, `css/style.css` — **S**
+  Pattern selection currently uses a row of buttons that takes up toolbar space. Should be a dropdown/select menu or a single button that opens a popup menu.
+
+- [ ] **No copy and paste for shapes** — `js/app.js`, `js/state.js` — **M**
+  No way to duplicate a shape. Ctrl+C/Ctrl+V should copy the selected shape and paste it with a slight offset. Also useful: Ctrl+D for duplicate-in-place.
+
+- [ ] **Rename from "Sigil Synth" to "spatch"** — `index.html`, `embed.html`, `package.json` — **XS**
+  The app should be called "spatch" everywhere: page title, logo text, package name.
+
+- [ ] **Share/embed buttons should be removed for now** — `index.html`, `js/app.js` — **XS**
+  Remove the Share and Embed (`</>`) buttons from the toolbar until the sharing workflow is more polished.
+
+- [ ] **Play/latch UI is confusing** — `index.html`, `js/app.js`, `css/style.css` — **M**
+  Separate play and latch buttons are unclear. Replace with three play button variants: normal play (press-and-hold), latched play (click to toggle, with lock icon), and loop play (auto-repeat). These should be visually distinct versions of the same play action.
+
+- [ ] **Duration should be a slider** — `index.html`, `js/app.js`, `js/audio.js` — **S**
+  Add a duration slider (1–5 seconds) that controls how long the overall playback lasts. This replaces or supplements the ADSR timing for a simpler mental model of "how long does it play."
+
 ### Low Severity / Dead Code
 
 - [ ] **Dead code in `pointInTriangle`** — `js/shapes.js:54-60` — **XS**
@@ -83,8 +122,8 @@
 ## Tech Debt
 
 - [ ] **Migrate to TypeScript** — **L**
-- [ ] **Add bundling and minification** — **M**
-- [ ] **Use `package.json` and Bun instead of vendoring libs** — **S**
+- [x] **Add bundling and minification** — **M**
+- [x] **Use `package.json` and Bun instead of vendoring libs** — **S**
 - [ ] **Do a not-invented-here audit** — **M**
 
 ---

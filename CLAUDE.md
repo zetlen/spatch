@@ -2,18 +2,21 @@
 
 ## What This Is
 
-Sigil Synth is a zero-dependency browser instrument. You compose visual sigils from
-geometric shapes and hear them as synthesized chords. Every visual property maps to
-an audio parameter.
+Sigil Synth is a browser instrument. You compose visual sigils from geometric shapes
+and hear them as synthesized chords. Every visual property maps to an audio parameter.
 
 ## Project Structure
 
 ```
-index.html           Main app (open directly in browser, no build step)
+package.json         Package manifest (Bun)
+bun.lock             Lockfile
+build.ts             Build script (Bun.build)
+index.html           Main app (source HTML entry point)
 embed.html           Standalone embed viewer (reads state from URL hash)
 css/style.css        All styles (CSS custom properties, synthwave theme)
 js/
   app.js             Entry point: init, event wiring, render loop
+  embed-entry.js     Entry point for embed.html viewer
   state.js           SigilState class: data model, undo/redo, CRUD
   canvas.js          Canvas 2D rendering (shapes, decorations, selection UI)
   shapes.js          Hit testing, resize/rotate math
@@ -30,17 +33,20 @@ js/
   layers.js          Layer EQ shelving helper
   worklets/
     bitcrusher.js    AudioWorkletProcessor for the "rough" pattern effect
-lib/
-  lz-string.min.js   Vendored LZ-String (only external dependency)
+dist/                Build output (gitignored)
 plans/
   sigil-synth-design.md  Full design document
 ```
 
 ## How to Run
 
-Open `index.html` in a browser. No build, no install, no server required.
-(A local server like `python3 -m http.server` is needed for ES module loading
-and AudioWorklet registration.)
+```bash
+bun install          # install dependencies
+bun run build        # build to dist/ (minified)
+bun run dev          # build to dist/ (unminified, with source maps)
+```
+
+Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 
 ## Key Concepts
 
