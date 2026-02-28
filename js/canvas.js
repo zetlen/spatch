@@ -2,6 +2,7 @@
 
 import { getFillStyle } from './colors.js';
 import { applyPattern } from './patterns.js';
+import { BASE_MIDI } from './audio.js';
 
 const CANVAS_BG = '#1a1a2e';
 
@@ -12,8 +13,8 @@ export function render(ctx, state, canvasSize, selectedId, playingShapeIds) {
   ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, canvasSize, canvasSize);
 
-  // Subtle grid for placement guidance
-  drawGrid(ctx, canvasSize);
+  // Chromatic pitch guide lines
+  drawChromaticGuides(ctx, canvasSize);
 
   // ADSR corner arcs
   drawADSRCorners(ctx, canvasSize, state.envelope);
@@ -37,16 +38,20 @@ export function render(ctx, state, canvasSize, selectedId, playingShapeIds) {
   }
 }
 
-function drawGrid(ctx, size) {
+function drawChromaticGuides(ctx, size) {
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.02)';
   ctx.lineWidth = 1;
-  const step = size / 16;
-  for (let i = 1; i < 16; i++) {
-    const p = i * step;
-    ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
+  for (let s = 0; s <= 36; s++) {
+    const y = (1 - s / 36) * size;
+    const isOctave = s % 12 === 0;
+    ctx.strokeStyle = isOctave ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)';
+    ctx.setLineDash(isOctave ? [6, 8] : [4, 8]);
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(size, y);
+    ctx.stroke();
   }
+  ctx.setLineDash([]);
   ctx.restore();
 }
 
