@@ -4,7 +4,8 @@ import { serializeState } from './serialize.js';
 
 export function generateEmbedSnippet(state, host) {
   const encoded = serializeState(state);
-  const url = `${host || window.location.origin + window.location.pathname}#${encoded}`;
+  const base = host || window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'embed.html';
+  const url = `${base}#${encoded}`;
 
   const iframe = `<iframe src="${url}" width="400" height="400" style="border:none;border-radius:8px;" allow="autoplay"></iframe>`;
 

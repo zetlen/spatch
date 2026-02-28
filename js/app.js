@@ -9,7 +9,6 @@ import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.js';
 import { DecorationTool } from './decorations.js';
 import { saveToURL, loadFromURL } from './serialize.js';
 import { showEmbedModal, copyToClipboard } from './embed.js';
-import { serializeState } from './serialize.js';
 
 // ---- Init ----
 
@@ -141,7 +140,8 @@ canvas.addEventListener('mousedown', (e) => {
   if (e.shiftKey && state.data.shapes.length > 0 && toolbar.currentTool === 'select') {
     interactionMode = 'arpeggio';
     triggeredShapes.clear();
-    audio._init();
+    audio._init().then(() => { audio._arpeggioReady = true; });
+    audio._arpeggioReady = false;
     return;
   }
 
@@ -270,6 +270,7 @@ canvas.addEventListener('mousemove', (e) => {
   }
 
   if (interactionMode === 'arpeggio') {
+    if (!audio._arpeggioReady) return;
     // Trigger shapes as pointer crosses their X position
     for (const shape of state.data.shapes) {
       const shapePx = shape.x * CANVAS_SIZE;

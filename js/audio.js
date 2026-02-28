@@ -127,6 +127,7 @@ export class AudioEngine {
     this.isPlaying = false;
     this.playingShapeIds = new Set();
     this._workletReady = false;
+    this._sessionId = 0; // generation counter to prevent stale cleanup
   }
 
   async _init() {
@@ -204,8 +205,11 @@ export class AudioEngine {
     this.envelopeGain.gain.setValueAtTime(this.envelopeGain.gain.value, now);
     this.envelopeGain.gain.linearRampToValueAtTime(0, now + releaseTime);
 
-    // Schedule cleanup
-    setTimeout(() => this._cleanup(), releaseTime * 1000 + 100);
+    // Schedule cleanup, but only if the session hasn't changed
+    const sid = this._sessionId;
+    setTimeout(() => {
+      if (this._sessionId === sid) this._cleanup();
+    }, releaseTime * 1000 + 100);
   }
 
   triggerArpeggio(sigilState, envelope, shapeId) {
@@ -219,7 +223,27 @@ export class AudioEngine {
 
     const idx = sigilState.shapes.indexOf(shape);
     const total = sigilState.shapes.length;
+
+    // Set up a dedicated arpeggio gain as the "masterGain" so _buildVoice
+    // connects to it instead of ctx.destination (avoids double-routing)
+    if (!this._arpeggioGain) {
+      if (!this.compressor) {
+        this.compressor = ctx.createDynamicsCompressor();
+        this.compressor.threshold.value = -24;
+        this.compressor.knee.value = 12;
+        this.compressor.ratio.value = 4;
+        this.compressor.connect(ctx.destination);
+      }
+      this._arpeggioGain = ctx.createGain();
+      this._arpeggioGain.gain.value = 0.7;
+      this._arpeggioGain.connect(this.compressor);
+    }
+
+    // Temporarily set masterGain so _buildVoice routes to our arpeggio chain
+    const prevMaster = this.masterGain;
+    this.masterGain = this._arpeggioGain;
     const voice = this._buildVoice(ctx, shape, idx, total);
+    this.masterGain = prevMaster;
 
     // Mini envelope: quick attack, short sustain, quick release
     const miniGain = ctx.createGain();
@@ -230,25 +254,25 @@ export class AudioEngine {
     miniGain.gain.linearRampToValueAtTime(0.4, now + 0.1);
     miniGain.gain.linearRampToValueAtTime(0, now + 0.5);
 
-    // Connect through mini envelope to destination
-    if (!this.compressor) {
-      this.compressor = ctx.createDynamicsCompressor();
-      this.compressor.threshold.value = -24;
-      this.compressor.knee.value = 12;
-      this.compressor.ratio.value = 4;
-      this.compressor.connect(ctx.destination);
-    }
-
+    // Re-route voice output through the mini envelope
+    voice.outputNode.disconnect();
     voice.outputNode.connect(miniGain);
-    miniGain.connect(this.compressor);
+    miniGain.connect(this._arpeggioGain);
 
     voice.oscillator.start(now);
     voice.oscillator.stop(now + 0.6);
 
+    // Track voice for cleanup
+    this.activeVoices.push(voice);
+
     this.playingShapeIds.add(shapeId);
     setTimeout(() => {
       this.playingShapeIds.delete(shapeId);
-    }, 600);
+      // Remove from activeVoices after it's done
+      const i = this.activeVoices.indexOf(voice);
+      if (i !== -1) this.activeVoices.splice(i, 1);
+      try { miniGain.disconnect(); } catch (e) {}
+    }, 650);
   }
 
   stop() {
@@ -257,11 +281,21 @@ export class AudioEngine {
   }
 
   _cleanup() {
+    this._sessionId++;
+
     for (const voice of this.activeVoices) {
       try { voice.oscillator.stop(); } catch (e) {}
+      try { voice.oscillator.disconnect(); } catch (e) {}
+      try { voice.outputNode.disconnect(); } catch (e) {}
       if (voice.effectDispose) voice.effectDispose();
     }
     this.activeVoices = [];
+
+    if (this.masterGain) { try { this.masterGain.disconnect(); } catch (e) {} this.masterGain = null; }
+    if (this.envelopeGain) { try { this.envelopeGain.disconnect(); } catch (e) {} this.envelopeGain = null; }
+    if (this.compressor) { try { this.compressor.disconnect(); } catch (e) {} this.compressor = null; }
+    if (this._arpeggioGain) { try { this._arpeggioGain.disconnect(); } catch (e) {} this._arpeggioGain = null; }
+
     this.playingShapeIds.clear();
     this.isPlaying = false;
   }
