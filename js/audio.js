@@ -137,7 +137,7 @@ export class AudioEngine {
     // Try to register bitcrusher worklet
     if (this.audioCtx.audioWorklet) {
       try {
-        await this.audioCtx.audioWorklet.addModule('js/worklets/bitcrusher.js');
+        await this.audioCtx.audioWorklet.addModule('worklets/bitcrusher.js');
         this._workletReady = true;
       } catch (e) {
         console.warn('AudioWorklet not available, using WaveShaper fallback');
