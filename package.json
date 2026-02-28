@@ -1,0 +1,14 @@
+{
+  "name": "sigil-synth",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run build.ts",
+    "dev": "bun run build.ts --dev",
+    "clean": "rm -rf dist",
+    "serve": "cd dist && bunx serve"
+  },
+  "dependencies": {
+    "lz-string": "^1.5.0"
+  }
+}
