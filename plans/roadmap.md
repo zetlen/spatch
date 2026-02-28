@@ -80,6 +80,15 @@
 
 ---
 
+## Tech Debt
+
+- [ ] **Migrate to TypeScript** — **L**
+- [x] **Add bundling and minification** — **M**
+- [x] **Use `package.json` and Bun instead of vendoring libs** — **S**
+- [ ] **Do a not-invented-here audit** — **M**
+
+---
+
 ## Size Key
 
 | Size | Meaning |
