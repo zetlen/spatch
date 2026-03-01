@@ -416,70 +416,111 @@ document.addEventListener('keydown', (e) => {
     toolbar._updateToolActive();
     decoTool.setTool(null);
   }
-});
-
-// ---- Latch & Play button ----
-
-const playBtn = document.getElementById('btn-play');
-const latchBtn = document.getElementById('btn-latch');
-const latchSlider = document.getElementById('latch-position');
-const canvasWrap = document.getElementById('canvas-wrap');
-
-let latchMode = false;
-
-function stopPlayback() {
-  audio.release(state.data.envelope);
-  playBtn.classList.remove('playing');
-  playBtn.textContent = '\u25B6 PLAY';
-  latchSlider.classList.add('hidden');
-  const releaseMs = state.data.envelope.release * 1000 + 100;
-  setTimeout(() => {
-    canvasWrap.classList.remove('playing');
-    needsRender = true;
-  }, releaseMs);
-}
-
-latchBtn.addEventListener('click', () => {
-  latchMode = !latchMode;
-  latchBtn.classList.toggle('active', latchMode);
-  if (!latchMode && audio.isPlaying) {
-    stopPlayback();
+  if (e.key === 'n') setPlayMode('normal');
+  if (e.key === 'l') setPlayMode('latch');
+  if (e.key === 'o') setPlayMode('loop');
+  if (e.key === ' ' && playMode !== 'normal') {
+    e.preventDefault();
+    playBtn.click();
   }
 });
 
-playBtn.addEventListener('mousedown', async (e) => {
-  e.preventDefault();
-  if (latchMode) return; // latch uses click, not mousedown
-  if (state.data.shapes.length === 0) return;
+// ---- Play mode selector & Play button ----
 
+const playBtn = document.getElementById('btn-play');
+const latchSlider = document.getElementById('latch-position');
+const canvasWrap = document.getElementById('canvas-wrap');
+const modeBtns = document.querySelectorAll('.mode-btn');
+
+let playMode = 'normal'; // 'normal' | 'latch' | 'loop'
+let loopTimeoutId = null;
+let releaseGlowTimeoutId = null;
+
+function setPlayMode(mode) {
+  if (audio.isPlaying) stopPlayback();
+  playMode = mode;
+  modeBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === mode));
+  if (mode !== 'latch') latchSlider.classList.add('hidden');
+}
+
+async function startPlayback() {
+  if (releaseGlowTimeoutId != null) {
+    clearTimeout(releaseGlowTimeoutId);
+    releaseGlowTimeoutId = null;
+  }
   await audio.play(state.data, state.data.envelope);
   playBtn.classList.add('playing');
   canvasWrap.classList.add('playing');
   playBtn.textContent = '\u25A0 STOP';
   needsRender = true;
+}
+
+function stopPlayback() {
+  if (loopTimeoutId != null) {
+    clearTimeout(loopTimeoutId);
+    loopTimeoutId = null;
+  }
+  audio.release(state.data.envelope);
+  playBtn.classList.remove('playing');
+  playBtn.textContent = '\u25B6 PLAY';
+  latchSlider.classList.add('hidden');
+  const releaseMs = state.data.envelope.release * 1000 + 100;
+  releaseGlowTimeoutId = setTimeout(() => {
+    releaseGlowTimeoutId = null;
+    canvasWrap.classList.remove('playing');
+    needsRender = true;
+  }, releaseMs);
+}
+
+function scheduleLoopRestart() {
+  const env = state.data.envelope;
+  const sustainHoldMs = (0.3 + env.sustain * 0.5) * 1000;
+  const attackDecayMs = (env.attack + env.decay) * 1000;
+  const releaseMs = env.release * 1000;
+
+  loopTimeoutId = setTimeout(() => {
+    // Trigger release phase
+    audio.release(state.data.envelope);
+    // After release completes, restart
+    loopTimeoutId = setTimeout(() => {
+      if (playMode === 'loop') {
+        startPlayback();
+        scheduleLoopRestart();
+      }
+    }, releaseMs + 50);
+  }, attackDecayMs + sustainHoldMs);
+}
+
+modeBtns.forEach((btn) => {
+  btn.addEventListener('click', () => setPlayMode(btn.dataset.mode));
+});
+
+playBtn.addEventListener('mousedown', async (e) => {
+  e.preventDefault();
+  if (playMode !== 'normal') return;
+  if (state.data.shapes.length === 0) return;
+  await startPlayback();
 });
 
 playBtn.addEventListener('mouseup', () => {
-  if (latchMode) return; // latch uses click, not mouseup
-  if (audio.isPlaying) {
-    stopPlayback();
-  }
+  if (playMode !== 'normal') return;
+  if (audio.isPlaying) stopPlayback();
 });
 
 playBtn.addEventListener('click', async () => {
-  if (!latchMode) return; // non-latch handled by mousedown/mouseup
+  if (playMode === 'normal') return;
   if (state.data.shapes.length === 0) return;
 
   if (audio.isPlaying) {
     stopPlayback();
   } else {
-    await audio.play(state.data, state.data.envelope);
-    playBtn.classList.add('playing');
-    canvasWrap.classList.add('playing');
-    playBtn.textContent = '\u25A0 STOP';
-    latchSlider.value = 1;
-    latchSlider.classList.remove('hidden');
-    needsRender = true;
+    await startPlayback();
+    if (playMode === 'latch') {
+      latchSlider.value = 1;
+      latchSlider.classList.remove('hidden');
+    } else if (playMode === 'loop') {
+      scheduleLoopRestart();
+    }
   }
 });
 
