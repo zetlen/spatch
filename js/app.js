@@ -14,7 +14,6 @@ import { AudioEngine } from './audio.js';
 import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.js';
 import { DecorationTool } from './decorations.js';
 import { saveToURL, loadFromURL } from './serialize.js';
-import { showEmbedModal, copyToClipboard } from './embed.js';
 
 // ---- Init ----
 
@@ -528,26 +527,6 @@ latchSlider.addEventListener('input', () => {
   if (audio.isPlaying) {
     audio.setEnvelopePosition(parseFloat(latchSlider.value), state.data.envelope);
   }
-});
-
-// ---- Share button ----
-
-document.getElementById('btn-share').addEventListener('click', () => {
-  saveToURL(state.data);
-  copyToClipboard(window.location.href).then(() => {
-    const btn = document.getElementById('btn-share');
-    btn.textContent = 'Copied!';
-    setTimeout(() => {
-      btn.textContent = 'Share';
-    }, 2000);
-  });
-});
-
-// ---- Embed button ----
-
-document.getElementById('btn-embed').addEventListener('click', () => {
-  saveToURL(state.data);
-  showEmbedModal(state.data);
 });
 
 // ---- Auto-save to URL (debounced) ----
