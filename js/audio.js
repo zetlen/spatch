@@ -12,7 +12,7 @@ for (let octave = 0; octave < 3; octave++) {
 }
 PENTATONIC_SEMITONES.push(36); // top: 3 octaves above root
 
-export const BASE_MIDI = 48; // C3
+const BASE_MIDI = 48; // C3
 
 function midiToFreq(midi) {
   return 440 * Math.pow(2, (midi - 69) / 12);
@@ -42,10 +42,14 @@ export function rotationToDetune(rotation) {
 
 function oscillatorType(shapeType) {
   switch (shapeType) {
-    case 'triangle': return 'sawtooth';
-    case 'square':   return 'square';
-    case 'circle':   return 'sine';
-    default:         return 'sine';
+    case 'triangle':
+      return 'sawtooth';
+    case 'square':
+      return 'square';
+    case 'circle':
+      return 'sine';
+    default:
+      return 'sine';
   }
 }
 
@@ -139,7 +143,7 @@ export class AudioEngine {
       try {
         await this.audioCtx.audioWorklet.addModule('worklets/bitcrusher.js');
         this._workletReady = true;
-      } catch (e) {
+      } catch {
         console.warn('AudioWorklet not available, using WaveShaper fallback');
       }
     }
@@ -207,9 +211,12 @@ export class AudioEngine {
 
     // Schedule cleanup, but only if the session hasn't changed
     const sid = this._sessionId;
-    setTimeout(() => {
-      if (this._sessionId === sid) this._cleanup();
-    }, releaseTime * 1000 + 100);
+    setTimeout(
+      () => {
+        if (this._sessionId === sid) this._cleanup();
+      },
+      releaseTime * 1000 + 100,
+    );
   }
 
   triggerArpeggio(sigilState, envelope, shapeId) {
@@ -218,7 +225,7 @@ export class AudioEngine {
     const ctx = this.audioCtx;
     if (ctx.state === 'suspended') ctx.resume();
 
-    const shape = sigilState.shapes.find(s => s.id === shapeId);
+    const shape = sigilState.shapes.find((s) => s.id === shapeId);
     if (!shape) return;
 
     const idx = sigilState.shapes.indexOf(shape);
@@ -271,7 +278,9 @@ export class AudioEngine {
       // Remove from activeVoices after it's done
       const i = this.activeVoices.indexOf(voice);
       if (i !== -1) this.activeVoices.splice(i, 1);
-      try { miniGain.disconnect(); } catch (e) {}
+      try {
+        miniGain.disconnect();
+      } catch {}
     }, 650);
   }
 
@@ -299,7 +308,7 @@ export class AudioEngine {
     if (!this.isPlaying || !this.audioCtx) return;
     const now = this.audioCtx.currentTime;
     for (const voice of this.activeVoices) {
-      const shape = sigilState.shapes.find(s => s.id === voice.shapeId);
+      const shape = sigilState.shapes.find((s) => s.id === voice.shapeId);
       if (!shape) continue;
       voice.oscillator.frequency.setValueAtTime(yToFrequency(shape.y), now);
       voice.oscillator.detune.setValueAtTime(rotationToDetune(shape.rotation), now);
@@ -318,17 +327,43 @@ export class AudioEngine {
     this._sessionId++;
 
     for (const voice of this.activeVoices) {
-      try { voice.oscillator.stop(); } catch (e) {}
-      try { voice.oscillator.disconnect(); } catch (e) {}
-      try { voice.outputNode.disconnect(); } catch (e) {}
+      try {
+        voice.oscillator.stop();
+      } catch {}
+      try {
+        voice.oscillator.disconnect();
+      } catch {}
+      try {
+        voice.outputNode.disconnect();
+      } catch {}
       if (voice.effectDispose) voice.effectDispose();
     }
     this.activeVoices = [];
 
-    if (this.masterGain) { try { this.masterGain.disconnect(); } catch (e) {} this.masterGain = null; }
-    if (this.envelopeGain) { try { this.envelopeGain.disconnect(); } catch (e) {} this.envelopeGain = null; }
-    if (this.compressor) { try { this.compressor.disconnect(); } catch (e) {} this.compressor = null; }
-    if (this._arpeggioGain) { try { this._arpeggioGain.disconnect(); } catch (e) {} this._arpeggioGain = null; }
+    if (this.masterGain) {
+      try {
+        this.masterGain.disconnect();
+      } catch {}
+      this.masterGain = null;
+    }
+    if (this.envelopeGain) {
+      try {
+        this.envelopeGain.disconnect();
+      } catch {}
+      this.envelopeGain = null;
+    }
+    if (this.compressor) {
+      try {
+        this.compressor.disconnect();
+      } catch {}
+      this.compressor = null;
+    }
+    if (this._arpeggioGain) {
+      try {
+        this._arpeggioGain.disconnect();
+      } catch {}
+      this._arpeggioGain = null;
+    }
 
     this.playingShapeIds.clear();
     this.isPlaying = false;
@@ -377,6 +412,14 @@ export class AudioEngine {
     layerEQ.connect(panner);
     panner.connect(this.masterGain || ctx.destination);
 
-    return { oscillator: osc, outputNode: panner, effectDispose, shapeId: shape.id, gain, filter, panner };
+    return {
+      oscillator: osc,
+      outputNode: panner,
+      effectDispose,
+      shapeId: shape.id,
+      gain,
+      filter,
+      panner,
+    };
   }
 }

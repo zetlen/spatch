@@ -43,32 +43,32 @@ lib/
 
 ## Visual → Audio Mapping
 
-| Visual Property        | Audio Parameter              |
-|------------------------|------------------------------|
-| Shape type             | Oscillator waveform          |
-| Y position             | Pitch (pentatonic scale)     |
-| X position             | Stereo pan                   |
-| Size                   | Gain (volume)                |
-| Rotation               | Detune (0–50 cents)          |
-| Fill hue               | Filter type (LP/BP/HP/notch) |
-| Fill saturation        | Filter Q (resonance)         |
-| Fill lightness         | Filter cutoff frequency      |
-| Fill mode (solid)      | Direct HSL → filter          |
-| Fill mode (radial/Lab) | Lab L*/a*/b* → filter params |
-| Fill mode (linear)     | Overdrive/waveshaper amount  |
-| Pattern overlay        | Audio effect (see below)     |
-| Layer order            | EQ shelving (low ↔ high)     |
-| Canvas corners (ADSR)  | Envelope shape               |
+| Visual Property        | Audio Parameter               |
+| ---------------------- | ----------------------------- |
+| Shape type             | Oscillator waveform           |
+| Y position             | Pitch (pentatonic scale)      |
+| X position             | Stereo pan                    |
+| Size                   | Gain (volume)                 |
+| Rotation               | Detune (0–50 cents)           |
+| Fill hue               | Filter type (LP/BP/HP/notch)  |
+| Fill saturation        | Filter Q (resonance)          |
+| Fill lightness         | Filter cutoff frequency       |
+| Fill mode (solid)      | Direct HSL → filter           |
+| Fill mode (radial/Lab) | Lab L*/a*/b\* → filter params |
+| Fill mode (linear)     | Overdrive/waveshaper amount   |
+| Pattern overlay        | Audio effect (see below)      |
+| Layer order            | EQ shelving (low ↔ high)      |
+| Canvas corners (ADSR)  | Envelope shape                |
 
 ### Pattern → Effect Mapping
 
-| Pattern   | Effect     | Description                          |
-|-----------|------------|--------------------------------------|
-| Stripes   | Chorus     | Modulated delay + dry/wet mix        |
-| Checker   | Tremolo    | LFO amplitude modulation             |
-| Noise     | Flanger    | Short delay with feedback + LFO      |
-| Gradient  | Phaser     | Allpass filter chain with LFO        |
-| Rough     | Bitcrusher | AudioWorklet (fallback: WaveShaper)  |
+| Pattern  | Effect     | Description                         |
+| -------- | ---------- | ----------------------------------- |
+| Stripes  | Chorus     | Modulated delay + dry/wet mix       |
+| Checker  | Tremolo    | LFO amplitude modulation            |
+| Noise    | Flanger    | Short delay with feedback + LFO     |
+| Gradient | Phaser     | Allpass filter chain with LFO       |
+| Rough    | Bitcrusher | AudioWorklet (fallback: WaveShaper) |
 
 ### ADSR Corner Mapping
 
@@ -103,7 +103,7 @@ Corners are draggable; the canvas border-radius updates live.
 Three fill modes, each with a dedicated picker tab:
 
 1. **Solid**: HSL via hue ring + saturation/lightness square
-2. **Radial gradient**: CIE Lab color space (a*/b* plane + L* slider), two stops
+2. **Radial gradient**: CIE Lab color space (a*/b* plane + L\* slider), two stops
 3. **Linear gradient**: Two HSL stops + angle dial
 
 ### Sharing
@@ -136,11 +136,13 @@ Three fill modes, each with a dedicated picker tab:
 ## Audio Pipeline
 
 Per voice (one per shape):
+
 ```
 Oscillator → Gain → BiquadFilter → [Effect] → [Overdrive] → LayerEQ → StereoPanner → MasterGain
 ```
 
 Master chain:
+
 ```
 MasterGain → EnvelopeGain (ADSR) → DynamicsCompressor → Destination
 ```

@@ -6,11 +6,13 @@ import { updateCanvasBorderRadius } from './envelope.js';
 
 const hash = window.location.hash.slice(1);
 if (!hash) {
-  document.body.innerHTML = '<p style="color:#e0e0ff;text-align:center;padding:2em;">No sigil data found.</p>';
+  document.body.innerHTML =
+    '<p style="color:#e0e0ff;text-align:center;padding:2em;">No sigil data found.</p>';
 } else {
   const state = deserializeState(hash);
   if (!state) {
-    document.body.innerHTML = '<p style="color:#e0e0ff;text-align:center;padding:2em;">Invalid sigil data.</p>';
+    document.body.innerHTML =
+      '<p style="color:#e0e0ff;text-align:center;padding:2em;">Invalid sigil data.</p>';
   } else {
     const canvas = document.getElementById('c');
     const ctx = canvas.getContext('2d');

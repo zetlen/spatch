@@ -2,7 +2,13 @@
 
 import { SigilState } from './state.js';
 import { render } from './canvas.js';
-import { hitTestShapes, hitTestHandles, hitTestADSRCorner, calcResize, calcRotation } from './shapes.js';
+import {
+  hitTestShapes,
+  hitTestHandles,
+  hitTestADSRCorner,
+  calcResize,
+  calcRotation,
+} from './shapes.js';
 import { Toolbar } from './toolbar.js';
 import { AudioEngine } from './audio.js';
 import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.js';
@@ -88,8 +94,11 @@ function renderLoop() {
       ctx.restore();
     }
 
-    updateCanvasBorderRadius(canvas, state.data.envelope,
-      parseInt(canvas.style.width) || CANVAS_SIZE);
+    updateCanvasBorderRadius(
+      canvas,
+      state.data.envelope,
+      parseInt(canvas.style.width) || CANVAS_SIZE,
+    );
 
     needsRender = false;
   }
@@ -106,8 +115,8 @@ function canvasCoords(e) {
   return {
     px: (e.clientX - rect.left) * scaleX,
     py: (e.clientY - rect.top) * scaleY,
-    nx: (e.clientX - rect.left) * scaleX / CANVAS_SIZE,
-    ny: (e.clientY - rect.top) * scaleY / CANVAS_SIZE,
+    nx: ((e.clientX - rect.left) * scaleX) / CANVAS_SIZE,
+    ny: ((e.clientY - rect.top) * scaleY) / CANVAS_SIZE,
   };
 }
 
@@ -143,7 +152,9 @@ canvas.addEventListener('mousedown', (e) => {
   if (e.shiftKey && state.data.shapes.length > 0 && toolbar.currentTool === 'select') {
     interactionMode = 'arpeggio';
     triggeredShapes.clear();
-    audio._init().then(() => { audio._arpeggioReady = true; });
+    audio._init().then(() => {
+      audio._arpeggioReady = true;
+    });
     audio._arpeggioReady = false;
     return;
   }
@@ -243,7 +254,7 @@ canvas.addEventListener('mousemove', (e) => {
     const shape = state.getSelected();
     if (!shape) return;
     // Transform delta to shape-local coordinates
-    const rotRad = shape.rotation * Math.PI / 180;
+    const rotRad = (shape.rotation * Math.PI) / 180;
     const dpx = px - dragStart.px;
     const dpy = py - dragStart.py;
     const cos = Math.cos(-rotRad);
@@ -252,7 +263,10 @@ canvas.addEventListener('mousemove', (e) => {
     const localDy = dpx * sin + dpy * cos;
     const newSize = calcResize(
       { ...shape, size: dragOriginal.size },
-      activeHandle, localDx, localDy, CANVAS_SIZE
+      activeHandle,
+      localDx,
+      localDy,
+      CANVAS_SIZE,
     );
     state.updateShape(shape.id, { size: newSize });
     return;
@@ -290,13 +304,18 @@ canvas.addEventListener('mousemove', (e) => {
   }
 });
 
-canvas.addEventListener('mouseup', (e) => {
+canvas.addEventListener('mouseup', () => {
   if (interactionMode === 'drawing') {
     decoTool.handleMouseUp();
     needsRender = true;
   }
 
-  if (interactionMode === 'dragging' || interactionMode === 'resizing' || interactionMode === 'rotating' || interactionMode === 'adsr') {
+  if (
+    interactionMode === 'dragging' ||
+    interactionMode === 'resizing' ||
+    interactionMode === 'rotating' ||
+    interactionMode === 'adsr'
+  ) {
     // Push the pre-manipulation snapshot onto the undo stack
     if (preManipSnapshot) {
       state.undoStack.push(preManipSnapshot);
@@ -325,26 +344,44 @@ canvas.addEventListener('mouseleave', () => {
 
 // ---- Touch support ----
 
-canvas.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  const touch = e.touches[0];
-  canvas.dispatchEvent(new MouseEvent('mousedown', {
-    clientX: touch.clientX, clientY: touch.clientY,
-  }));
-}, { passive: false });
+canvas.addEventListener(
+  'touchstart',
+  (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    canvas.dispatchEvent(
+      new MouseEvent('mousedown', {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+      }),
+    );
+  },
+  { passive: false },
+);
 
-canvas.addEventListener('touchmove', (e) => {
-  e.preventDefault();
-  const touch = e.touches[0];
-  canvas.dispatchEvent(new MouseEvent('mousemove', {
-    clientX: touch.clientX, clientY: touch.clientY,
-  }));
-}, { passive: false });
+canvas.addEventListener(
+  'touchmove',
+  (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    canvas.dispatchEvent(
+      new MouseEvent('mousemove', {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+      }),
+    );
+  },
+  { passive: false },
+);
 
-canvas.addEventListener('touchend', (e) => {
-  e.preventDefault();
-  canvas.dispatchEvent(new MouseEvent('mouseup', {}));
-}, { passive: false });
+canvas.addEventListener(
+  'touchend',
+  (e) => {
+    e.preventDefault();
+    canvas.dispatchEvent(new MouseEvent('mouseup', {}));
+  },
+  { passive: false },
+);
 
 // ---- Keyboard shortcuts ----
 
@@ -459,7 +496,9 @@ document.getElementById('btn-share').addEventListener('click', () => {
   copyToClipboard(window.location.href).then(() => {
     const btn = document.getElementById('btn-share');
     btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = 'Share'; }, 2000);
+    setTimeout(() => {
+      btn.textContent = 'Share';
+    }, 2000);
   });
 });
 
@@ -486,10 +525,15 @@ function debouncedSave() {
 
 function getCornerPosition(cornerName, size) {
   switch (cornerName) {
-    case 'attack':  return { x: 0, y: size };
-    case 'decay':   return { x: 0, y: 0 };
-    case 'sustain': return { x: size, y: 0 };
-    case 'release': return { x: size, y: size };
-    default:        return { x: 0, y: 0 };
+    case 'attack':
+      return { x: 0, y: size };
+    case 'decay':
+      return { x: 0, y: 0 };
+    case 'sustain':
+      return { x: size, y: 0 };
+    case 'release':
+      return { x: size, y: size };
+    default:
+      return { x: 0, y: 0 };
   }
 }

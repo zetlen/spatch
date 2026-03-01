@@ -2,12 +2,18 @@
 
 export function createEffect(audioCtx, pattern, workletReady) {
   switch (pattern) {
-    case 'stripes':  return createChorus(audioCtx);
-    case 'checker':  return createTremolo(audioCtx);
-    case 'noise':    return createFlanger(audioCtx);
-    case 'gradient': return createPhaser(audioCtx);
-    case 'rough':    return createBitcrusher(audioCtx, workletReady);
-    default:         return null;
+    case 'stripes':
+      return createChorus(audioCtx);
+    case 'checker':
+      return createTremolo(audioCtx);
+    case 'noise':
+      return createFlanger(audioCtx);
+    case 'gradient':
+      return createPhaser(audioCtx);
+    case 'rough':
+      return createBitcrusher(audioCtx, workletReady);
+    default:
+      return null;
   }
 }
 
@@ -15,8 +21,10 @@ export function createEffect(audioCtx, pattern, workletReady) {
 function createChorus(ctx) {
   const input = ctx.createGain();
   const output = ctx.createGain();
-  const dry = ctx.createGain(); dry.gain.value = 0.7;
-  const wet = ctx.createGain(); wet.gain.value = 0.5;
+  const dry = ctx.createGain();
+  dry.gain.value = 0.7;
+  const wet = ctx.createGain();
+  wet.gain.value = 0.5;
 
   const delay = ctx.createDelay(0.1);
   delay.delayTime.value = 0.025;
@@ -69,8 +77,10 @@ function createTremolo(ctx) {
 function createFlanger(ctx) {
   const input = ctx.createGain();
   const output = ctx.createGain();
-  const dry = ctx.createGain(); dry.gain.value = 0.7;
-  const wet = ctx.createGain(); wet.gain.value = 0.7;
+  const dry = ctx.createGain();
+  dry.gain.value = 0.7;
+  const wet = ctx.createGain();
+  wet.gain.value = 0.7;
 
   const delay = ctx.createDelay(0.02);
   delay.delayTime.value = 0.005;
@@ -104,11 +114,13 @@ function createFlanger(ctx) {
 function createPhaser(ctx) {
   const input = ctx.createGain();
   const output = ctx.createGain();
-  const dry = ctx.createGain(); dry.gain.value = 0.8;
-  const wet = ctx.createGain(); wet.gain.value = 0.6;
+  const dry = ctx.createGain();
+  dry.gain.value = 0.8;
+  const wet = ctx.createGain();
+  wet.gain.value = 0.6;
 
   const allpassFreqs = [350, 1100, 2700, 5500];
-  const filters = allpassFreqs.map(freq => {
+  const filters = allpassFreqs.map((freq) => {
     const f = ctx.createBiquadFilter();
     f.type = 'allpass';
     f.frequency.value = freq;
@@ -152,7 +164,7 @@ function createBitcrusher(ctx, workletReady) {
       node.parameters.get('bitDepth').value = 6;
       node.parameters.get('frequencyReduction').value = 0.3;
       return { input: node, output: node, dispose: () => {} };
-    } catch (e) {
+    } catch {
       // fall through to waveshaper
     }
   }
