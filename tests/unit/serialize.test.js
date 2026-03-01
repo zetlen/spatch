@@ -48,7 +48,7 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decoded.decorations).toHaveLength(0);
   });
 
-  test('state with shapes round-trips (values preserved, IDs regenerated)', () => {
+  test('state with shapes round-trips (values and IDs preserved)', () => {
     const state = makeState({
       shapes: [
         makeShape({ id: 'original1', type: 'circle', x: 0.3, y: 0.7, size: 0.15, rotation: 90 }),
@@ -79,9 +79,9 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decoded.shapes[1].type).toBe('square');
     expect(decoded.shapes[1].pattern).toBe('stripes');
 
-    // IDs are regenerated (not same as originals)
-    expect(decoded.shapes[0].id).not.toBe('original1');
-    expect(decoded.shapes[1].id).not.toBe('original2');
+    // IDs are preserved through round-trip
+    expect(decoded.shapes[0].id).toBe('original1');
+    expect(decoded.shapes[1].id).toBe('original2');
   });
 
   test('all shape types survive round-trip', () => {

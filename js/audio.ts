@@ -180,29 +180,50 @@ function createLayerEQ(audioCtx: AudioContext, layerIndex: number, totalLayers: 
 
 // ---- Voice types (internal) ----
 
-interface Startable {
-  start(time: number): void;
-  stop(time: number): void;
-  disconnect?(): void;
+function safeStop(node: AudioScheduledSourceNode): void {
+  try {
+    node.stop();
+    node.disconnect();
+  } catch {}
 }
 
-interface Voice {
-  oscillator: Startable;
+function safeDisconnect(node: AudioNode): void {
+  try {
+    node.disconnect();
+  } catch {}
+}
+
+interface VoiceBase {
   outputNode: StereoPannerNode;
   effectDispose: (() => void) | null;
   shapeId: string;
   gain: GainNode;
   filter: BiquadFilterNode;
   panner: StereoPannerNode;
-  // Square voice extras
-  oscRaw?: OscillatorNode;
-  pwmOffset?: ConstantSourceNode;
-  // Triangle voice extras
-  oscSaw?: OscillatorNode;
-  oscTri?: OscillatorNode;
-  gainSaw?: GainNode;
-  gainTri?: GainNode;
+  start(time: number): void;
+  stop(time: number): void;
 }
+
+interface SineVoice extends VoiceBase {
+  waveform: 'sine';
+  oscillator: OscillatorNode;
+}
+
+interface SquareVoice extends VoiceBase {
+  waveform: 'square';
+  oscRaw: OscillatorNode;
+  pwmOffset: ConstantSourceNode;
+}
+
+interface TriangleVoice extends VoiceBase {
+  waveform: 'triangle';
+  oscSaw: OscillatorNode;
+  oscTri: OscillatorNode;
+  gainSaw: GainNode;
+  gainTri: GainNode;
+}
+
+type Voice = SineVoice | SquareVoice | TriangleVoice;
 
 interface TextVoice {
   isTextVoice: true;
@@ -301,7 +322,7 @@ export class AudioEngine {
     for (let i = 0; i < totalLayers; i++) {
       const shape = sigilState.shapes[i];
       const voice = this._buildVoice(ctx, shape, i, totalLayers, curlicues);
-      voice.oscillator.start(now);
+      voice.start(now);
       this.activeVoices.push(voice);
       this.playingShapeIds.add(shape.id);
     }
@@ -407,8 +428,10 @@ export class AudioEngine {
     voice.outputNode.connect(miniGain);
     miniGain.connect(this._arpeggioGain!);
 
-    voice.oscillator.start(now);
-    voice.oscillator.stop(now + 0.6);
+    voice.start(now);
+    // Schedule stop after 0.6s — we use setTimeout since voice.stop()
+    // does immediate cleanup rather than scheduled stop
+    setTimeout(() => voice.stop(0), 600);
 
     // Track voice for cleanup
     this.activeVoices.push(voice);
@@ -472,7 +495,7 @@ export class AudioEngine {
       const shape = sigilState.shapes[i];
       if (!this.playingShapeIds.has(shape.id)) {
         const voice = this._buildVoice(ctx, shape, i, totalLayers, curlicues);
-        voice.oscillator.start(now);
+        voice.start(now);
         this.activeVoices.push(voice);
         this.playingShapeIds.add(shape.id);
       }
@@ -487,19 +510,22 @@ export class AudioEngine {
       const param = rotationToParam(shape.rotation);
       const freq = yToFrequency(shape.y);
 
-      if (shape.type === 'square') {
-        voice.oscRaw!.frequency.setValueAtTime(freq, now);
-        voice.pwmOffset!.offset.setValueAtTime((param * 2 - 1) * 0.9, now);
-      } else if (shape.type === 'triangle') {
-        voice.oscSaw!.frequency.setValueAtTime(freq, now);
-        voice.oscTri!.frequency.setValueAtTime(freq, now);
-        const mix = 1.0 - Math.abs(param - 0.5) * 2;
-        const gainTri = Math.sin((mix * Math.PI) / 2);
-        const gainSaw = Math.cos((mix * Math.PI) / 2);
-        voice.gainTri!.gain.setValueAtTime(gainTri, now);
-        voice.gainSaw!.gain.setValueAtTime(gainSaw, now);
-      } else {
-        (voice.oscillator as OscillatorNode).frequency.setValueAtTime(freq, now);
+      switch (voice.waveform) {
+        case 'square':
+          voice.oscRaw.frequency.setValueAtTime(freq, now);
+          voice.pwmOffset.offset.setValueAtTime((param * 2 - 1) * 0.9, now);
+          break;
+        case 'triangle': {
+          voice.oscSaw.frequency.setValueAtTime(freq, now);
+          voice.oscTri.frequency.setValueAtTime(freq, now);
+          const mix = 1.0 - Math.abs(param - 0.5) * 2;
+          voice.gainTri.gain.setValueAtTime(Math.sin((mix * Math.PI) / 2), now);
+          voice.gainSaw.gain.setValueAtTime(Math.cos((mix * Math.PI) / 2), now);
+          break;
+        }
+        case 'sine':
+          voice.oscillator.frequency.setValueAtTime(freq, now);
+          break;
       }
 
       voice.gain.gain.setValueAtTime(
@@ -555,56 +581,15 @@ export class AudioEngine {
 
   _stopVoice(voice: AnyVoice): void {
     if ('isTextVoice' in voice) {
-      try {
-        voice.textCarrier.disconnect();
-      } catch {}
-      try {
-        voice.outputNode.disconnect();
-      } catch {}
+      safeDisconnect(voice.textCarrier);
+      safeDisconnect(voice.outputNode);
       if (voice.effectDispose) voice.effectDispose();
       return;
     }
 
-    if (voice.oscRaw)
-      try {
-        voice.oscRaw.stop();
-      } catch {}
-    if (voice.oscSaw)
-      try {
-        voice.oscSaw.stop();
-      } catch {}
-    if (voice.oscTri)
-      try {
-        voice.oscTri.stop();
-      } catch {}
-    if (voice.pwmOffset)
-      try {
-        voice.pwmOffset.stop();
-      } catch {}
-    if (voice.oscillator && voice.oscillator.disconnect)
-      try {
-        voice.oscillator.disconnect();
-      } catch {}
-    if (voice.oscRaw)
-      try {
-        voice.oscRaw.disconnect();
-      } catch {}
-    if (voice.oscSaw)
-      try {
-        voice.oscSaw.disconnect();
-      } catch {}
-    if (voice.oscTri)
-      try {
-        voice.oscTri.disconnect();
-      } catch {}
-    if (voice.pwmOffset)
-      try {
-        voice.pwmOffset.disconnect();
-      } catch {}
-    try {
-      voice.outputNode.disconnect();
-    } catch {}
-    if (voice.effectDispose) voice.effectDispose();
+    voice.stop(0);
+    safeDisconnect(voice.outputNode);
+    voice.effectDispose?.();
   }
 
   _buildVoice(
@@ -620,93 +605,6 @@ export class AudioEngine {
     const freq = yToFrequency(shape.y);
     const param = rotationToParam(shape.rotation);
     const detuneCents = curlicuesToDetune(curlicues);
-    let voiceSources: Partial<Voice> = {};
-
-    if (shape.type === 'square') {
-      const osc = ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.value = freq;
-      osc.detune.value = detuneCents;
-
-      const pwmOffset = ctx.createConstantSource();
-      // param 0..1 -> dc offset -0.9 .. +0.9
-      pwmOffset.offset.value = (param * 2 - 1) * 0.9;
-
-      const ws = createPWMWaveshaper(ctx);
-
-      osc.connect(ws);
-      pwmOffset.connect(ws);
-      ws.connect(gain);
-
-      pwmOffset.start();
-
-      voiceSources = {
-        oscillator: {
-          start: (time: number) => {
-            try {
-              osc.start(time);
-            } catch {}
-          }, // pwmOffset already started
-          stop: (time: number) => {
-            try {
-              osc.stop(time);
-            } catch {}
-          },
-        },
-        oscRaw: osc,
-        pwmOffset: pwmOffset,
-      };
-    } else if (shape.type === 'triangle') {
-      const oscSaw = ctx.createOscillator();
-      oscSaw.type = 'sawtooth';
-      oscSaw.frequency.value = freq;
-      oscSaw.detune.value = detuneCents;
-
-      const oscTri = ctx.createOscillator();
-      oscTri.type = 'triangle';
-      oscTri.frequency.value = freq;
-      oscTri.detune.value = detuneCents;
-
-      const gainSaw = ctx.createGain();
-      const gainTri = ctx.createGain();
-
-      const mix = 1.0 - Math.abs(param - 0.5) * 2;
-      gainTri.gain.value = Math.sin((mix * Math.PI) / 2);
-      gainSaw.gain.value = Math.cos((mix * Math.PI) / 2);
-
-      oscSaw.connect(gainSaw);
-      oscTri.connect(gainTri);
-      gainSaw.connect(gain);
-      gainTri.connect(gain);
-
-      voiceSources = {
-        oscillator: {
-          start: (time: number) => {
-            oscSaw.start(time);
-            oscTri.start(time);
-          },
-          stop: (time: number) => {
-            try {
-              oscSaw.stop(time);
-            } catch {}
-            try {
-              oscTri.stop(time);
-            } catch {}
-          },
-        },
-        oscSaw: oscSaw,
-        oscTri: oscTri,
-        gainSaw: gainSaw,
-        gainTri: gainTri,
-      };
-    } else {
-      const osc = ctx.createOscillator();
-      osc.type = oscillatorType(shape.type);
-      osc.frequency.value = freq;
-      osc.detune.value = detuneCents;
-      osc.connect(gain);
-      voiceSources = { oscillator: osc };
-    }
 
     const filter = ctx.createBiquadFilter();
     applyColorFilter(filter, shape.fill);
@@ -741,14 +639,107 @@ export class AudioEngine {
     layerEQ.connect(panner);
     panner.connect(this.masterGain || ctx.destination);
 
-    return {
-      ...voiceSources,
+    const shared = {
       outputNode: panner,
       effectDispose,
       shapeId: shape.id,
       gain,
       filter,
       panner,
-    } as Voice;
+    };
+
+    if (shape.type === 'square') {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      osc.detune.value = detuneCents;
+
+      const pwmOffset = ctx.createConstantSource();
+      pwmOffset.offset.value = (param * 2 - 1) * 0.9;
+
+      const ws = createPWMWaveshaper(ctx);
+
+      osc.connect(ws);
+      pwmOffset.connect(ws);
+      ws.connect(gain);
+
+      pwmOffset.start();
+
+      return {
+        ...shared,
+        waveform: 'square',
+        oscRaw: osc,
+        pwmOffset,
+        start(time: number) {
+          try {
+            osc.start(time);
+          } catch {}
+        },
+        stop(time: number) {
+          safeStop(osc);
+          safeStop(pwmOffset);
+        },
+      };
+    }
+
+    if (shape.type === 'triangle') {
+      const oscSaw = ctx.createOscillator();
+      oscSaw.type = 'sawtooth';
+      oscSaw.frequency.value = freq;
+      oscSaw.detune.value = detuneCents;
+
+      const oscTri = ctx.createOscillator();
+      oscTri.type = 'triangle';
+      oscTri.frequency.value = freq;
+      oscTri.detune.value = detuneCents;
+
+      const gainSaw = ctx.createGain();
+      const gainTri = ctx.createGain();
+
+      const mix = 1.0 - Math.abs(param - 0.5) * 2;
+      gainTri.gain.value = Math.sin((mix * Math.PI) / 2);
+      gainSaw.gain.value = Math.cos((mix * Math.PI) / 2);
+
+      oscSaw.connect(gainSaw);
+      oscTri.connect(gainTri);
+      gainSaw.connect(gain);
+      gainTri.connect(gain);
+
+      return {
+        ...shared,
+        waveform: 'triangle',
+        oscSaw,
+        oscTri,
+        gainSaw,
+        gainTri,
+        start(time: number) {
+          oscSaw.start(time);
+          oscTri.start(time);
+        },
+        stop(time: number) {
+          safeStop(oscSaw);
+          safeStop(oscTri);
+        },
+      };
+    }
+
+    // Sine (circle) — default
+    const osc = ctx.createOscillator();
+    osc.type = oscillatorType(shape.type);
+    osc.frequency.value = freq;
+    osc.detune.value = detuneCents;
+    osc.connect(gain);
+
+    return {
+      ...shared,
+      waveform: 'sine',
+      oscillator: osc,
+      start(time: number) {
+        osc.start(time);
+      },
+      stop(time: number) {
+        safeStop(osc);
+      },
+    };
   }
 }

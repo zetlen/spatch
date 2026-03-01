@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { AudioEngine } from '../../js/audio.js';
+import { AudioEngine } from '../../js/audio.ts';
 
 // Minimal Web Audio API stubs for testing voice reconciliation logic.
 // We only need enough to let _buildVoice wire up nodes and updateVoices
