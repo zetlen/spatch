@@ -5,6 +5,21 @@ import { applyPattern } from './patterns.js';
 
 const CANVAS_BG = '#1a1a2e';
 
+// Track whether the last pointer interaction was touch.
+// Hybrid devices (touch + mouse/stylus) switch dynamically.
+let lastInputWasTouch = false;
+window.addEventListener(
+  'pointerdown',
+  (e) => {
+    lastInputWasTouch = e.pointerType === 'touch';
+  },
+  true,
+);
+
+export function isLastInputTouch() {
+  return lastInputWasTouch;
+}
+
 export function render(ctx, state, canvasSize, selectedId, playingShapeIds) {
   ctx.clearRect(0, 0, canvasSize, canvasSize);
 
@@ -27,8 +42,8 @@ export function render(ctx, state, canvasSize, selectedId, playingShapeIds) {
     drawDecoration(ctx, deco, canvasSize);
   }
 
-  // Selection handles
-  if (selectedId) {
+  // Selection handles (hidden when last input was touch — pinch/rotate replaces them)
+  if (selectedId && !lastInputWasTouch) {
     const sel = state.shapes.find((s) => s.id === selectedId);
     if (sel) drawSelectionHandles(ctx, sel, canvasSize);
   }
