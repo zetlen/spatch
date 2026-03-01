@@ -10,8 +10,8 @@ class BitcrusherProcessor extends AudioWorkletProcessor {
 
   constructor() {
     super();
-    this._lastSample = 0;
-    this._phase = 0;
+    this._lastSample = [];
+    this._phase = [];
   }
 
   process(inputs, outputs, parameters) {
@@ -27,6 +27,10 @@ class BitcrusherProcessor extends AudioWorkletProcessor {
         : [parameters.frequencyReduction[0]];
 
     for (let channel = 0; channel < input.length; channel++) {
+      if (this._phase[channel] === undefined) {
+        this._phase[channel] = 0;
+        this._lastSample[channel] = 0;
+      }
       const inp = input[channel];
       const out = output[channel];
       for (let i = 0; i < inp.length; i++) {
@@ -34,12 +38,12 @@ class BitcrusherProcessor extends AudioWorkletProcessor {
         const freq = freqReduction.length > 1 ? freqReduction[i] : freqReduction[0];
         const step = Math.pow(0.5, bits);
 
-        this._phase += freq;
-        if (this._phase >= 1.0) {
-          this._phase -= 1.0;
-          this._lastSample = step * Math.floor(inp[i] / step + 0.5);
+        this._phase[channel] += freq;
+        if (this._phase[channel] >= 1.0) {
+          this._phase[channel] -= 1.0;
+          this._lastSample[channel] = step * Math.floor(inp[i] / step + 0.5);
         }
-        out[i] = this._lastSample;
+        out[i] = this._lastSample[channel];
       }
     }
     return true;
