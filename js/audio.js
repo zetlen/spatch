@@ -281,9 +281,9 @@ export class AudioEngine {
 
         this.activeVoices.push({
           isTextVoice: true,
-          oscRaw: carrier,
+          textCarrier: carrier,
           outputNode: panner,
-          vocoderOutput: vocoder.output,
+          effectDispose: vocoder.dispose,
         });
       }
     }
@@ -401,6 +401,7 @@ export class AudioEngine {
     if (!this.isPlaying || !this.audioCtx) return;
     const now = this.audioCtx.currentTime;
     for (const voice of this.activeVoices) {
+      if (voice.isTextVoice) continue;
       const shape = sigilState.shapes.find((s) => s.id === voice.shapeId);
       if (!shape) continue;
 
@@ -485,10 +486,9 @@ export class AudioEngine {
         try {
           voice.pwmOffset.disconnect();
         } catch {}
-
-      if (voice.vocoderOutput)
+      if (voice.textCarrier)
         try {
-          voice.vocoderOutput.disconnect();
+          voice.textCarrier.disconnect();
         } catch {}
 
       try {
@@ -631,6 +631,7 @@ export class AudioEngine {
     const layerEQ = createLayerEQ(ctx, layerIndex, totalLayers);
 
     // Wire: gain -> filter -> [effect] -> [overdrive] -> layerEQ -> panner -> master
+    // (Note: Text vocoder voices bypass this and use: carrier -> filter bank -> vocoder output -> panner -> master)
     gain.connect(filter);
 
     let lastNode = filter;

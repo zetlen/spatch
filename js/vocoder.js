@@ -57,7 +57,7 @@ export function createVocoderChain(audioCtx, text, carrierNode) {
     for (const band of bands) {
       const bandGainValue = formants ? getFormantGain(band.freq, formants) : 0;
 
-      band.gain.gain.setValueAtTime(band.gain.gain.value || 0, time);
+      band.gain.gain.setValueAtTime(0, time);
       band.gain.gain.linearRampToValueAtTime(bandGainValue, time + 0.02);
       // Hold, then fade
       band.gain.gain.setValueAtTime(bandGainValue, time + CHAR_DURATION - 0.03);
@@ -67,7 +67,21 @@ export function createVocoderChain(audioCtx, text, carrierNode) {
 
   const totalDuration = chars.length * CHAR_DURATION;
 
-  return { output, duration: totalDuration };
+  return {
+    input: null,
+    output,
+    duration: totalDuration,
+    dispose: () => {
+      for (const band of bands) {
+        try {
+          band.filter.disconnect();
+        } catch {}
+        try {
+          band.gain.disconnect();
+        } catch {}
+      }
+    },
+  };
 }
 
 function getFormants(char) {
