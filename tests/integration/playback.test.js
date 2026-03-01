@@ -15,11 +15,8 @@ test.describe('Playback', () => {
     const box = await canvas.boundingBox();
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
-    // Press and hold play button
-    const playBtn = page.locator('#btn-play');
-    await playBtn.dispatchEvent('mousedown');
-
-    // Canvas wrap should have .playing class
+    // Use Space to latch-play (verifies audio starts)
+    await page.keyboard.press('Space');
     await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
 
     // Wait a bit for audio to stabilize
@@ -29,8 +26,8 @@ test.describe('Playback', () => {
     const isPlaying = await page.evaluate(() => window.__audioTap?.isPlaying());
     expect(isPlaying).toBe(true);
 
-    // Release play button
-    await playBtn.dispatchEvent('mouseup');
+    // Press Space again to stop
+    await page.keyboard.press('Space');
 
     // After release time, .playing class should be removed
     await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
@@ -48,22 +45,21 @@ test.describe('Playback', () => {
     // Before playing
     await expect(playBtn).toContainText('PLAY');
 
-    // Start playing
-    await playBtn.dispatchEvent('mousedown');
+    // Start playing via Space (latched)
+    await page.keyboard.press('Space');
     await expect(playBtn).toContainText('STOP');
 
-    // Release
-    await playBtn.dispatchEvent('mouseup');
+    // Press Space again to stop
+    await page.keyboard.press('Space');
     await expect(playBtn).toContainText('PLAY', { timeout: 5000 });
   });
 
   test('play does nothing with no shapes', async ({ page }) => {
-    const playBtn = page.locator('#btn-play');
-    await playBtn.dispatchEvent('mousedown');
+    // Press Space with no shapes on canvas
+    await page.keyboard.press('Space');
 
     // Should not enter playing state
     await page.waitForTimeout(100);
     await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/);
-    await playBtn.dispatchEvent('mouseup');
   });
 });
