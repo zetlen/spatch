@@ -18,9 +18,9 @@ import { AudioEngine } from './audio.ts';
 import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.ts';
 import { DecorationTool } from './decorations.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
-import { generateEmbedSnippet, copyToClipboard } from './embed.js';
+import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
 import { IDLE, type InteractionState } from './interaction.ts';
-import type { Shape, Decoration, NormalizedCoord, Degrees } from './types.ts';
+import { normalizedCoord, degrees, type Shape, type Decoration } from './types.ts';
 
 // ---- Init ----
 
@@ -321,8 +321,8 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     const dx = nx - interaction.startNx;
     const dy = ny - interaction.startNy;
     store.updateShape(shape.id, {
-      x: Math.max(0, Math.min(1, interaction.origin.x + dx)) as NormalizedCoord,
-      y: Math.max(0, Math.min(1, interaction.origin.y + dy)) as NormalizedCoord,
+      x: normalizedCoord(interaction.origin.x + dx),
+      y: normalizedCoord(interaction.origin.y + dy),
     });
     return;
   }
@@ -339,7 +339,7 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     const localDx = dpx * cos - dpy * sin;
     const localDy = dpx * sin + dpy * cos;
     const newSize = calcResize(
-      { ...shape, size: interaction.origin.size as NormalizedCoord },
+      { ...shape, size: normalizedCoord(interaction.origin.size) },
       interaction.handle,
       localDx,
       localDy,
@@ -544,7 +544,7 @@ canvas.addEventListener(
 
       store.updateShape(interaction.shapeId, {
         size: newSize,
-        rotation: Math.round(newRotation) as Degrees,
+        rotation: degrees(Math.round(newRotation)),
       });
       return;
     }

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { generateEmbedSnippet } from '../../js/embed.js';
+import { generateEmbedSnippet } from '../../js/embed.ts';
 
 describe('generateEmbedSnippet', () => {
   test('returns an iframe string containing encoded state', () => {

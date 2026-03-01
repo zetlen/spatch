@@ -2,15 +2,16 @@
 
 import { createEffect } from './effects.ts';
 import { createVocoderChain } from './vocoder.ts';
-import type {
-  ShapeType,
-  Shape,
-  Fill,
-  SigilData,
-  Envelope,
-  NormalizedCoord,
-  Degrees,
-  Cents,
+import {
+  cents,
+  type ShapeType,
+  type Shape,
+  type Fill,
+  type SigilData,
+  type Envelope,
+  type NormalizedCoord,
+  type Degrees,
+  type Cents,
 } from './types.ts';
 
 // ---- Pentatonic scale ----
@@ -77,7 +78,7 @@ export function rotationToParam(rotation: Degrees): number {
 }
 
 export function curlicuesToDetune(count: number): Cents {
-  return (count * 15) as Cents; // 15 cents per curlicue
+  return cents(count * 15); // 15 cents per curlicue
 }
 
 function oscillatorType(shapeType: ShapeType): OscillatorType {

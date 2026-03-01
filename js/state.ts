@@ -1,19 +1,20 @@
 // state.ts — Sigil data model, undo/redo, state management
 
-import type {
-  ShapeType,
-  Shape,
-  Decoration,
-  SquiggleDecoration,
-  CurlicueDecoration,
-  TextDecoration,
-  SigilData,
-  Envelope,
-  Fill,
-  NormalizedCoord,
-  Degrees,
+import {
+  normalizedCoord,
+  degrees,
+  createDefaultFill,
+  type ShapeType,
+  type Shape,
+  type Decoration,
+  type SquiggleDecoration,
+  type CurlicueDecoration,
+  type TextDecoration,
+  type SigilData,
+  type Envelope,
+  type Fill,
+  type NormalizedCoord,
 } from './types.ts';
-import { createDefaultFill } from './types.ts';
 
 let _idCounter = 0;
 export function genId(prefix = 's'): string {
@@ -34,8 +35,8 @@ function createShape(type: ShapeType, x: NormalizedCoord, y: NormalizedCoord): S
     type,
     x,
     y,
-    size: 0.12 as NormalizedCoord,
-    rotation: 0 as Degrees,
+    size: normalizedCoord(0.12),
+    rotation: degrees(0),
     fill: createDefaultFill(),
     pattern: null,
   };
@@ -125,8 +126,8 @@ export class SigilStore {
   pasteShape(shapeData: Shape, offsetX = 0, offsetY = 0): Shape {
     const clone: Shape = JSON.parse(JSON.stringify(shapeData));
     clone.id = genId('s');
-    clone.x = Math.max(0, Math.min(1, clone.x + offsetX)) as NormalizedCoord;
-    clone.y = Math.max(0, Math.min(1, clone.y + offsetY)) as NormalizedCoord;
+    clone.x = normalizedCoord(clone.x + offsetX);
+    clone.y = normalizedCoord(clone.y + offsetY);
     this.data.shapes.push(clone);
     this._notify();
     return clone;

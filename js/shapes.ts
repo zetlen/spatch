@@ -1,15 +1,17 @@
 // shapes.ts — Hit testing, selection, drag/resize/rotate
 
-import type {
-  Shape,
-  Decoration,
-  Envelope,
-  SigilData,
-  NormalizedCoord,
-  Degrees,
-  HandleType,
-  ADSRCorner,
-  DecoBounds,
+import {
+  normalizedCoord,
+  degrees,
+  type Shape,
+  type Decoration,
+  type Envelope,
+  type SigilData,
+  type NormalizedCoord,
+  type HandleType,
+  type ADSRCorner,
+  type Degrees,
+  type DecoBounds,
 } from './types.ts';
 
 const HANDLE_SIZE = 8;
@@ -19,7 +21,7 @@ const MIN_SIZE = 0.025;
 const MAX_SIZE = 0.9;
 
 export function clampSize(size: number): NormalizedCoord {
-  return Math.max(MIN_SIZE, Math.min(MAX_SIZE, size)) as NormalizedCoord;
+  return normalizedCoord(Math.max(MIN_SIZE, Math.min(MAX_SIZE, size)));
 }
 
 // Hit test against all shapes (back-to-front, return topmost)
@@ -203,7 +205,7 @@ export function calcRotation(shape: Shape, mx: number, my: number, canvasSize: n
   // Convert to degrees, offset so "up" = 0
   let deg = (angle * 180) / Math.PI + 90;
   if (deg < 0) deg += 360;
-  return (deg % 360) as Degrees;
+  return degrees(deg);
 }
 
 // ---- Decoration hit testing ----
@@ -303,14 +305,14 @@ export function moveDeco(deco: Decoration, dnx: number, dny: number): void {
   switch (deco.type) {
     case 'squiggle':
       for (const pt of deco.points) {
-        pt[0] = Math.max(0, Math.min(1, pt[0] + dnx)) as NormalizedCoord;
-        pt[1] = Math.max(0, Math.min(1, pt[1] + dny)) as NormalizedCoord;
+        pt[0] = normalizedCoord(pt[0] + dnx);
+        pt[1] = normalizedCoord(pt[1] + dny);
       }
       break;
     case 'curlicue':
     case 'text':
-      deco.x = Math.max(0, Math.min(1, deco.x + dnx)) as NormalizedCoord;
-      deco.y = Math.max(0, Math.min(1, deco.y + dny)) as NormalizedCoord;
+      deco.x = normalizedCoord(deco.x + dnx);
+      deco.y = normalizedCoord(deco.y + dny);
       break;
   }
 }

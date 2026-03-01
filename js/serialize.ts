@@ -2,15 +2,16 @@
 
 import LZString from 'lz-string';
 import { genId } from './state.ts';
-import type {
-  SigilData,
-  Fill,
-  SolidFill,
-  RadialFill,
-  LinearFill,
-  Decoration,
-  NormalizedCoord,
-  Degrees,
+import {
+  normalizedCoord,
+  degrees,
+  type SigilData,
+  type Fill,
+  type SolidFill,
+  type RadialFill,
+  type LinearFill,
+  type Decoration,
+  type NormalizedCoord,
 } from './types.ts';
 
 export function serializeState(state: SigilData): string {
@@ -182,10 +183,10 @@ function decompactify(c: CompactStateLegacy | CompactStateV1): SigilData {
     shapes: (c.sh || []).map((s) => ({
       id: s.i || genId('s'),
       type: (typeMap[s.t] || 'circle') as 'circle' | 'triangle' | 'square',
-      x: s.x as NormalizedCoord,
-      y: s.y as NormalizedCoord,
-      size: s.z as NormalizedCoord,
-      rotation: s.r as Degrees,
+      x: normalizedCoord(s.x),
+      y: normalizedCoord(s.y),
+      size: normalizedCoord(s.z),
+      rotation: degrees(s.r),
       fill: decompactFill(s.f),
       pattern: s.p ? (patMap[s.p as string] as any) || null : null,
     })),
@@ -212,14 +213,17 @@ function decompactDecoration(
       return {
         ...base,
         type: 'squiggle',
-        points: (d.p || []) as [NormalizedCoord, NormalizedCoord][],
+        points: (d.p || []).map(
+          (pt: number[]) =>
+            [normalizedCoord(pt[0]), normalizedCoord(pt[1])] as [NormalizedCoord, NormalizedCoord],
+        ),
       };
     case 'curlicue':
       return {
         ...base,
         type: 'curlicue',
-        x: (d.x || 0) as NormalizedCoord,
-        y: (d.y || 0) as NormalizedCoord,
+        x: normalizedCoord(d.x || 0),
+        y: normalizedCoord(d.y || 0),
         scale: 1,
       };
     case 'text':
@@ -227,8 +231,8 @@ function decompactDecoration(
         ...base,
         type: 'text',
         text: d.tx || '',
-        x: (d.x || 0) as NormalizedCoord,
-        y: (d.y || 0) as NormalizedCoord,
+        x: normalizedCoord(d.x || 0),
+        y: normalizedCoord(d.y || 0),
         scale: 1,
         fontSize: d.fs || 24,
       };

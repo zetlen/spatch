@@ -12,11 +12,26 @@ type Brand<T, B extends string> = T & { readonly [__brand]: B };
 /** A number normalized to the 0–1 range (canvas coordinates, sizes). */
 export type NormalizedCoord = Brand<number, 'NormalizedCoord'>;
 
+/** Clamp to [0, 1] and brand as NormalizedCoord. */
+export function normalizedCoord(n: number): NormalizedCoord {
+  return Math.max(0, Math.min(1, n)) as NormalizedCoord;
+}
+
 /** An angle in degrees, 0–360. */
 export type Degrees = Brand<number, 'Degrees'>;
 
+/** Wrap to [0, 360) and brand as Degrees. */
+export function degrees(n: number): Degrees {
+  return (((n % 360) + 360) % 360) as Degrees;
+}
+
 /** A detuning offset in cents. */
 export type Cents = Brand<number, 'Cents'>;
+
+/** Brand as Cents (no range restriction). */
+export function cents(n: number): Cents {
+  return n as Cents;
+}
 
 // ---- Shape types ----
 
