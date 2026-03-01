@@ -14,6 +14,7 @@ import { AudioEngine } from './audio.js';
 import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.js';
 import { DecorationTool } from './decorations.js';
 import { saveToURL, loadFromURL } from './serialize.js';
+import { generateEmbedSnippet, copyToClipboard } from './embed.js';
 
 // ---- Init ----
 
@@ -408,6 +409,7 @@ document.addEventListener('keydown', (e) => {
     toolbar._updateToolActive();
     decoTool.setTool(null);
     document.getElementById('text-input').classList.add('hidden');
+    shareMenu.classList.add('hidden');
     needsRender = true;
   }
   if (e.key === 'v') {
@@ -540,6 +542,43 @@ function debouncedSave() {
     }
   }, 1000);
 }
+
+// ---- Share menu ----
+
+const menuBtn = document.getElementById('btn-menu');
+const shareMenu = document.getElementById('share-menu');
+
+menuBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  shareMenu.classList.toggle('hidden');
+});
+
+document.addEventListener('click', (e) => {
+  if (!shareMenu.contains(e.target) && e.target !== menuBtn) {
+    shareMenu.classList.add('hidden');
+  }
+});
+
+shareMenu.addEventListener('click', async (e) => {
+  const item = e.target.closest('.share-menu-item');
+  if (!item) return;
+
+  const action = item.dataset.action;
+  const label = item.querySelector('span');
+  const originalText = label.textContent;
+
+  if (action === 'share') {
+    await copyToClipboard(window.location.href);
+  } else if (action === 'embed') {
+    const snippet = generateEmbedSnippet(state.data);
+    await copyToClipboard(snippet);
+  }
+
+  label.textContent = 'Copied!';
+  setTimeout(() => {
+    label.textContent = originalText;
+  }, 1500);
+});
 
 // ---- Corner position helper ----
 

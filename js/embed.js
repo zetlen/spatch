@@ -6,7 +6,7 @@
 
 import { serializeState } from './serialize.js';
 
-function generateEmbedSnippet(state, host) {
+export function generateEmbedSnippet(state, host) {
   const encoded = serializeState(state);
   const base =
     host || window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'embed.html';
