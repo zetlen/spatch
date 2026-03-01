@@ -365,12 +365,12 @@ export class AudioEngine {
     if (!this.isPlaying || !this.audioCtx) return;
     const ctx = this.audioCtx;
     const now = ctx.currentTime;
-    const currentShapeIds = new Set(sigilState.shapes.map((s) => s.id));
+    const shapeMap = new Map(sigilState.shapes.map((s) => [s.id, s]));
 
     // Remove voices for deleted shapes
     for (let i = this.activeVoices.length - 1; i >= 0; i--) {
       const voice = this.activeVoices[i];
-      if (!currentShapeIds.has(voice.shapeId)) {
+      if (!shapeMap.has(voice.shapeId)) {
         this._stopVoice(voice);
         this.activeVoices.splice(i, 1);
         this.playingShapeIds.delete(voice.shapeId);
@@ -391,7 +391,7 @@ export class AudioEngine {
 
     // Update existing voices
     for (const voice of this.activeVoices) {
-      const shape = sigilState.shapes.find((s) => s.id === voice.shapeId);
+      const shape = shapeMap.get(voice.shapeId);
       if (!shape) continue;
 
       const param = rotationToParam(shape.rotation);
