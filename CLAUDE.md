@@ -27,10 +27,8 @@ js/
   envelope.js        ADSR ↔ canvas corner radius conversion
   toolbar.js         Toolbar class: tool/pattern/color picker UI binding
   decorations.js     DecorationTool class: squiggle/curlicue/text placement
-  vocoder.js         Formant vocoder (vowel/consonant → bandpass filter bank)
   embed.js           Embed snippet generator + modal UI
   serialize.js       LZ-string URL serialization (compact single-char keys)
-  layers.js          Layer EQ shelving helper
   worklets/
     bitcrusher.js    AudioWorkletProcessor for the "rough" pattern effect
 dist/                Build output (gitignored)
@@ -75,6 +73,10 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 - Fill objects carry all three mode's parameters at once (solid HSL, radial Lab,
   linear HSL pair). The `mode` field selects which set is active.
 - Audio effects return `{ input, output, dispose }` objects for uniform wiring.
+
+**IMPORTANT: If you need a temporary directory for scratch files, build artifacts, or
+throwaway work, use `tmp/` at the project root. It is gitignored. Do NOT create temp
+files anywhere else.**
 
 ## When Making Changes
 
