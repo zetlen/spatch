@@ -3,7 +3,7 @@ import {
   yToFrequency,
   xToPan,
   sizeToGain,
-  rotationToDetune,
+  rotationToParam,
   waveformGain,
   shapeAreaFraction,
   areaToGain,
@@ -82,21 +82,21 @@ describe('sizeToGain', () => {
   });
 });
 
-describe('rotationToDetune', () => {
-  test('rotation=0 returns 0 cents', () => {
-    expect(rotationToDetune(0)).toBe(0);
+describe('rotationToParam', () => {
+  test('rotation=0 returns 0.0', () => {
+    expect(rotationToParam(0)).toBe(0);
   });
 
-  test('rotation=180 returns 25 cents', () => {
-    expect(rotationToDetune(180)).toBe(25);
+  test('rotation=180 returns 0.5', () => {
+    expect(rotationToParam(180)).toBe(0.5);
   });
 
-  test('rotation=360 returns 50 cents', () => {
-    expect(rotationToDetune(360)).toBeCloseTo(50);
+  test('rotation=360 returns 1.0', () => {
+    expect(rotationToParam(360)).toBeCloseTo(1.0);
   });
 
-  test('rotation=90 returns 12.5 cents', () => {
-    expect(rotationToDetune(90)).toBeCloseTo(12.5);
+  test('rotation=90 returns 0.25', () => {
+    expect(rotationToParam(90)).toBeCloseTo(0.25);
   });
 });
 

@@ -172,21 +172,23 @@ function drawSelectionHandles(ctx, shape, canvasSize) {
     ctx.strokeRect(hx - handleSize, hy - handleSize, handleSize * 2, handleSize * 2);
   }
 
-  // Rotation handle (above shape)
-  const rotHandleY = -r - 25;
-  ctx.beginPath();
-  ctx.moveTo(0, -r);
-  ctx.lineTo(0, rotHandleY);
-  ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  // Rotation handle (above shape), disabled for circles
+  if (shape.type !== 'circle') {
+    const rotHandleY = -r - 25;
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(0, rotHandleY);
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
-  ctx.beginPath();
-  ctx.arc(0, rotHandleY, 5, 0, Math.PI * 2);
-  ctx.fillStyle = '#b44dff';
-  ctx.fill();
-  ctx.strokeStyle = '#0a0a1a';
-  ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, rotHandleY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#b44dff';
+    ctx.fill();
+    ctx.strokeStyle = '#0a0a1a';
+    ctx.stroke();
+  }
 
   ctx.restore();
 }
