@@ -434,6 +434,7 @@ const modeBtns = document.querySelectorAll('.mode-btn');
 
 let playMode = 'normal'; // 'normal' | 'latch' | 'loop'
 let loopTimeoutId = null;
+let releaseGlowTimeoutId = null;
 
 function setPlayMode(mode) {
   if (audio.isPlaying) stopPlayback();
@@ -443,6 +444,10 @@ function setPlayMode(mode) {
 }
 
 async function startPlayback() {
+  if (releaseGlowTimeoutId != null) {
+    clearTimeout(releaseGlowTimeoutId);
+    releaseGlowTimeoutId = null;
+  }
   await audio.play(state.data, state.data.envelope);
   playBtn.classList.add('playing');
   canvasWrap.classList.add('playing');
@@ -460,7 +465,8 @@ function stopPlayback() {
   playBtn.textContent = '\u25B6 PLAY';
   latchSlider.classList.add('hidden');
   const releaseMs = state.data.envelope.release * 1000 + 100;
-  setTimeout(() => {
+  releaseGlowTimeoutId = setTimeout(() => {
+    releaseGlowTimeoutId = null;
     canvasWrap.classList.remove('playing');
     needsRender = true;
   }, releaseMs);
