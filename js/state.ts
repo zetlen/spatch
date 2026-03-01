@@ -4,13 +4,16 @@ import type {
   ShapeType,
   Shape,
   Decoration,
-  DecorationType,
+  SquiggleDecoration,
+  CurlicueDecoration,
+  TextDecoration,
   SigilData,
   Envelope,
   Fill,
   NormalizedCoord,
   Degrees,
 } from './types.ts';
+import { createDefaultFill } from './types.ts';
 
 let _idCounter = 0;
 export function genId(prefix = 's'): string {
@@ -33,37 +36,59 @@ function createShape(type: ShapeType, x: NormalizedCoord, y: NormalizedCoord): S
     y,
     size: 0.12 as NormalizedCoord,
     rotation: 0 as Degrees,
-    fill: {
-      mode: 'solid',
-      h: 200,
-      s: 80,
-      l: 50,
-      h2: 180,
-      s2: 80,
-      l2: 45,
-      gradAngle: 0,
-    },
+    fill: createDefaultFill(),
     pattern: null,
   };
 }
 
-function createDecoration(
-  type: DecorationType,
-  points: [NormalizedCoord, NormalizedCoord][] | null,
+function createSquiggle(
+  points: [NormalizedCoord, NormalizedCoord][],
   color?: string,
-): Decoration {
+): SquiggleDecoration {
   return {
     id: genId('d'),
-    type,
-    points: points || [],
-    text: null,
+    type: 'squiggle',
+    points,
     targetShapeId: null,
-    x: 0 as NormalizedCoord,
-    y: 0 as NormalizedCoord,
-    scale: 1,
     strokeColor: color || 'hsl(320, 100%, 60%)',
     strokeWidth: 3,
+  };
+}
+
+function createCurlicue(
+  x: NormalizedCoord,
+  y: NormalizedCoord,
+  color?: string,
+): CurlicueDecoration {
+  return {
+    id: genId('d'),
+    type: 'curlicue',
+    x,
+    y,
+    scale: 1,
+    targetShapeId: null,
+    strokeColor: color || 'hsl(280, 100%, 65%)',
+    strokeWidth: 3,
+  };
+}
+
+function createTextDeco(
+  text: string,
+  x: NormalizedCoord,
+  y: NormalizedCoord,
+  color?: string,
+): TextDecoration {
+  return {
+    id: genId('d'),
+    type: 'text',
+    text,
+    x,
+    y,
+    scale: 1,
     fontSize: 24,
+    targetShapeId: null,
+    strokeColor: color || 'hsl(50, 100%, 60%)',
+    strokeWidth: 3,
   };
 }
 
@@ -168,16 +193,16 @@ export class SigilState {
     this.updateShape(id, updates);
   }
 
-  updateFill(id: string, fillUpdates: Partial<Fill>): void {
+  updateFill(id: string, fill: Fill): void {
     const shape = this.data.shapes.find((s) => s.id === id);
     if (!shape) return;
-    Object.assign(shape.fill, fillUpdates);
+    shape.fill = fill;
     this._notify();
   }
 
-  updateFillWithUndo(id: string, fillUpdates: Partial<Fill>): void {
+  updateFillWithUndo(id: string, fill: Fill): void {
     this._pushUndo();
-    this.updateFill(id, fillUpdates);
+    this.updateFill(id, fill);
   }
 
   getShape(id: string): Shape | undefined {
@@ -227,16 +252,31 @@ export class SigilState {
     this.updateEnvelope(updates);
   }
 
-  addDecoration(
-    type: DecorationType,
-    points: [NormalizedCoord, NormalizedCoord][] | null,
-    color?: string,
-  ): Decoration {
+  addDecoration(deco: Decoration): Decoration {
     this._pushUndo();
-    const deco = createDecoration(type, points, color);
     this.data.decorations.push(deco);
     this._notify();
     return deco;
+  }
+
+  addSquiggle(points: [NormalizedCoord, NormalizedCoord][], color?: string): SquiggleDecoration {
+    const deco = createSquiggle(points, color);
+    return this.addDecoration(deco) as SquiggleDecoration;
+  }
+
+  addCurlicue(x: NormalizedCoord, y: NormalizedCoord, color?: string): CurlicueDecoration {
+    const deco = createCurlicue(x, y, color);
+    return this.addDecoration(deco) as CurlicueDecoration;
+  }
+
+  addTextDeco(
+    text: string,
+    x: NormalizedCoord,
+    y: NormalizedCoord,
+    color?: string,
+  ): TextDecoration {
+    const deco = createTextDeco(text, x, y, color);
+    return this.addDecoration(deco) as TextDecoration;
   }
 
   removeDecoration(id: string): void {

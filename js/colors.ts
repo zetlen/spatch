@@ -25,7 +25,7 @@ export function getFillStyle(
     }
 
     case 'linear': {
-      const angle = ((fill.gradAngle || 0) * Math.PI) / 180;
+      const angle = (fill.gradAngle * Math.PI) / 180;
       const dx = Math.cos(angle) * radius;
       const dy = Math.sin(angle) * radius;
       const grad = ctx.createLinearGradient(-dx, -dy, dx, dy);
@@ -33,9 +33,6 @@ export function getFillStyle(
       grad.addColorStop(1, hslToString(fill.h2, fill.s2, fill.l2));
       return grad;
     }
-
-    default:
-      return '#ff00ff';
   }
 }
 
@@ -48,9 +45,7 @@ export function getSwatchColor(fill: Fill): string {
     case 'radial':
       return hslToString(fill.h, fill.s, fill.l);
     case 'linear':
-      return `linear-gradient(${fill.gradAngle || 0}deg, ${hslToString(fill.h, fill.s, fill.l)}, ${hslToString(fill.h2, fill.s2, fill.l2)})`;
-    default:
-      return '#ff00ff';
+      return `linear-gradient(${fill.gradAngle}deg, ${hslToString(fill.h, fill.s, fill.l)}, ${hslToString(fill.h2, fill.s2, fill.l2)})`;
   }
 }
 

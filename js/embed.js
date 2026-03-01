@@ -1,6 +1,6 @@
 // embed.js — Embed snippet generator
 
-import { serializeState } from './serialize.js';
+import { serializeState } from './serialize.ts';
 
 export function generateEmbedSnippet(state, host) {
   const encoded = serializeState(state);

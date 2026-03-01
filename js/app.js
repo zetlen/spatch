@@ -1,7 +1,7 @@
 // app.js — Entry point, event wiring, render loop
 
 import { SigilState } from './state.ts';
-import { render } from './canvas.js';
+import { render } from './canvas.ts';
 import {
   hitTestShapes,
   hitTestHandles,
@@ -13,11 +13,11 @@ import {
   hitTestDecoHandles,
   getDecoBounds,
 } from './shapes.ts';
-import { Toolbar } from './toolbar.js';
+import { Toolbar } from './toolbar.ts';
 import { AudioEngine } from './audio.ts';
 import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.ts';
-import { DecorationTool } from './decorations.js';
-import { saveToURL, loadFromURL } from './serialize.js';
+import { DecorationTool } from './decorations.ts';
+import { saveToURL, loadFromURL } from './serialize.ts';
 import { generateEmbedSnippet, copyToClipboard } from './embed.js';
 
 // ---- Init ----

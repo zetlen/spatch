@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { serializeState, deserializeState } from '../../js/serialize.js';
+import { serializeState, deserializeState } from '../../js/serialize.ts';
 
 function makeState(overrides = {}) {
   return {
@@ -18,16 +18,7 @@ function makeShape(overrides = {}) {
     y: 0.5,
     size: 0.12,
     rotation: 45,
-    fill: {
-      mode: 'solid',
-      h: 200,
-      s: 80,
-      l: 50,
-      h2: 180,
-      s2: 80,
-      l2: 45,
-      gradAngle: 0,
-    },
+    fill: { mode: 'solid', h: 200, s: 80, l: 50 },
     pattern: null,
     ...overrides,
   };
@@ -99,32 +90,13 @@ describe('serializeState / deserializeState round-trip', () => {
 
   test('all fill modes survive round-trip', () => {
     const solidShape = makeShape({
-      fill: { ...makeShape().fill, mode: 'solid', h: 120, s: 50, l: 60 },
+      fill: { mode: 'solid', h: 120, s: 50, l: 60 },
     });
     const radialShape = makeShape({
-      fill: {
-        ...makeShape().fill,
-        mode: 'radial',
-        h: 200,
-        s: 80,
-        l: 50,
-        h2: 100,
-        s2: 60,
-        l2: 40,
-      },
+      fill: { mode: 'radial', h: 200, s: 80, l: 50, h2: 100, s2: 60, l2: 40 },
     });
     const linearShape = makeShape({
-      fill: {
-        ...makeShape().fill,
-        mode: 'linear',
-        gradAngle: 90,
-        h: 100,
-        s: 50,
-        l: 40,
-        h2: 200,
-        s2: 70,
-        l2: 60,
-      },
+      fill: { mode: 'linear', gradAngle: 90, h: 100, s: 50, l: 40, h2: 200, s2: 70, l2: 60 },
     });
 
     const state = makeState({ shapes: [solidShape, radialShape, linearShape] });

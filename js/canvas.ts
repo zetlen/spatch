@@ -1,13 +1,13 @@
-// canvas.js — Canvas rendering pipeline
+// canvas.ts — Canvas rendering pipeline
 
 import { getFillStyle } from './colors.ts';
-import { applyPattern } from './patterns.js';
+import { applyPattern } from './patterns.ts';
 import { getDecoBounds } from './shapes.ts';
+import type { Shape, Decoration, SigilData, DecoBounds } from './types.ts';
 
 const CANVAS_BG = '#1a1a2e';
 
 // Track whether the last pointer interaction was touch.
-// Hybrid devices (touch + mouse/stylus) switch dynamically.
 let lastInputWasTouch = false;
 window.addEventListener(
   'pointerdown',
@@ -17,33 +17,35 @@ window.addEventListener(
   true,
 );
 
-export function isLastInputTouch() {
+export function isLastInputTouch(): boolean {
   return lastInputWasTouch;
 }
 
-export function render(ctx, state, canvasSize, selectedId, playingShapeIds, selectedDecoId) {
+export function render(
+  ctx: CanvasRenderingContext2D,
+  state: SigilData,
+  canvasSize: number,
+  selectedId: string | null,
+  playingShapeIds: Set<string> | null,
+  selectedDecoId?: string | null,
+): void {
   ctx.clearRect(0, 0, canvasSize, canvasSize);
 
-  // Background
   ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, canvasSize, canvasSize);
 
-  // Chromatic pitch guide lines
   drawChromaticGuides(ctx, canvasSize);
 
-  // Shapes (back to front)
   for (let i = 0; i < state.shapes.length; i++) {
     const shape = state.shapes[i];
-    const isPlaying = playingShapeIds && playingShapeIds.has(shape.id);
+    const isPlaying = playingShapeIds != null && playingShapeIds.has(shape.id);
     drawShape(ctx, shape, canvasSize, shape.id === selectedId, isPlaying);
   }
 
-  // Decorations
   for (const deco of state.decorations) {
     drawDecoration(ctx, deco, canvasSize);
   }
 
-  // Selection handles (hidden when last input was touch — pinch/rotate replaces them)
   if (!lastInputWasTouch) {
     if (selectedId) {
       const sel = state.shapes.find((s) => s.id === selectedId);
@@ -56,7 +58,7 @@ export function render(ctx, state, canvasSize, selectedId, playingShapeIds, sele
   }
 }
 
-function drawChromaticGuides(ctx, size) {
+function drawChromaticGuides(ctx: CanvasRenderingContext2D, size: number): void {
   ctx.save();
   ctx.lineWidth = 1;
   for (let s = 0; s <= 36; s++) {
@@ -73,7 +75,13 @@ function drawChromaticGuides(ctx, size) {
   ctx.restore();
 }
 
-function drawShape(ctx, shape, canvasSize, isSelected, isPlaying) {
+function drawShape(
+  ctx: CanvasRenderingContext2D,
+  shape: Shape,
+  canvasSize: number,
+  isSelected: boolean,
+  isPlaying: boolean,
+): void {
   const cx = shape.x * canvasSize;
   const cy = shape.y * canvasSize;
   const r = (shape.size / 2) * canvasSize;
@@ -83,25 +91,21 @@ function drawShape(ctx, shape, canvasSize, isSelected, isPlaying) {
   ctx.translate(cx, cy);
   ctx.rotate(rotRad);
 
-  // Build clip path
   buildShapePath(ctx, shape, canvasSize);
   ctx.save();
   ctx.clip();
 
-  // Fill
   const fillStyle = getFillStyle(ctx, shape.fill, r);
   ctx.fillStyle = fillStyle;
   buildShapePath(ctx, shape, canvasSize);
   ctx.fill();
 
-  // Pattern overlay
   if (shape.pattern) {
     applyPattern(ctx, shape, canvasSize);
   }
 
-  ctx.restore(); // un-clip
+  ctx.restore();
 
-  // Neon outline glow
   const glowColor = isPlaying ? 'rgba(0, 240, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)';
   const glowLayers = isPlaying
     ? [
@@ -131,10 +135,14 @@ function drawShape(ctx, shape, canvasSize, isSelected, isPlaying) {
     ctx.restore();
   }
 
-  ctx.restore(); // un-translate/rotate
+  ctx.restore();
 }
 
-export function buildShapePath(ctx, shape, canvasSize) {
+export function buildShapePath(
+  ctx: CanvasRenderingContext2D,
+  shape: Shape,
+  canvasSize: number,
+): void {
   const r = (shape.size / 2) * canvasSize;
   ctx.beginPath();
   switch (shape.type) {
@@ -157,7 +165,11 @@ export function buildShapePath(ctx, shape, canvasSize) {
   }
 }
 
-function drawSelectionHandles(ctx, shape, canvasSize) {
+function drawSelectionHandles(
+  ctx: CanvasRenderingContext2D,
+  shape: Shape,
+  canvasSize: number,
+): void {
   const cx = shape.x * canvasSize;
   const cy = shape.y * canvasSize;
   const r = (shape.size / 2) * canvasSize;
@@ -167,24 +179,22 @@ function drawSelectionHandles(ctx, shape, canvasSize) {
   ctx.translate(cx, cy);
   ctx.rotate(rotRad);
 
-  // Bounding box
   ctx.setLineDash([4, 4]);
   ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
   ctx.lineWidth = 1;
   ctx.strokeRect(-r, -r, r * 2, r * 2);
   ctx.setLineDash([]);
 
-  // Corner resize handles
   const handleSize = 5;
   const handles = [
     [-r, -r],
     [r, -r],
     [r, r],
-    [-r, r], // corners
+    [-r, r],
     [0, -r],
     [r, 0],
     [0, r],
-    [-r, 0], // midpoints
+    [-r, 0],
   ];
   ctx.fillStyle = '#00f0ff';
   ctx.strokeStyle = '#0a0a1a';
@@ -194,7 +204,6 @@ function drawSelectionHandles(ctx, shape, canvasSize) {
     ctx.strokeRect(hx - handleSize, hy - handleSize, handleSize * 2, handleSize * 2);
   }
 
-  // Rotation handle (above shape), disabled for circles
   if (shape.type !== 'circle') {
     const rotHandleY = -r - 25;
     ctx.beginPath();
@@ -215,20 +224,22 @@ function drawSelectionHandles(ctx, shape, canvasSize) {
   ctx.restore();
 }
 
-function drawDecoSelectionHandles(ctx, deco, canvasSize) {
+function drawDecoSelectionHandles(
+  ctx: CanvasRenderingContext2D,
+  deco: Decoration,
+  canvasSize: number,
+): void {
   const bounds = getDecoBounds(deco, canvasSize);
   if (!bounds) return;
 
   ctx.save();
 
-  // Bounding box
   ctx.setLineDash([4, 4]);
   ctx.strokeStyle = 'rgba(255, 225, 86, 0.5)';
   ctx.lineWidth = 1;
   ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
   ctx.setLineDash([]);
 
-  // Corner resize handles
   const handleSize = 5;
   const corners = [
     [bounds.x, bounds.y],
@@ -247,53 +258,60 @@ function drawDecoSelectionHandles(ctx, deco, canvasSize) {
   ctx.restore();
 }
 
-function drawDecoration(ctx, deco, canvasSize) {
-  if (deco.type === 'squiggle' && deco.points.length >= 2) {
-    ctx.save();
-    ctx.strokeStyle = deco.strokeColor;
-    ctx.lineWidth = deco.strokeWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+function drawDecoration(ctx: CanvasRenderingContext2D, deco: Decoration, canvasSize: number): void {
+  switch (deco.type) {
+    case 'squiggle': {
+      if (deco.points.length < 2) break;
+      ctx.save();
+      ctx.strokeStyle = deco.strokeColor;
+      ctx.lineWidth = deco.strokeWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = deco.strokeColor;
+      ctx.shadowBlur = 8;
 
-    // Neon glow
-    ctx.shadowColor = deco.strokeColor;
-    ctx.shadowBlur = 8;
-
-    ctx.beginPath();
-    const pts = deco.points;
-    ctx.moveTo(pts[0][0] * canvasSize, pts[0][1] * canvasSize);
-    for (let i = 1; i < pts.length - 1; i++) {
-      const midX = ((pts[i][0] + pts[i + 1][0]) / 2) * canvasSize;
-      const midY = ((pts[i][1] + pts[i + 1][1]) / 2) * canvasSize;
-      ctx.quadraticCurveTo(pts[i][0] * canvasSize, pts[i][1] * canvasSize, midX, midY);
+      ctx.beginPath();
+      const pts = deco.points;
+      ctx.moveTo(pts[0][0] * canvasSize, pts[0][1] * canvasSize);
+      for (let i = 1; i < pts.length - 1; i++) {
+        const midX = ((pts[i][0] + pts[i + 1][0]) / 2) * canvasSize;
+        const midY = ((pts[i][1] + pts[i + 1][1]) / 2) * canvasSize;
+        ctx.quadraticCurveTo(pts[i][0] * canvasSize, pts[i][1] * canvasSize, midX, midY);
+      }
+      const last = pts[pts.length - 1];
+      ctx.lineTo(last[0] * canvasSize, last[1] * canvasSize);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      break;
     }
-    const last = pts[pts.length - 1];
-    ctx.lineTo(last[0] * canvasSize, last[1] * canvasSize);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.restore();
-  }
 
-  if (deco.type === 'curlicue') {
-    drawCurlicue(ctx, deco, canvasSize);
-  }
+    case 'curlicue':
+      drawCurlicue(ctx, deco, canvasSize);
+      break;
 
-  if (deco.type === 'text' && deco.text) {
-    const s = deco.scale || 1;
-    ctx.save();
-    ctx.font = `${(deco.fontSize || 24) * s}px 'Orbitron', sans-serif`;
-    ctx.fillStyle = deco.strokeColor;
-    ctx.shadowColor = deco.strokeColor;
-    ctx.shadowBlur = 10;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(deco.text, deco.x * canvasSize, deco.y * canvasSize);
-    ctx.shadowBlur = 0;
-    ctx.restore();
+    case 'text': {
+      const s = deco.scale || 1;
+      ctx.save();
+      ctx.font = `${deco.fontSize * s}px 'Orbitron', sans-serif`;
+      ctx.fillStyle = deco.strokeColor;
+      ctx.shadowColor = deco.strokeColor;
+      ctx.shadowBlur = 10;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(deco.text, deco.x * canvasSize, deco.y * canvasSize);
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      break;
+    }
   }
 }
 
-function drawCurlicue(ctx, deco, canvasSize) {
+function drawCurlicue(
+  ctx: CanvasRenderingContext2D,
+  deco: Decoration & { type: 'curlicue' },
+  canvasSize: number,
+): void {
   const cx = deco.x * canvasSize;
   const cy = deco.y * canvasSize;
   const scale = 1.2 * (deco.scale || 1);
@@ -306,7 +324,6 @@ function drawCurlicue(ctx, deco, canvasSize) {
   ctx.shadowColor = deco.strokeColor;
   ctx.shadowBlur = 6;
 
-  // Logarithmic spiral
   ctx.beginPath();
   const a = 3 * scale;
   const b = 0.15;

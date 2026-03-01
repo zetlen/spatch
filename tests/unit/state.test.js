@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { SigilState, createDefaultState } from '../../js/state.js';
+import { SigilState, createDefaultState } from '../../js/state.ts';
 
 describe('SigilState CRUD', () => {
   test('starts with default state (empty shapes, default envelope)', () => {
@@ -71,15 +71,15 @@ describe('SigilState updateShape / updateFill / updateEnvelope', () => {
     expect(updated.y).toBe(0.5); // unchanged
   });
 
-  test('updateFill modifies fill properties', () => {
+  test('updateFill replaces the fill entirely', () => {
     const state = new SigilState();
     const shape = state.addShape('circle', 0.5, 0.5);
-    state.updateFill(shape.id, { mode: 'radial', h2: 100 });
+    state.updateFill(shape.id, { mode: 'radial', h: 200, s: 80, l: 50, h2: 100, s2: 60, l2: 40 });
 
     const updated = state.getShape(shape.id);
     expect(updated.fill.mode).toBe('radial');
     expect(updated.fill.h2).toBe(100);
-    expect(updated.fill.h).toBe(200); // unchanged
+    expect(updated.fill.h).toBe(200);
   });
 
   test('updateEnvelope modifies envelope', () => {
@@ -260,14 +260,13 @@ describe('SigilState onChange listener', () => {
 });
 
 describe('SigilState decorations', () => {
-  test('addDecoration adds and notifies', () => {
+  test('addSquiggle adds and notifies', () => {
     const state = new SigilState();
     let notified = false;
     state.onChange(() => {
       notified = true;
     });
-    const deco = state.addDecoration(
-      'squiggle',
+    const deco = state.addSquiggle(
       [
         [0.1, 0.2],
         [0.3, 0.4],
@@ -282,7 +281,7 @@ describe('SigilState decorations', () => {
 
   test('removeDecoration removes and notifies', () => {
     const state = new SigilState();
-    const deco = state.addDecoration('text', [], '#fff');
+    const deco = state.addTextDeco('Hello', 0.5, 0.5, '#fff');
     let notified = false;
     state.onChange(() => {
       notified = true;
