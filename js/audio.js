@@ -363,7 +363,33 @@ export class AudioEngine {
 
   updateVoices(sigilState) {
     if (!this.isPlaying || !this.audioCtx) return;
-    const now = this.audioCtx.currentTime;
+    const ctx = this.audioCtx;
+    const now = ctx.currentTime;
+    const currentShapeIds = new Set(sigilState.shapes.map((s) => s.id));
+
+    // Remove voices for deleted shapes
+    for (let i = this.activeVoices.length - 1; i >= 0; i--) {
+      const voice = this.activeVoices[i];
+      if (!currentShapeIds.has(voice.shapeId)) {
+        this._stopVoice(voice);
+        this.activeVoices.splice(i, 1);
+        this.playingShapeIds.delete(voice.shapeId);
+      }
+    }
+
+    // Add voices for new shapes
+    const totalLayers = sigilState.shapes.length;
+    for (let i = 0; i < totalLayers; i++) {
+      const shape = sigilState.shapes[i];
+      if (!this.playingShapeIds.has(shape.id)) {
+        const voice = this._buildVoice(ctx, shape, i, totalLayers);
+        voice.oscillator.start(now);
+        this.activeVoices.push(voice);
+        this.playingShapeIds.add(shape.id);
+      }
+    }
+
+    // Update existing voices
     for (const voice of this.activeVoices) {
       const shape = sigilState.shapes.find((s) => s.id === voice.shapeId);
       if (!shape) continue;
@@ -373,19 +399,11 @@ export class AudioEngine {
 
       if (shape.type === 'square') {
         voice.oscRaw.frequency.setValueAtTime(freq, now);
-        // pulse width maps from 50% (param=0) to ~5% or ~95%
-        // param 0..1 -> dc offset -0.9 .. +0.9
         voice.pwmOffset.offset.setValueAtTime((param * 2 - 1) * 0.9, now);
       } else if (shape.type === 'triangle') {
         voice.oscSaw.frequency.setValueAtTime(freq, now);
         voice.oscTri.frequency.setValueAtTime(freq, now);
-        // equal power crossfade
-        // 0 degrees (param=0): pure sawtooth
-        // 180 degrees (param=0.5): pure triangle
-        // 360 degrees (param=1.0): back to sawtooth
-        // distance from 0.5 (180 deg) determines mix
-        const mix = 1.0 - Math.abs(param - 0.5) * 2; // mix = 0 at 0/360, mix = 1 at 180
-        // sin/cos for equal power
+        const mix = 1.0 - Math.abs(param - 0.5) * 2;
         const gainTri = Math.sin((mix * Math.PI) / 2);
         const gainSaw = Math.cos((mix * Math.PI) / 2);
         voice.gainTri.gain.setValueAtTime(gainTri, now);
@@ -412,48 +430,7 @@ export class AudioEngine {
     this._sessionId++;
 
     for (const voice of this.activeVoices) {
-      if (voice.oscRaw)
-        try {
-          voice.oscRaw.stop();
-        } catch {}
-      if (voice.oscSaw)
-        try {
-          voice.oscSaw.stop();
-        } catch {}
-      if (voice.oscTri)
-        try {
-          voice.oscTri.stop();
-        } catch {}
-      if (voice.pwmOffset)
-        try {
-          voice.pwmOffset.stop();
-        } catch {}
-
-      if (voice.oscillator && voice.oscillator.disconnect)
-        try {
-          voice.oscillator.disconnect();
-        } catch {}
-      if (voice.oscRaw)
-        try {
-          voice.oscRaw.disconnect();
-        } catch {}
-      if (voice.oscSaw)
-        try {
-          voice.oscSaw.disconnect();
-        } catch {}
-      if (voice.oscTri)
-        try {
-          voice.oscTri.disconnect();
-        } catch {}
-      if (voice.pwmOffset)
-        try {
-          voice.pwmOffset.disconnect();
-        } catch {}
-
-      try {
-        voice.outputNode.disconnect();
-      } catch {}
-      if (voice.effectDispose) voice.effectDispose();
+      this._stopVoice(voice);
     }
     this.activeVoices = [];
 
@@ -484,6 +461,49 @@ export class AudioEngine {
 
     this.playingShapeIds.clear();
     this.isPlaying = false;
+  }
+
+  _stopVoice(voice) {
+    if (voice.oscRaw)
+      try {
+        voice.oscRaw.stop();
+      } catch {}
+    if (voice.oscSaw)
+      try {
+        voice.oscSaw.stop();
+      } catch {}
+    if (voice.oscTri)
+      try {
+        voice.oscTri.stop();
+      } catch {}
+    if (voice.pwmOffset)
+      try {
+        voice.pwmOffset.stop();
+      } catch {}
+    if (voice.oscillator && voice.oscillator.disconnect)
+      try {
+        voice.oscillator.disconnect();
+      } catch {}
+    if (voice.oscRaw)
+      try {
+        voice.oscRaw.disconnect();
+      } catch {}
+    if (voice.oscSaw)
+      try {
+        voice.oscSaw.disconnect();
+      } catch {}
+    if (voice.oscTri)
+      try {
+        voice.oscTri.disconnect();
+      } catch {}
+    if (voice.pwmOffset)
+      try {
+        voice.pwmOffset.disconnect();
+      } catch {}
+    try {
+      voice.outputNode.disconnect();
+    } catch {}
+    if (voice.effectDispose) voice.effectDispose();
   }
 
   _buildVoice(ctx, shape, layerIndex, totalLayers) {
