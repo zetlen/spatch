@@ -2,9 +2,10 @@
 
 import { serializeState } from './serialize.js';
 
-export function generateEmbedSnippet(state, host) {
+function generateEmbedSnippet(state, host) {
   const encoded = serializeState(state);
-  const base = host || window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'embed.html';
+  const base =
+    host || window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'embed.html';
   const url = `${base}#${encoded}`;
 
   const iframe = `<iframe src="${url}" width="400" height="400" style="border:none;border-radius:8px;" allow="autoplay"></iframe>`;
@@ -80,5 +81,7 @@ export function showEmbedModal(state) {
   });
 
   document.getElementById('embed-close').addEventListener('click', () => modal.remove());
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
 }
