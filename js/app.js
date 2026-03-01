@@ -147,6 +147,7 @@ toolbar.onToolChange = (tool) => {
   if (tool === 'squiggle' || tool === 'curlicue' || tool === 'text') {
     decoTool.setTool(tool);
     state.selectedId = null;
+    state.selectedDecoId = null;
     needsRender = true;
   } else {
     decoTool.setTool(null);
@@ -174,8 +175,19 @@ canvas.addEventListener('mousedown', (e) => {
 
   // Decoration tools
   if (tool === 'squiggle' || tool === 'curlicue' || tool === 'text') {
-    if (decoTool.handleMouseDown(nx, ny)) {
-      interactionMode = 'drawing';
+    const result = decoTool.handleMouseDown(nx, ny);
+    if (result) {
+      if (result.placed) {
+        // Curlicue / text: placed instantly — switch to select mode like shapes
+        state.selectedDecoId = result.placed;
+        state.selectedId = null;
+        toolbar.currentTool = 'select';
+        toolbar._updateToolActive();
+        decoTool.setTool(null);
+      } else {
+        // Squiggle: drawing in progress
+        interactionMode = 'drawing';
+      }
       needsRender = true;
       return;
     }
@@ -406,7 +418,15 @@ canvas.addEventListener('mousemove', (e) => {
 
 canvas.addEventListener('mouseup', () => {
   if (interactionMode === 'drawing') {
-    decoTool.handleMouseUp();
+    const decoId = decoTool.handleMouseUp();
+    if (decoId) {
+      // Squiggle finished — switch to select mode like shapes
+      state.selectedDecoId = decoId;
+      state.selectedId = null;
+      toolbar.currentTool = 'select';
+      toolbar._updateToolActive();
+      decoTool.setTool(null);
+    }
     needsRender = true;
   }
 
@@ -436,7 +456,14 @@ canvas.addEventListener('mouseup', () => {
 
 canvas.addEventListener('mouseleave', () => {
   if (interactionMode === 'drawing') {
-    decoTool.handleMouseUp();
+    const decoId = decoTool.handleMouseUp();
+    if (decoId) {
+      state.selectedDecoId = decoId;
+      state.selectedId = null;
+      toolbar.currentTool = 'select';
+      toolbar._updateToolActive();
+      decoTool.setTool(null);
+    }
     needsRender = true;
   }
   if (interactionMode === 'arpeggio') {
