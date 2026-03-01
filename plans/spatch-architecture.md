@@ -12,8 +12,9 @@ All state lives in the URL. No backend, no database, no accounts.
 
 ## Data Model
 
-All application state lives in a single plain object managed by `SigilState`
-(`js/state.js`):
+All application state lives in a single plain object managed by `SigilStore`
+(`js/state.ts`). `UndoManager` wraps the store to provide undo/redo.
+Selection state (`selectedId`, `selectedDecoId`) is app-level, not in the store.
 
 ```
 {
@@ -31,31 +32,31 @@ A shape is the fundamental unit. Each shape maps to one audio voice.
 {
   id:       "s1a3f"                    // counter + random suffix
   type:     "circle" | "triangle" | "square"
-  x:        0.0–1.0                    // normalized position
-  y:        0.0–1.0
-  size:     0.0–1.0                    // bounding radius × 2, normalized
-  rotation: 0–360                      // degrees
-  fill: {
-    mode:   "solid" | "radial" | "linear"
-    // solid fields:   h, s, l
-    // radial fields:  labL, labA, labB, labL2, labA2, labB2
-    // linear fields:  gradAngle, h1, s1, l1, h2, s2, l2
-    // ALL fields are always present; `mode` selects which set is active
-  }
+  x:        NormalizedCoord            // 0–1, branded type
+  y:        NormalizedCoord
+  size:     NormalizedCoord            // bounding radius × 2, normalized
+  rotation: Degrees                    // 0–360, branded type
+  fill:     SolidFill | RadialFill | LinearFill   // discriminated union on `mode`
   pattern:  null | "stripes" | "checker" | "noise" | "gradient" | "rough"
 }
 ```
 
-The fill object always carries parameters for all three modes simultaneously.
-Switching modes preserves previous values — no lossy conversion when cycling.
+Fill is a discriminated union:
+- `SolidFill`: `{ mode: 'solid', h, s, l }`
+- `RadialFill`: `{ mode: 'radial', h, s, l, h2, s2, l2 }`
+- `LinearFill`: `{ mode: 'linear', h, s, l, h2, s2, l2, gradAngle }`
+
+The toolbar uses a flat `FillDraft` bag internally so switching modes preserves
+previous values. Conversion between `Fill` and `FillDraft` uses `fillToFillDraft()`
+/ `fillDraftToFill()` in `types.ts`.
 
 ### Decorations
 
-Decorations are non-shape visual elements: squiggles, curlicues, and text.
+Decorations are a discriminated union (`Decoration` in `types.ts`) on the `type` field:
 
-- **Squiggle**: freehand polyline stored as an array of `[x,y]` points (normalized)
-- **Curlicue**: a logarithmic spiral placed at a single `(x, y)` point
-- **Text**: a string placed at `(x, y)`, rendered in Orbitron font
+- **Squiggle**: freehand polyline stored as an array of `[NormalizedCoord, NormalizedCoord]` points
+- **Curlicue**: a logarithmic spiral placed at a single `(x, y)` point, with `scale`
+- **Text**: a string placed at `(x, y)`, rendered in Orbitron font, with `scale` and `fontSize`
 
 ### Envelope
 
@@ -111,8 +112,8 @@ A DC offset (from a `ConstantSourceNode`) shifts the clip point, controlling the
 pulse width. Rotation sweeps the duty cycle from narrow pulse (0°) through 50%
 square (180°) to inverted narrow pulse (360°).
 
-Waveforms have gain normalization to compensate for differing RMS levels: square
-×0.7, sawtooth ×0.85, sine ×1.0.
+Waveforms have gain normalization to compensate for differing perceived loudness:
+square ×0.7, sawtooth ×0.85, sine ×1.4 (boosted since it's a single partial).
 
 ---
 
@@ -180,10 +181,13 @@ scheduled over 150ms per character using Gaussian proximity weighting.
 
 ### Play Modes
 
-- **Normal**: press-and-hold. Mousedown = gate on, mouseup = gate off.
-- **Latch**: click to toggle. A slider appears to scrub the envelope position.
-- **Loop**: click to start auto-repeating. Sustain hold time is
-  `(0.3 + sustain × 0.5)` seconds, then release, then restart.
+All three modes are accessed via the play button's drag-up fan gesture:
+
+- **Normal**: quick press-and-release. Audio plays during press, stops on release.
+- **Latch**: drag up to the lock zone, release. Audio sustains until the button is
+  pressed again.
+- **Loop**: drag further up to the loop zone. Distance controls loop hold time
+  (100ms–2000ms). Audio repeats: play → hold → release → restart.
 
 ### Arpeggio
 
@@ -214,7 +218,7 @@ every frame when `needsRender` is true or audio is playing (for glow animation).
    spiral), text (Orbitron font), all with shadow glow.
 5. **Selection handles** — dashed cyan bounding box, 8 resize handles, rotation
    handle (purple circle above top edge, skipped for circles).
-6. **Live squiggle preview** — drawn directly by `app.js` during active drawing,
+6. **Live squiggle preview** — drawn directly by `app.ts` during active drawing,
    using raw `lineTo` segments (not the smooth Bézier version).
 
 ---
@@ -229,8 +233,12 @@ used for hit testing; normalized coords are stored in state.
 
 ### Interaction State Machine
 
+Interaction state is a discriminated union (`InteractionState` in `js/interaction.ts`).
+Each mode carries its own data — no separate variables for drag origin, active handle, etc.
+
 ```
-idle → dragging | resizing | rotating | adsr | drawing | arpeggio → idle
+idle → dragging | resizing | rotating | adsr | drawing | arpeggio
+       | deco-dragging | deco-resizing | pinch-rotate → idle
 ```
 
 **Mousedown priority** (first match wins):
@@ -240,18 +248,19 @@ idle → dragging | resizing | rotating | adsr | drawing | arpeggio → idle
 4. ADSR corner hit (canvas corner, 64px radius) → envelope drag
 5. Handle hit on selected shape → resize or rotate
 6. Shape body hit → select + drag
-7. Empty space → deselect
+7. Handle hit on selected decoration → deco-resize
+8. Decoration body hit → select + deco-drag
+9. Empty space → deselect
 
-**Drag operations use deferred undo**: `updateShape()` is called without undo on
-every mousemove for smooth feedback. A pre-drag snapshot is captured at mousedown
-and pushed to the undo stack only on mouseup. This keeps the undo history clean
-(one entry per drag, not one per pixel).
+**Undo is captured at mousedown**: `undo.snapshot()` is called before any manipulation
+begins. `updateShape()` / `updateDecoration()` is called without undo on every
+mousemove for smooth feedback. On mouseup, the interaction resets to idle — the
+snapshot was already captured.
 
 ### Touch Support
 
-Touch events are translated to synthetic mouse events. Single-touch only, no
-multi-touch. Touch events don't forward `shiftKey`, so arpeggio mode is currently
-inaccessible on mobile (see issue #12).
+Single-touch events are translated to synthetic mouse events. Two-finger pinch
+gestures resize and rotate the selected shape simultaneously (`pinch-rotate` mode).
 
 ---
 
@@ -273,31 +282,34 @@ maps back to the envelope value through the inverse formula.
 
 ### Mutation
 
-All state changes go through `SigilState` methods (`addShape`, `updateShape`,
+All state changes go through `SigilStore` methods (`addShape`, `updateShape`,
 `updateFill`, `updateEnvelope`, etc.). Each mutation calls `_notify()`, which
 fires all registered `onChange` callbacks.
 
 ### Observer Chain
 
-`state.onChange` drives three systems:
+`store.onChange` drives three systems:
 1. **Render scheduling** — sets `needsRender = true` for the next animation frame
 2. **Audio voice updates** — calls `audio.updateVoices()` if currently playing
 3. **URL auto-save** — debounced (1 second) `saveToURL()` updates the hash
 
 ### Undo/Redo
 
-Snapshot-based: `JSON.stringify` / `JSON.parse` deep clone of `state.data`. Max 50
-undo entries. Redo stack is cleared on any new mutation. `selectedId` is runtime-only
-UI state and is excluded from snapshots.
+`UndoManager` wraps a `SigilStore`. `snapshot()` captures the current state via
+`JSON.stringify` / `JSON.parse` deep clone. `undo()` and `redo()` swap the store's
+data. Max 50 undo entries. Redo stack is cleared on any new snapshot. Callers
+decide when to snapshot — typically at mousedown before a manipulation begins.
 
 ### Serialization
 
 ```
-state.data → compactify (single-char keys) → JSON.stringify → LZ-string compress → URL hash
+store.data → compactify (single-char keys, v:1) → JSON.stringify → LZ-string compress → URL hash
 ```
 
-Deserialization regenerates shape IDs (they are not serialized). The URL is updated
-via `history.replaceState` (no navigation, no browser history entry).
+The compact format includes a version field (`v: 1`). Deserialization handles both
+the current versioned format and the legacy unversioned format. Shape IDs are
+regenerated on load. The URL is updated via `history.replaceState` (no navigation,
+no browser history entry).
 
 ### Embed Viewer
 
@@ -315,14 +327,17 @@ serialized URL works at any canvas size.
 **Observer-driven architecture.** A single `_notify()` call cascades to rendering,
 audio, and persistence. No explicit orchestration needed.
 
-**Deferred undo for continuous operations.** Drag/resize/rotate capture a
-pre-manipulation snapshot and commit it only on mouseup.
+**Snapshot-at-start undo for continuous operations.** `undo.snapshot()` is called
+at mousedown before manipulation begins. Mousemove updates state freely; mouseup
+just resets the interaction mode.
 
 **Stateless effect interface.** `{ input, output, dispose }` lets the audio engine
 compose arbitrary signal chains without coupling to effect internals.
 
-**Fill carries all modes.** No data loss when switching between solid/radial/linear.
-The inactive mode's parameters are preserved and restored.
+**Discriminated unions throughout.** Fill, Decoration, Voice, and InteractionState
+are all typed discriminated unions. TypeScript narrows access to variant-specific
+fields. The toolbar uses a flat `FillDraft` internally so switching fill modes
+preserves previous values.
 
 **Canvas corners as envelope.** The ADSR is literally the shape of the canvas. This
 reinforces the principle that everything visible is everything audible.
