@@ -1,135 +1,182 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sigil Synth</title>
-  <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-  <div id="app">
-    <header id="toolbar-top">
-      <div class="toolbar-group title-group">
-        <h1 class="logo">SIGIL SYNTH</h1>
-      </div>
-      <div class="toolbar-group tools-group">
-        <button class="tool-btn" data-tool="select" title="Select (V)">
-          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51z" fill="currentColor"/></svg>
-        </button>
-        <div class="separator"></div>
-        <button class="tool-btn shape-btn" data-tool="triangle" title="Triangle">
-          <svg viewBox="0 0 24 24" width="20" height="20"><polygon points="12,3 22,21 2,21" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-        </button>
-        <button class="tool-btn shape-btn" data-tool="square" title="Square">
-          <svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-        </button>
-        <button class="tool-btn shape-btn" data-tool="circle" title="Circle">
-          <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-        </button>
-      </div>
-      <div class="toolbar-group fill-group">
-        <label class="toolbar-label">Fill</label>
-        <div id="fill-swatch" class="swatch" title="Pick color"></div>
-        <select id="fill-mode" title="Fill type">
-          <option value="solid">Solid</option>
-          <option value="radial">Radial</option>
-          <option value="linear">Linear</option>
-        </select>
-      </div>
-      <div class="toolbar-group pattern-group">
-        <label class="toolbar-label">Pattern</label>
-        <button class="pattern-btn" data-pattern="none" title="None">&#8709;</button>
-        <button class="pattern-btn" data-pattern="stripes" title="Stripes">&#9776;</button>
-        <button class="pattern-btn" data-pattern="checker" title="Checker">&#9638;</button>
-        <button class="pattern-btn" data-pattern="noise" title="Noise">&#9618;</button>
-        <button class="pattern-btn" data-pattern="gradient" title="Gradient">&#9653;</button>
-        <button class="pattern-btn" data-pattern="rough" title="Rough">&#10070;</button>
-      </div>
-      <div class="toolbar-group actions-group">
-        <button id="btn-undo" class="action-btn" title="Undo (Ctrl+Z)">&#8630;</button>
-        <button id="btn-redo" class="action-btn" title="Redo (Ctrl+Y)">&#8631;</button>
-      </div>
-    </header>
-
-    <main id="canvas-area">
-      <div id="canvas-wrap">
-        <canvas id="sigil-canvas" width="800" height="800"></canvas>
-        <!-- ADSR corner handles are rendered on the canvas itself -->
-      </div>
-    </main>
-
-    <!-- Color Picker Panel (hidden by default) -->
-    <div id="color-picker-panel" class="panel hidden">
-      <div class="panel-tabs">
-        <button class="panel-tab active" data-tab="solid">Solid</button>
-        <button class="panel-tab" data-tab="radial">Radial</button>
-        <button class="panel-tab" data-tab="linear">Linear</button>
-      </div>
-      <div class="panel-body">
-        <!-- Solid HSL -->
-        <div id="tab-solid" class="tab-content active">
-          <canvas id="hue-ring" width="200" height="200"></canvas>
-          <canvas id="sl-square" width="150" height="150"></canvas>
-          <div class="hsl-inputs">
-            <label>H <input type="number" id="inp-h" min="0" max="360" value="200"></label>
-            <label>S <input type="number" id="inp-s" min="0" max="100" value="80"></label>
-            <label>L <input type="number" id="inp-l" min="0" max="100" value="50"></label>
-          </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sigil Synth</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="toolbar-top">
+        <div class="toolbar-group title-group">
+          <h1 class="logo">SIGIL SYNTH</h1>
         </div>
-        <!-- Radial (Lab) -->
-        <div id="tab-radial" class="tab-content">
-          <div class="lab-picker">
-            <canvas id="lab-plane" width="160" height="160"></canvas>
-            <input type="range" id="lab-l-slider" min="0" max="100" value="60" orient="vertical">
-          </div>
-          <div class="lab-stop-label">Stop 1 / Stop 2</div>
+        <div class="toolbar-group tools-group">
+          <button class="tool-btn" data-tool="select" title="Select (V)">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51z" fill="currentColor" />
+            </svg>
+          </button>
+          <div class="separator"></div>
+          <button class="tool-btn shape-btn" data-tool="triangle" title="Triangle">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <polygon
+                points="12,3 22,21 2,21"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              />
+            </svg>
+          </button>
+          <button class="tool-btn shape-btn" data-tool="square" title="Square">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <rect
+                x="3"
+                y="3"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              />
+            </svg>
+          </button>
+          <button class="tool-btn shape-btn" data-tool="circle" title="Circle">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </button>
         </div>
-        <!-- Linear (HSL + angle) -->
-        <div id="tab-linear" class="tab-content">
-          <canvas id="angle-dial" width="100" height="100"></canvas>
-          <div class="linear-stops">
-            <div class="linear-stop">
-              <label>H1 <input type="number" id="inp-h1" min="0" max="360" value="320"></label>
-              <label>S1 <input type="number" id="inp-s1" min="0" max="100" value="90"></label>
-              <label>L1 <input type="number" id="inp-l1" min="0" max="100" value="55"></label>
-            </div>
-            <div class="linear-stop">
-              <label>H2 <input type="number" id="inp-h2" min="0" max="360" value="180"></label>
-              <label>S2 <input type="number" id="inp-s2" min="0" max="100" value="80"></label>
-              <label>L2 <input type="number" id="inp-l2" min="0" max="100" value="45"></label>
+        <div class="toolbar-group fill-group">
+          <label class="toolbar-label">Fill</label>
+          <div id="fill-swatch" class="swatch" title="Pick color"></div>
+          <select id="fill-mode" title="Fill type">
+            <option value="solid">Solid</option>
+            <option value="radial">Radial</option>
+            <option value="linear">Linear</option>
+          </select>
+        </div>
+        <div class="toolbar-group pattern-group">
+          <label class="toolbar-label">Pattern</label>
+          <button class="pattern-btn" data-pattern="none" title="None">&#8709;</button>
+          <button class="pattern-btn" data-pattern="stripes" title="Stripes">&#9776;</button>
+          <button class="pattern-btn" data-pattern="checker" title="Checker">&#9638;</button>
+          <button class="pattern-btn" data-pattern="noise" title="Noise">&#9618;</button>
+          <button class="pattern-btn" data-pattern="gradient" title="Gradient">&#9653;</button>
+          <button class="pattern-btn" data-pattern="rough" title="Rough">&#10070;</button>
+        </div>
+        <div class="toolbar-group actions-group">
+          <button id="btn-undo" class="action-btn" title="Undo (Ctrl+Z)">&#8630;</button>
+          <button id="btn-redo" class="action-btn" title="Redo (Ctrl+Y)">&#8631;</button>
+        </div>
+      </header>
+
+      <main id="canvas-area">
+        <div id="canvas-wrap">
+          <canvas id="sigil-canvas" width="800" height="800"></canvas>
+          <!-- ADSR corner handles are rendered on the canvas itself -->
+        </div>
+      </main>
+
+      <!-- Color Picker Panel (hidden by default) -->
+      <div id="color-picker-panel" class="panel hidden">
+        <div class="panel-tabs">
+          <button class="panel-tab active" data-tab="solid">Solid</button>
+          <button class="panel-tab" data-tab="radial">Radial</button>
+          <button class="panel-tab" data-tab="linear">Linear</button>
+        </div>
+        <div class="panel-body">
+          <!-- Solid HSL -->
+          <div id="tab-solid" class="tab-content active">
+            <canvas id="hue-ring" width="200" height="200"></canvas>
+            <canvas id="sl-square" width="150" height="150"></canvas>
+            <div class="hsl-inputs">
+              <label>H <input type="number" id="inp-h" min="0" max="360" value="200" /></label>
+              <label>S <input type="number" id="inp-s" min="0" max="100" value="80" /></label>
+              <label>L <input type="number" id="inp-l" min="0" max="100" value="50" /></label>
             </div>
           </div>
+          <!-- Radial (Lab) -->
+          <div id="tab-radial" class="tab-content">
+            <div class="lab-picker">
+              <canvas id="lab-plane" width="160" height="160"></canvas>
+              <input
+                type="range"
+                id="lab-l-slider"
+                min="0"
+                max="100"
+                value="60"
+                orient="vertical"
+              />
+            </div>
+            <div class="lab-stop-label">Stop 1 / Stop 2</div>
+          </div>
+          <!-- Linear (HSL + angle) -->
+          <div id="tab-linear" class="tab-content">
+            <canvas id="angle-dial" width="100" height="100"></canvas>
+            <div class="linear-stops">
+              <div class="linear-stop">
+                <label>H1 <input type="number" id="inp-h1" min="0" max="360" value="320" /></label>
+                <label>S1 <input type="number" id="inp-s1" min="0" max="100" value="90" /></label>
+                <label>L1 <input type="number" id="inp-l1" min="0" max="100" value="55" /></label>
+              </div>
+              <div class="linear-stop">
+                <label>H2 <input type="number" id="inp-h2" min="0" max="360" value="180" /></label>
+                <label>S2 <input type="number" id="inp-s2" min="0" max="100" value="80" /></label>
+                <label>L2 <input type="number" id="inp-l2" min="0" max="100" value="45" /></label>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      <footer id="toolbar-bottom">
+        <div class="toolbar-group deco-group">
+          <button class="tool-btn" data-tool="squiggle" title="Draw Squiggle">&#8766;</button>
+          <button class="tool-btn" data-tool="curlicue" title="Place Curlicue">&#10048;</button>
+          <button class="tool-btn" data-tool="text" title="Add Text">T</button>
+          <input
+            type="text"
+            id="text-input"
+            class="text-input hidden"
+            placeholder="Type a word..."
+            maxlength="40"
+          />
+        </div>
+        <div class="toolbar-group layer-group">
+          <label class="toolbar-label">Layers</label>
+          <button id="btn-bring-front" class="action-btn" title="Bring to Front">&#8679;</button>
+          <button id="btn-send-back" class="action-btn" title="Send to Back">&#8681;</button>
+          <button id="btn-delete" class="action-btn danger" title="Delete (Del)">&#10005;</button>
+        </div>
+        <div class="toolbar-group play-group">
+          <button id="btn-latch" class="action-btn" title="Latch (sustained playback)">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <path
+                d="M12 2C9.24 2 7 4.24 7 7v4H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v4H9V7c0-1.66 1.34-3 3-3z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+          <button id="btn-play" class="play-btn" title="Play Sigil">&#9654; PLAY</button>
+          <input
+            type="range"
+            id="latch-position"
+            class="latch-slider hidden"
+            min="0"
+            max="1"
+            step="0.01"
+            value="1"
+          />
+        </div>
+        <div class="toolbar-group share-group">
+          <button id="btn-share" class="action-btn" title="Copy share link">Share</button>
+          <button id="btn-embed" class="action-btn" title="Get embed code">&lt;/&gt;</button>
+        </div>
+      </footer>
     </div>
 
-    <footer id="toolbar-bottom">
-      <div class="toolbar-group deco-group">
-        <button class="tool-btn" data-tool="squiggle" title="Draw Squiggle">&#8766;</button>
-        <button class="tool-btn" data-tool="curlicue" title="Place Curlicue">&#10048;</button>
-        <button class="tool-btn" data-tool="text" title="Add Text">T</button>
-        <input type="text" id="text-input" class="text-input hidden" placeholder="Type a word..." maxlength="40">
-      </div>
-      <div class="toolbar-group layer-group">
-        <label class="toolbar-label">Layers</label>
-        <button id="btn-bring-front" class="action-btn" title="Bring to Front">&#8679;</button>
-        <button id="btn-send-back" class="action-btn" title="Send to Back">&#8681;</button>
-        <button id="btn-delete" class="action-btn danger" title="Delete (Del)">&#10005;</button>
-      </div>
-      <div class="toolbar-group play-group">
-        <button id="btn-latch" class="action-btn" title="Latch (sustained playback)">
-          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2C9.24 2 7 4.24 7 7v4H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v4H9V7c0-1.66 1.34-3 3-3z" fill="currentColor"/></svg>
-        </button>
-        <button id="btn-play" class="play-btn" title="Play Sigil">&#9654; PLAY</button>
-        <input type="range" id="latch-position" class="latch-slider hidden" min="0" max="1" step="0.01" value="1">
-      </div>
-      <div class="toolbar-group share-group">
-        <button id="btn-share" class="action-btn" title="Copy share link">Share</button>
-        <button id="btn-embed" class="action-btn" title="Get embed code">&lt;/&gt;</button>
-      </div>
-    </footer>
-  </div>
-
-  <script type="module" src="js/app.js"></script>
-</body>
+    <script type="module" src="js/app.js"></script>
+  </body>
 </html>

@@ -9,20 +9,22 @@ export function labToRgb(L, a, b) {
   let fz = fy - b / 200;
 
   const delta = 6 / 29;
-  const cubeOrLinear = (t) => t > delta ? t * t * t : 3 * delta * delta * (t - 4 / 29);
+  const cubeOrLinear = (t) => (t > delta ? t * t * t : 3 * delta * delta * (t - 4 / 29));
 
-  const xn = 0.95047, yn = 1.0, zn = 1.08883;
+  const xn = 0.95047,
+    yn = 1.0,
+    zn = 1.08883;
   let X = xn * cubeOrLinear(fx);
   let Y = yn * cubeOrLinear(fy);
   let Z = zn * cubeOrLinear(fz);
 
   // XYZ -> linear sRGB
-  let rl =  3.2406 * X - 1.5372 * Y - 0.4986 * Z;
+  let rl = 3.2406 * X - 1.5372 * Y - 0.4986 * Z;
   let gl = -0.9689 * X + 1.8758 * Y + 0.0415 * Z;
-  let bl =  0.0557 * X - 0.2040 * Y + 1.0570 * Z;
+  let bl = 0.0557 * X - 0.204 * Y + 1.057 * Z;
 
   // Gamma correction
-  const gamma = (c) => c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+  const gamma = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
 
   return [
     Math.round(Math.max(0, Math.min(1, gamma(rl))) * 255),
@@ -55,7 +57,7 @@ export function getFillStyle(ctx, fill, radius) {
     }
 
     case 'linear': {
-      const angle = (fill.gradAngle || 0) * Math.PI / 180;
+      const angle = ((fill.gradAngle || 0) * Math.PI) / 180;
       const dx = Math.cos(angle) * radius;
       const dy = Math.sin(angle) * radius;
       const grad = ctx.createLinearGradient(-dx, -dy, dx, dy);
@@ -88,8 +90,8 @@ export function getSwatchColor(fill) {
 
 export function drawHueRing(ctx, cx, cy, outerR, innerR) {
   for (let deg = 0; deg < 360; deg++) {
-    const startAngle = (deg - 1) * Math.PI / 180;
-    const endAngle = (deg + 1) * Math.PI / 180;
+    const startAngle = ((deg - 1) * Math.PI) / 180;
+    const endAngle = ((deg + 1) * Math.PI) / 180;
     ctx.beginPath();
     ctx.arc(cx, cy, outerR, startAngle, endAngle);
     ctx.arc(cx, cy, innerR, endAngle, startAngle, true);
@@ -119,17 +121,37 @@ export function drawSLSquare(ctx, x, y, w, h, hue) {
 }
 
 function hslToRgb(h, s, l) {
-  s /= 100; l /= 100;
+  s /= 100;
+  l /= 100;
   const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = l - c / 2;
   let r, g, b;
-  if (h < 60)       { r = c; g = x; b = 0; }
-  else if (h < 120) { r = x; g = c; b = 0; }
-  else if (h < 180) { r = 0; g = c; b = x; }
-  else if (h < 240) { r = 0; g = x; b = c; }
-  else if (h < 300) { r = x; g = 0; b = c; }
-  else              { r = c; g = 0; b = x; }
+  if (h < 60) {
+    r = c;
+    g = x;
+    b = 0;
+  } else if (h < 120) {
+    r = x;
+    g = c;
+    b = 0;
+  } else if (h < 180) {
+    r = 0;
+    g = c;
+    b = x;
+  } else if (h < 240) {
+    r = 0;
+    g = x;
+    b = c;
+  } else if (h < 300) {
+    r = x;
+    g = 0;
+    b = c;
+  } else {
+    r = c;
+    g = 0;
+    b = x;
+  }
   return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
 }
 
@@ -163,7 +185,7 @@ export function drawAngleDial(ctx, cx, cy, r, angle) {
   ctx.lineWidth = 2;
   ctx.stroke();
   // Direction indicator
-  const rad = angle * Math.PI / 180;
+  const rad = (angle * Math.PI) / 180;
   ctx.beginPath();
   ctx.moveTo(cx, cy);
   ctx.lineTo(cx + Math.cos(rad) * r * 0.8, cy + Math.sin(rad) * r * 0.8);

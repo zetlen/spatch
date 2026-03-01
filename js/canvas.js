@@ -2,7 +2,6 @@
 
 import { getFillStyle } from './colors.js';
 import { applyPattern } from './patterns.js';
-import { BASE_MIDI } from './audio.js';
 
 const CANVAS_BG = '#1a1a2e';
 
@@ -30,7 +29,7 @@ export function render(ctx, state, canvasSize, selectedId, playingShapeIds) {
 
   // Selection handles
   if (selectedId) {
-    const sel = state.shapes.find(s => s.id === selectedId);
+    const sel = state.shapes.find((s) => s.id === selectedId);
     if (sel) drawSelectionHandles(ctx, sel, canvasSize);
   }
 }
@@ -52,12 +51,11 @@ function drawChromaticGuides(ctx, size) {
   ctx.restore();
 }
 
-
 function drawShape(ctx, shape, canvasSize, isSelected, isPlaying) {
   const cx = shape.x * canvasSize;
   const cy = shape.y * canvasSize;
   const r = (shape.size / 2) * canvasSize;
-  const rotRad = shape.rotation * Math.PI / 180;
+  const rotRad = (shape.rotation * Math.PI) / 180;
 
   ctx.save();
   ctx.translate(cx, cy);
@@ -83,16 +81,18 @@ function drawShape(ctx, shape, canvasSize, isSelected, isPlaying) {
 
   // Neon outline glow
   const glowColor = isPlaying ? 'rgba(0, 240, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)';
-  const glowLayers = isPlaying ? [
-    { width: 8, alpha: 0.15, color: '#00f0ff' },
-    { width: 4, alpha: 0.3, color: '#00f0ff' },
-    { width: 2, alpha: 0.7, color: '#00f0ff' },
-    { width: 1, alpha: 1.0, color: '#ffffff' },
-  ] : [
-    { width: 6, alpha: 0.08, color: glowColor },
-    { width: 3, alpha: 0.15, color: glowColor },
-    { width: 1.5, alpha: 0.4, color: 'rgba(255,255,255,0.6)' },
-  ];
+  const glowLayers = isPlaying
+    ? [
+        { width: 8, alpha: 0.15, color: '#00f0ff' },
+        { width: 4, alpha: 0.3, color: '#00f0ff' },
+        { width: 2, alpha: 0.7, color: '#00f0ff' },
+        { width: 1, alpha: 1.0, color: '#ffffff' },
+      ]
+    : [
+        { width: 6, alpha: 0.08, color: glowColor },
+        { width: 3, alpha: 0.15, color: glowColor },
+        { width: 1.5, alpha: 0.4, color: 'rgba(255,255,255,0.6)' },
+      ];
 
   for (const layer of glowLayers) {
     ctx.save();
@@ -124,10 +124,11 @@ export function buildShapePath(ctx, shape, canvasSize) {
       break;
     case 'triangle':
       for (let i = 0; i < 3; i++) {
-        const angle = (i * 2 * Math.PI / 3) - Math.PI / 2;
+        const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
         const px = Math.cos(angle) * r;
         const py = Math.sin(angle) * r;
-        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
       }
       ctx.closePath();
       break;
@@ -138,7 +139,7 @@ function drawSelectionHandles(ctx, shape, canvasSize) {
   const cx = shape.x * canvasSize;
   const cy = shape.y * canvasSize;
   const r = (shape.size / 2) * canvasSize;
-  const rotRad = shape.rotation * Math.PI / 180;
+  const rotRad = (shape.rotation * Math.PI) / 180;
 
   ctx.save();
   ctx.translate(cx, cy);
@@ -154,8 +155,14 @@ function drawSelectionHandles(ctx, shape, canvasSize) {
   // Corner resize handles
   const handleSize = 5;
   const handles = [
-    [-r, -r], [r, -r], [r, r], [-r, r],         // corners
-    [0, -r], [r, 0], [0, r], [-r, 0],            // midpoints
+    [-r, -r],
+    [r, -r],
+    [r, r],
+    [-r, r], // corners
+    [0, -r],
+    [r, 0],
+    [0, r],
+    [-r, 0], // midpoints
   ];
   ctx.fillStyle = '#00f0ff';
   ctx.strokeStyle = '#0a0a1a';
@@ -200,12 +207,9 @@ function drawDecoration(ctx, deco, canvasSize) {
     const pts = deco.points;
     ctx.moveTo(pts[0][0] * canvasSize, pts[0][1] * canvasSize);
     for (let i = 1; i < pts.length - 1; i++) {
-      const midX = (pts[i][0] + pts[i + 1][0]) / 2 * canvasSize;
-      const midY = (pts[i][1] + pts[i + 1][1]) / 2 * canvasSize;
-      ctx.quadraticCurveTo(
-        pts[i][0] * canvasSize, pts[i][1] * canvasSize,
-        midX, midY
-      );
+      const midX = ((pts[i][0] + pts[i + 1][0]) / 2) * canvasSize;
+      const midY = ((pts[i][1] + pts[i + 1][1]) / 2) * canvasSize;
+      ctx.quadraticCurveTo(pts[i][0] * canvasSize, pts[i][1] * canvasSize, midX, midY);
     }
     const last = pts[pts.length - 1];
     ctx.lineTo(last[0] * canvasSize, last[1] * canvasSize);
@@ -253,7 +257,8 @@ function drawCurlicue(ctx, deco, canvasSize) {
     const r = a * Math.exp(b * t);
     const x = r * Math.cos(t);
     const y = r * Math.sin(t);
-    t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    if (t === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
   }
   ctx.stroke();
 

@@ -41,17 +41,17 @@ function compactify(state) {
       s: round2(state.envelope.sustain),
       r: round2(state.envelope.release),
     },
-    sh: state.shapes.map(s => ({
-      t: s.type[0],                              // 't','s','c'
+    sh: state.shapes.map((s) => ({
+      t: s.type[0], // 't','s','c'
       x: round3(s.x),
       y: round3(s.y),
       z: round3(s.size),
       r: Math.round(s.rotation),
       f: compactFill(s.fill),
-      p: s.pattern ? s.pattern[0] : 0,           // 's','c','n','g','r' or 0
+      p: s.pattern ? s.pattern[0] : 0, // 's','c','n','g','r' or 0
     })),
-    d: state.decorations.map(d => ({
-      t: d.type[0],                               // 's','c','t'
+    d: state.decorations.map((d) => ({
+      t: d.type[0], // 's','c','t'
       p: d.points ? d.points.map(([x, y]) => [round3(x), round3(y)]) : [],
       x: round3(d.x),
       y: round3(d.y),
@@ -76,7 +76,7 @@ function decompactify(c) {
       sustain: c.e.s,
       release: c.e.r,
     },
-    shapes: (c.sh || []).map(s => ({
+    shapes: (c.sh || []).map((s) => ({
       id: genId(),
       type: typeMap[s.t] || 'circle',
       x: s.x,
@@ -84,9 +84,9 @@ function decompactify(c) {
       size: s.z,
       rotation: s.r,
       fill: decompactFill(s.f),
-      pattern: s.p ? (patMap[s.p] || null) : null,
+      pattern: s.p ? patMap[s.p] || null : null,
     })),
-    decorations: (c.d || []).map(d => ({
+    decorations: (c.d || []).map((d) => ({
       id: genId(),
       type: decoMap[d.t] || 'squiggle',
       points: d.p || [],
@@ -116,18 +116,51 @@ function compactFill(f) {
 
 function decompactFill(f) {
   const base = {
-    mode: 'solid', h: 200, s: 80, l: 50,
-    labL: 60, labA: 0, labB: 0, labL2: 30, labA2: 40, labB2: -40,
-    gradAngle: 0, h1: 320, s1: 90, l1: 55, h2: 180, s2: 80, l2: 45,
+    mode: 'solid',
+    h: 200,
+    s: 80,
+    l: 50,
+    labL: 60,
+    labA: 0,
+    labB: 0,
+    labL2: 30,
+    labA2: 40,
+    labB2: -40,
+    gradAngle: 0,
+    h1: 320,
+    s1: 90,
+    l1: 55,
+    h2: 180,
+    s2: 80,
+    l2: 45,
   };
 
   switch (f.m) {
     case 's':
       return { ...base, mode: 'solid', h: f.h, s: f.s, l: f.l };
     case 'r':
-      return { ...base, mode: 'radial', labL: f.L, labA: f.a, labB: f.b, labL2: f.L2, labA2: f.a2, labB2: f.b2 };
+      return {
+        ...base,
+        mode: 'radial',
+        labL: f.L,
+        labA: f.a,
+        labB: f.b,
+        labL2: f.L2,
+        labA2: f.a2,
+        labB2: f.b2,
+      };
     case 'l':
-      return { ...base, mode: 'linear', gradAngle: f.g, h1: f.h1, s1: f.s1, l1: f.l1, h2: f.h2, s2: f.s2, l2: f.l2 };
+      return {
+        ...base,
+        mode: 'linear',
+        gradAngle: f.g,
+        h1: f.h1,
+        s1: f.s1,
+        l1: f.l1,
+        h2: f.h2,
+        s2: f.s2,
+        l2: f.l2,
+      };
     default:
       return base;
   }
@@ -138,5 +171,9 @@ function genId() {
   return 'r' + (++_counter).toString(36) + Math.random().toString(36).slice(2, 5);
 }
 
-function round2(n) { return Math.round(n * 100) / 100; }
-function round3(n) { return Math.round(n * 1000) / 1000; }
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+function round3(n) {
+  return Math.round(n * 1000) / 1000;
+}

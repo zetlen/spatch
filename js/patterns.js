@@ -2,14 +2,21 @@
 
 const cache = new Map();
 
-export function getPatternTile(patternType) {
+function getPatternTile(patternType) {
   if (cache.has(patternType)) return cache.get(patternType);
   let tile;
   switch (patternType) {
-    case 'stripes':    tile = createStripesTile(); break;
-    case 'checker':    tile = createCheckerTile(); break;
-    case 'noise':      tile = createNoiseTile(); break;
-    default:           return null; // gradient and rough are procedural
+    case 'stripes':
+      tile = createStripesTile();
+      break;
+    case 'checker':
+      tile = createCheckerTile();
+      break;
+    case 'noise':
+      tile = createNoiseTile();
+      break;
+    default:
+      return null; // gradient and rough are procedural
   }
   if (tile) cache.set(patternType, tile);
   return tile;
@@ -17,7 +24,8 @@ export function getPatternTile(patternType) {
 
 function createStripesTile() {
   const c = document.createElement('canvas');
-  c.width = 6; c.height = 6;
+  c.width = 6;
+  c.height = 6;
   const ctx = c.getContext('2d');
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(0, 0, 6, 3);
@@ -26,7 +34,8 @@ function createStripesTile() {
 
 function createCheckerTile() {
   const c = document.createElement('canvas');
-  c.width = 8; c.height = 8;
+  c.width = 8;
+  c.height = 8;
   const ctx = c.getContext('2d');
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(0, 0, 4, 4);
@@ -37,7 +46,8 @@ function createCheckerTile() {
 function createNoiseTile() {
   const size = 16;
   const c = document.createElement('canvas');
-  c.width = size; c.height = size;
+  c.width = size;
+  c.height = size;
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(size, size);
   for (let i = 0; i < img.data.length; i += 4) {
@@ -117,10 +127,11 @@ function buildShapePath(ctx, shape, canvasSize) {
       break;
     case 'triangle':
       for (let i = 0; i < 3; i++) {
-        const angle = (i * 2 * Math.PI / 3) - Math.PI / 2;
+        const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
         const px = Math.cos(angle) * r;
         const py = Math.sin(angle) * r;
-        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
       }
       ctx.closePath();
       break;

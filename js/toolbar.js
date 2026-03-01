@@ -1,6 +1,12 @@
 // toolbar.js — Toolbar UI, tool selection, color picker, pattern selector
 
-import { getSwatchColor, drawHueRing, drawSLSquare, drawLabPlane, drawAngleDial } from './colors.js';
+import {
+  getSwatchColor,
+  drawHueRing,
+  drawSLSquare,
+  drawLabPlane,
+  drawAngleDial,
+} from './colors.js';
 
 export class Toolbar {
   constructor(state) {
@@ -18,7 +24,7 @@ export class Toolbar {
   }
 
   _bindToolButtons() {
-    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+    document.querySelectorAll('.tool-btn[data-tool]').forEach((btn) => {
       btn.addEventListener('click', () => {
         this.currentTool = btn.dataset.tool;
         this._updateToolActive();
@@ -38,13 +44,13 @@ export class Toolbar {
   }
 
   _updateToolActive() {
-    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+    document.querySelectorAll('.tool-btn[data-tool]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.tool === this.currentTool);
     });
   }
 
   _bindPatternButtons() {
-    document.querySelectorAll('.pattern-btn').forEach(btn => {
+    document.querySelectorAll('.pattern-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const pattern = btn.dataset.pattern;
         const sel = this.state.getSelected();
@@ -62,11 +68,9 @@ export class Toolbar {
   _updatePatternActive() {
     const sel = this.state.getSelected();
     const current = sel ? sel.pattern : null;
-    document.querySelectorAll('.pattern-btn').forEach(btn => {
+    document.querySelectorAll('.pattern-btn').forEach((btn) => {
       const p = btn.dataset.pattern;
-      btn.classList.toggle('active',
-        (p === 'none' && !current) || p === current
-      );
+      btn.classList.toggle('active', (p === 'none' && !current) || p === current);
     });
   }
 
@@ -121,10 +125,10 @@ export class Toolbar {
     });
 
     // Tab switching
-    panel.querySelectorAll('.panel-tab').forEach(tab => {
+    panel.querySelectorAll('.panel-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
-        panel.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
-        panel.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        panel.querySelectorAll('.panel-tab').forEach((t) => t.classList.remove('active'));
+        panel.querySelectorAll('.tab-content').forEach((t) => t.classList.remove('active'));
         tab.classList.add('active');
         const tabId = 'tab-' + tab.dataset.tab;
         document.getElementById(tabId).classList.add('active');
@@ -142,7 +146,7 @@ export class Toolbar {
     });
 
     // HSL inputs
-    ['h', 's', 'l'].forEach(prop => {
+    ['h', 's', 'l'].forEach((prop) => {
       const input = document.getElementById('inp-' + prop);
       input.addEventListener('input', () => {
         const sel = this.state.getSelected();
@@ -155,7 +159,7 @@ export class Toolbar {
     });
 
     // Linear gradient inputs
-    ['h1', 's1', 'l1', 'h2', 's2', 'l2'].forEach(prop => {
+    ['h1', 's1', 'l1', 'h2', 's2', 'l2'].forEach((prop) => {
       const input = document.getElementById('inp-' + prop);
       if (!input) return;
       input.addEventListener('input', () => {
@@ -186,7 +190,7 @@ export class Toolbar {
       const rect = hueRing.getBoundingClientRect();
       const x = e.clientX - rect.left - 100;
       const y = e.clientY - rect.top - 100;
-      const angle = Math.atan2(y, x) * 180 / Math.PI;
+      const angle = (Math.atan2(y, x) * 180) / Math.PI;
       const hue = ((angle + 360) % 360) | 0;
       const dist = Math.hypot(x, y);
       if (dist >= 70 && dist <= 95) {
@@ -244,10 +248,10 @@ export class Toolbar {
         const rect = angleDial.getBoundingClientRect();
         const x = e.clientX - rect.left - 50;
         const y = e.clientY - rect.top - 50;
-        const angle = Math.round(Math.atan2(y, x) * 180 / Math.PI);
+        const angle = Math.round((Math.atan2(y, x) * 180) / Math.PI);
         const sel = this.state.getSelected();
         if (sel) {
-          this.state.updateFill(sel.id, { gradAngle: ((angle + 360) % 360) });
+          this.state.updateFill(sel.id, { gradAngle: (angle + 360) % 360 });
           this.updateSwatchFromSelected();
           this._renderAngleDial();
         }
@@ -271,10 +275,16 @@ export class Toolbar {
     // Indicator
     const sel = this.state.getSelected();
     if (sel && sel.fill.mode === 'solid') {
-      const rad = sel.fill.h * Math.PI / 180;
+      const rad = (sel.fill.h * Math.PI) / 180;
       const indicatorR = 82;
       ctx.beginPath();
-      ctx.arc(100 + Math.cos(rad) * indicatorR, 100 + Math.sin(rad) * indicatorR, 5, 0, Math.PI * 2);
+      ctx.arc(
+        100 + Math.cos(rad) * indicatorR,
+        100 + Math.sin(rad) * indicatorR,
+        5,
+        0,
+        Math.PI * 2,
+      );
       ctx.strokeStyle = 'white';
       ctx.lineWidth = 2;
       ctx.stroke();
@@ -314,7 +324,7 @@ export class Toolbar {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const sel = this.state.getSelected();
-    const angle = sel ? (sel.fill.gradAngle || 0) : 0;
+    const angle = sel ? sel.fill.gradAngle || 0 : 0;
     drawAngleDial(ctx, 50, 50, 40, angle);
   }
 
@@ -360,8 +370,10 @@ export class Toolbar {
 
     // Sync panel tab
     const panel = document.getElementById('color-picker-panel');
-    panel.querySelectorAll('.panel-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === sel.fill.mode));
-    panel.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    panel
+      .querySelectorAll('.panel-tab')
+      .forEach((t) => t.classList.toggle('active', t.dataset.tab === sel.fill.mode));
+    panel.querySelectorAll('.tab-content').forEach((t) => t.classList.remove('active'));
     const activeTab = document.getElementById('tab-' + sel.fill.mode);
     if (activeTab) activeTab.classList.add('active');
 

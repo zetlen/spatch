@@ -1,0 +1,11 @@
+pre-commit:
+  piped: true
+  commands:
+    format:
+      glob: '*.{js,ts,json,css,html}'
+      run: bunx oxfmt {staged_files}
+      stage_fixed: true
+    lint:
+      glob: '*.{js,ts}'
+      run: bunx oxlint --fix {staged_files}
+      stage_fixed: true

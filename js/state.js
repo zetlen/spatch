@@ -13,36 +13,48 @@ export function createDefaultState() {
   };
 }
 
-export function createShape(type, x, y) {
+function createShape(type, x, y) {
   return {
     id: genId('s'),
-    type,             // "circle" | "triangle" | "square"
-    x, y,             // normalized 0–1
-    size: 0.12,       // normalized
-    rotation: 0,      // degrees 0–360
+    type, // "circle" | "triangle" | "square"
+    x,
+    y, // normalized 0–1
+    size: 0.12, // normalized
+    rotation: 0, // degrees 0–360
     fill: {
-      mode: 'solid',  // "solid" | "radial" | "linear"
-      h: 200, s: 80, l: 50,
+      mode: 'solid', // "solid" | "radial" | "linear"
+      h: 200,
+      s: 80,
+      l: 50,
       // radial gradient (Lab)
-      labL: 60, labA: 0, labB: 0,
-      labL2: 30, labA2: 40, labB2: -40,
+      labL: 60,
+      labA: 0,
+      labB: 0,
+      labL2: 30,
+      labA2: 40,
+      labB2: -40,
       // linear gradient
       gradAngle: 0,
-      h1: 320, s1: 90, l1: 55,
-      h2: 180, s2: 80, l2: 45,
+      h1: 320,
+      s1: 90,
+      l1: 55,
+      h2: 180,
+      s2: 80,
+      l2: 45,
     },
-    pattern: null,    // null | "stripes" | "checker" | "noise" | "gradient" | "rough"
+    pattern: null, // null | "stripes" | "checker" | "noise" | "gradient" | "rough"
   };
 }
 
-export function createDecoration(type, points, color) {
+function createDecoration(type, points, color) {
   return {
     id: genId('d'),
     type,
     points: points || [],
     text: null,
     targetShapeId: null,
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     strokeColor: color || 'hsl(320, 100%, 60%)',
     strokeWidth: 3,
     fontSize: 24,
@@ -104,7 +116,7 @@ export class SigilState {
   }
 
   removeShape(id) {
-    const idx = this.data.shapes.findIndex(s => s.id === id);
+    const idx = this.data.shapes.findIndex((s) => s.id === id);
     if (idx === -1) return;
     this._pushUndo();
     this.data.shapes.splice(idx, 1);
@@ -113,7 +125,7 @@ export class SigilState {
   }
 
   updateShape(id, updates) {
-    const shape = this.data.shapes.find(s => s.id === id);
+    const shape = this.data.shapes.find((s) => s.id === id);
     if (!shape) return;
     Object.assign(shape, updates);
     this._notify();
@@ -125,7 +137,7 @@ export class SigilState {
   }
 
   updateFill(id, fillUpdates) {
-    const shape = this.data.shapes.find(s => s.id === id);
+    const shape = this.data.shapes.find((s) => s.id === id);
     if (!shape) return;
     Object.assign(shape.fill, fillUpdates);
     this._notify();
@@ -137,7 +149,7 @@ export class SigilState {
   }
 
   getShape(id) {
-    return this.data.shapes.find(s => s.id === id);
+    return this.data.shapes.find((s) => s.id === id);
   }
 
   getSelected() {
@@ -145,7 +157,7 @@ export class SigilState {
   }
 
   moveLayer(id, direction) {
-    const idx = this.data.shapes.findIndex(s => s.id === id);
+    const idx = this.data.shapes.findIndex((s) => s.id === id);
     if (idx === -1) return;
     const newIdx = idx + direction;
     if (newIdx < 0 || newIdx >= this.data.shapes.length) return;
@@ -156,7 +168,7 @@ export class SigilState {
   }
 
   bringToFront(id) {
-    const idx = this.data.shapes.findIndex(s => s.id === id);
+    const idx = this.data.shapes.findIndex((s) => s.id === id);
     if (idx === -1 || idx === this.data.shapes.length - 1) return;
     this._pushUndo();
     const [shape] = this.data.shapes.splice(idx, 1);
@@ -165,7 +177,7 @@ export class SigilState {
   }
 
   sendToBack(id) {
-    const idx = this.data.shapes.findIndex(s => s.id === id);
+    const idx = this.data.shapes.findIndex((s) => s.id === id);
     if (idx <= 0) return;
     this._pushUndo();
     const [shape] = this.data.shapes.splice(idx, 1);
@@ -192,7 +204,7 @@ export class SigilState {
   }
 
   removeDecoration(id) {
-    const idx = this.data.decorations.findIndex(d => d.id === id);
+    const idx = this.data.decorations.findIndex((d) => d.id === id);
     if (idx === -1) return;
     this._pushUndo();
     this.data.decorations.splice(idx, 1);

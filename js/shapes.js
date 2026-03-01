@@ -19,7 +19,7 @@ function isPointInShape(shape, mx, my, canvasSize) {
   const cx = shape.x * canvasSize;
   const cy = shape.y * canvasSize;
   const r = (shape.size / 2) * canvasSize;
-  const rotRad = shape.rotation * Math.PI / 180;
+  const rotRad = (shape.rotation * Math.PI) / 180;
 
   // Transform mouse point into shape-local coordinates
   const dx = mx - cx;
@@ -31,7 +31,7 @@ function isPointInShape(shape, mx, my, canvasSize) {
 
   switch (shape.type) {
     case 'circle':
-      return (lx * lx + ly * ly) <= r * r;
+      return lx * lx + ly * ly <= r * r;
 
     case 'square':
       return Math.abs(lx) <= r && Math.abs(ly) <= r;
@@ -40,7 +40,7 @@ function isPointInShape(shape, mx, my, canvasSize) {
       // Equilateral triangle inscribed in circle of radius r
       const verts = [];
       for (let i = 0; i < 3; i++) {
-        const angle = (i * 2 * Math.PI / 3) - Math.PI / 2;
+        const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
         verts.push([Math.cos(angle) * r, Math.sin(angle) * r]);
       }
       return pointInTriangle(lx, ly, verts[0], verts[1], verts[2]);
@@ -52,22 +52,12 @@ function isPointInShape(shape, mx, my, canvasSize) {
 }
 
 function pointInTriangle(px, py, v0, v1, v2) {
-  const d00 = dot(v0, v1, v0, v1);
-  const d01 = dot(v0, v1, v0, v2);
-  const d02 = dot(v0, v1, [0, 0], [px - v0[0], py - v0[1]]);
-  const d11 = dot(v0, v2, v0, v2);
-  const d12 = dot(v0, v2, [0, 0], [px - v0[0], py - v0[1]]);
-
   // Use barycentric coordinates
   const denom = (v1[0] - v0[0]) * (v2[1] - v0[1]) - (v2[0] - v0[0]) * (v1[1] - v0[1]);
   if (Math.abs(denom) < 0.001) return false;
   const u = ((v2[1] - v0[1]) * (px - v0[0]) + (v0[0] - v2[0]) * (py - v0[1])) / denom;
   const v = ((v0[1] - v1[1]) * (px - v0[0]) + (v1[0] - v0[0]) * (py - v0[1])) / denom;
-  return u >= 0 && v >= 0 && (u + v) <= 1;
-}
-
-function dot(a0, a1, b0, b1) {
-  return (a1[0] - a0[0]) * (b1[0] - b0[0]) + (a1[1] - a0[1]) * (b1[1] - b0[1]);
+  return u >= 0 && v >= 0 && u + v <= 1;
 }
 
 // Hit test selection handles. Returns handle type or null.
@@ -76,7 +66,7 @@ export function hitTestHandles(shape, mx, my, canvasSize) {
   const cx = shape.x * canvasSize;
   const cy = shape.y * canvasSize;
   const r = (shape.size / 2) * canvasSize;
-  const rotRad = shape.rotation * Math.PI / 180;
+  const rotRad = (shape.rotation * Math.PI) / 180;
 
   // Transform to local coords
   const dx = mx - cx;
@@ -95,13 +85,13 @@ export function hitTestHandles(shape, mx, my, canvasSize) {
   // Resize handles (corners and midpoints)
   const handles = [
     { x: -r, y: -r, type: 'nw' },
-    { x:  r, y: -r, type: 'ne' },
-    { x:  r, y:  r, type: 'se' },
-    { x: -r, y:  r, type: 'sw' },
-    { x:  0, y: -r, type: 'n' },
-    { x:  r, y:  0, type: 'e' },
-    { x:  0, y:  r, type: 's' },
-    { x: -r, y:  0, type: 'w' },
+    { x: r, y: -r, type: 'ne' },
+    { x: r, y: r, type: 'se' },
+    { x: -r, y: r, type: 'sw' },
+    { x: 0, y: -r, type: 'n' },
+    { x: r, y: 0, type: 'e' },
+    { x: 0, y: r, type: 's' },
+    { x: -r, y: 0, type: 'w' },
   ];
 
   for (const h of handles) {
@@ -117,8 +107,8 @@ export function hitTestHandles(shape, mx, my, canvasSize) {
 export function hitTestADSRCorner(envelope, mx, my, canvasSize) {
   const hitRadius = canvasSize * 0.08;
   const corners = [
-    { name: 'attack',  cx: 0,          cy: canvasSize },
-    { name: 'decay',   cx: 0,          cy: 0 },
+    { name: 'attack', cx: 0, cy: canvasSize },
+    { name: 'decay', cx: 0, cy: 0 },
     { name: 'sustain', cx: canvasSize, cy: 0 },
     { name: 'release', cx: canvasSize, cy: canvasSize },
   ];
@@ -138,16 +128,20 @@ export function calcResize(shape, handleType, localDx, localDy, canvasSize) {
   let newR = r;
 
   switch (handleType) {
-    case 'nw': case 'se':
-      newR = r + (handleType === 'se' ? 1 : -1) * (localDx + localDy) / 2;
+    case 'nw':
+    case 'se':
+      newR = r + ((handleType === 'se' ? 1 : -1) * (localDx + localDy)) / 2;
       break;
-    case 'ne': case 'sw':
-      newR = r + (handleType === 'ne' ? 1 : -1) * (localDx - localDy) / 2;
+    case 'ne':
+    case 'sw':
+      newR = r + ((handleType === 'ne' ? 1 : -1) * (localDx - localDy)) / 2;
       break;
-    case 'n': case 's':
+    case 'n':
+    case 's':
       newR = r + (handleType === 's' ? 1 : -1) * localDy;
       break;
-    case 'e': case 'w':
+    case 'e':
+    case 'w':
       newR = r + (handleType === 'e' ? 1 : -1) * localDx;
       break;
   }
@@ -163,7 +157,7 @@ export function calcRotation(shape, mx, my, canvasSize) {
   const cy = shape.y * canvasSize;
   const angle = Math.atan2(my - cy, mx - cx);
   // Convert to degrees, offset so "up" = 0
-  let deg = (angle * 180 / Math.PI) + 90;
+  let deg = (angle * 180) / Math.PI + 90;
   if (deg < 0) deg += 360;
   return deg % 360;
 }
