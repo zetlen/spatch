@@ -1,6 +1,7 @@
 // serialize.js — URL encode/decode sigil state with lz-string
 
 import LZString from 'lz-string';
+import { genId } from './state.js';
 
 export function serializeState(state) {
   const compact = compactify(state);
@@ -42,6 +43,7 @@ function compactify(state) {
       r: round2(state.envelope.release),
     },
     sh: state.shapes.map((s) => ({
+      i: s.id,
       t: s.type[0], // 't','s','c'
       x: round3(s.x),
       y: round3(s.y),
@@ -51,6 +53,7 @@ function compactify(state) {
       p: s.pattern ? s.pattern[0] : 0, // 's','c','n','g','r' or 0
     })),
     d: state.decorations.map((d) => ({
+      i: d.id,
       t: d.type[0], // 's','c','t'
       p: d.points ? d.points.map(([x, y]) => [round3(x), round3(y)]) : [],
       x: round3(d.x),
@@ -77,7 +80,7 @@ function decompactify(c) {
       release: c.e.r,
     },
     shapes: (c.sh || []).map((s) => ({
-      id: genId(),
+      id: s.i || genId('s'),
       type: typeMap[s.t] || 'circle',
       x: s.x,
       y: s.y,
@@ -87,7 +90,7 @@ function decompactify(c) {
       pattern: s.p ? patMap[s.p] || null : null,
     })),
     decorations: (c.d || []).map((d) => ({
-      id: genId(),
+      id: d.i || genId('d'),
       type: decoMap[d.t] || 'squiggle',
       points: d.p || [],
       text: d.tx || null,
@@ -151,11 +154,6 @@ function decompactFill(f) {
     default:
       return base;
   }
-}
-
-let _counter = 0;
-function genId() {
-  return 'r' + (++_counter).toString(36) + Math.random().toString(36).slice(2, 5);
 }
 
 function round2(n) {
