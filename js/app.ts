@@ -19,14 +19,8 @@ import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.ts';
 import { DecorationTool } from './decorations.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
 import { generateEmbedSnippet, copyToClipboard } from './embed.js';
-import type {
-  Shape,
-  Decoration,
-  HandleType,
-  ADSRCorner,
-  NormalizedCoord,
-  Degrees,
-} from './types.ts';
+import { IDLE, type InteractionState } from './interaction.ts';
+import type { Shape, Decoration, NormalizedCoord, Degrees } from './types.ts';
 
 // ---- Init ----
 
@@ -162,12 +156,7 @@ function canvasCoords(e: MouseEvent): CanvasCoords {
 
 // ---- Interaction state ----
 
-let interactionMode = 'idle'; // 'idle' | 'dragging' | 'resizing' | 'rotating' | 'adsr' | 'drawing' | 'arpeggio' | 'deco-dragging' | 'deco-resizing'
-let dragStart: CanvasCoords = { px: 0, py: 0, nx: 0, ny: 0 };
-let dragOriginal: any = null;
-let activeHandle: HandleType | null = null;
-let activeADSRCorner: ADSRCorner | null = null;
-let triggeredShapes = new Set<string>(); // for arpeggio mode
+let interaction: InteractionState = IDLE;
 
 // ---- Tool change callback ----
 
@@ -185,12 +174,10 @@ toolbar.onToolChange = (tool: string) => {
 
 canvas.addEventListener('mousedown', (e: MouseEvent) => {
   const { px, py, nx, ny } = canvasCoords(e);
-  dragStart = { px, py, nx, ny };
 
   // Arpeggio: shift+drag across canvas
   if (e.shiftKey && store.data.shapes.length > 0 && toolbar.currentTool === 'select') {
-    interactionMode = 'arpeggio';
-    triggeredShapes.clear();
+    interaction = { mode: 'arpeggio', triggered: new Set() };
     audio._init().then(() => {
       audio._arpeggioReady = true;
     });
@@ -212,7 +199,7 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
         decoTool.setTool(null);
       } else {
         // Squiggle: drawing in progress
-        interactionMode = 'drawing';
+        interaction = { mode: 'drawing' };
       }
       needsRender = true;
       return;
@@ -236,10 +223,8 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
   // 1. Check ADSR corners
   const adsrCorner = hitTestADSRCorner(store.data.envelope, px, py, CANVAS_SIZE);
   if (adsrCorner) {
-    interactionMode = 'adsr';
-    activeADSRCorner = adsrCorner;
     undo.snapshot();
-    dragOriginal = { ...store.data.envelope };
+    interaction = { mode: 'adsr', corner: adsrCorner, origin: { ...store.data.envelope } };
     return;
   }
 
@@ -248,16 +233,19 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
   if (selShape) {
     const handle = hitTestHandles(selShape, px, py, CANVAS_SIZE);
     if (handle === 'rotate') {
-      interactionMode = 'rotating';
       undo.snapshot();
-      dragOriginal = { rotation: selShape.rotation };
+      interaction = { mode: 'rotating' };
       return;
     }
     if (handle) {
-      interactionMode = 'resizing';
-      activeHandle = handle;
       undo.snapshot();
-      dragOriginal = { size: selShape.size };
+      interaction = {
+        mode: 'resizing',
+        handle,
+        origin: { size: selShape.size },
+        startPx: px,
+        startPy: py,
+      };
       return;
     }
   }
@@ -267,10 +255,14 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
   if (hitId) {
     setSelection(hitId);
     toolbar.syncToSelectedShape();
-    interactionMode = 'dragging';
     undo.snapshot();
     const shape = store.getShape(hitId)!;
-    dragOriginal = { x: shape.x, y: shape.y };
+    interaction = {
+      mode: 'dragging',
+      origin: { x: shape.x, y: shape.y },
+      startNx: nx,
+      startNy: ny,
+    };
     needsRender = true;
     return;
   }
@@ -280,13 +272,15 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
   if (selDeco) {
     const decoHandle = hitTestDecoHandles(selDeco, px, py, CANVAS_SIZE);
     if (decoHandle) {
-      interactionMode = 'deco-resizing';
-      activeHandle = decoHandle;
       undo.snapshot();
-      dragOriginal = {
-        scale: selDeco.type !== 'squiggle' ? selDeco.scale : 1,
-        bounds: getDecoBounds(selDeco, CANVAS_SIZE),
-        points: selDeco.type === 'squiggle' ? selDeco.points.map((p) => [...p]) : null,
+      interaction = {
+        mode: 'deco-resizing',
+        handle: decoHandle,
+        origin: {
+          scale: selDeco.type !== 'squiggle' ? selDeco.scale : 1,
+          bounds: getDecoBounds(selDeco, CANVAS_SIZE)!,
+          points: selDeco.type === 'squiggle' ? selDeco.points.map((p) => [...p]) : null,
+        },
       };
       return;
     }
@@ -296,14 +290,13 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
   const hitDecoId = hitTestDecorations(store.data, px, py, CANVAS_SIZE);
   if (hitDecoId) {
     setSelection(null, hitDecoId);
-    interactionMode = 'deco-dragging';
     undo.snapshot();
     const deco = store.getDecoration(hitDecoId)!;
-    if (deco.type === 'squiggle') {
-      dragOriginal = { points: deco.points.map((p) => [...p]) };
-    } else {
-      dragOriginal = { x: deco.x, y: deco.y };
-    }
+    const origin =
+      deco.type === 'squiggle'
+        ? { points: deco.points.map((p) => [...p]) }
+        : { x: deco.x, y: deco.y };
+    interaction = { mode: 'deco-dragging', origin, startNx: nx, startNy: ny };
     needsRender = true;
     return;
   }
@@ -316,38 +309,38 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
 canvas.addEventListener('mousemove', (e: MouseEvent) => {
   const { px, py, nx, ny } = canvasCoords(e);
 
-  if (interactionMode === 'drawing') {
+  if (interaction.mode === 'drawing') {
     decoTool.handleMouseMove(nx, ny);
     needsRender = true;
     return;
   }
 
-  if (interactionMode === 'dragging') {
+  if (interaction.mode === 'dragging') {
     const shape = getSelected();
     if (!shape) return;
-    const dx = nx - dragStart.nx;
-    const dy = ny - dragStart.ny;
+    const dx = nx - interaction.startNx;
+    const dy = ny - interaction.startNy;
     store.updateShape(shape.id, {
-      x: Math.max(0, Math.min(1, dragOriginal.x + dx)) as NormalizedCoord,
-      y: Math.max(0, Math.min(1, dragOriginal.y + dy)) as NormalizedCoord,
+      x: Math.max(0, Math.min(1, interaction.origin.x + dx)) as NormalizedCoord,
+      y: Math.max(0, Math.min(1, interaction.origin.y + dy)) as NormalizedCoord,
     });
     return;
   }
 
-  if (interactionMode === 'resizing') {
+  if (interaction.mode === 'resizing') {
     const shape = getSelected();
     if (!shape) return;
     // Transform delta to shape-local coordinates
     const rotRad = (shape.rotation * Math.PI) / 180;
-    const dpx = px - dragStart.px;
-    const dpy = py - dragStart.py;
+    const dpx = px - interaction.startPx;
+    const dpy = py - interaction.startPy;
     const cos = Math.cos(-rotRad);
     const sin = Math.sin(-rotRad);
     const localDx = dpx * cos - dpy * sin;
     const localDy = dpx * sin + dpy * cos;
     const newSize = calcResize(
-      { ...shape, size: dragOriginal.size },
-      activeHandle!,
+      { ...shape, size: interaction.origin.size as NormalizedCoord },
+      interaction.handle,
       localDx,
       localDy,
       CANVAS_SIZE,
@@ -356,7 +349,7 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     return;
   }
 
-  if (interactionMode === 'rotating') {
+  if (interaction.mode === 'rotating') {
     const shape = getSelected();
     if (!shape) return;
     const rotation = calcRotation(shape, px, py, CANVAS_SIZE);
@@ -364,22 +357,22 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     return;
   }
 
-  if (interactionMode === 'adsr') {
+  if (interaction.mode === 'adsr') {
     // Drag distance from corner determines value
-    const cornerPos = getCornerPosition(activeADSRCorner!, CANVAS_SIZE);
+    const cornerPos = getCornerPosition(interaction.corner, CANVAS_SIZE);
     const dist = Math.hypot(px - cornerPos.x, py - cornerPos.y);
-    const val = dragToEnvelopeValue(activeADSRCorner!, dist, CANVAS_SIZE);
-    store.updateEnvelope({ [activeADSRCorner!]: val });
+    const val = dragToEnvelopeValue(interaction.corner, dist, CANVAS_SIZE);
+    store.updateEnvelope({ [interaction.corner]: val });
     return;
   }
 
-  if (interactionMode === 'arpeggio') {
+  if (interaction.mode === 'arpeggio') {
     if (!audio._arpeggioReady) return;
     // Trigger shapes as pointer crosses their X position
     for (const shape of store.data.shapes) {
       const shapePx = shape.x * CANVAS_SIZE;
-      if (!triggeredShapes.has(shape.id) && Math.abs(px - shapePx) < 20) {
-        triggeredShapes.add(shape.id);
+      if (!interaction.triggered.has(shape.id) && Math.abs(px - shapePx) < 20) {
+        interaction.triggered.add(shape.id);
         audio.triggerArpeggio(store.data, store.data.envelope, shape.id);
         needsRender = true;
       }
@@ -387,39 +380,38 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     return;
   }
 
-  if (interactionMode === 'deco-dragging') {
+  if (interaction.mode === 'deco-dragging') {
     const deco = getSelectedDeco();
     if (!deco) return;
-    const dnx = nx - dragStart.nx;
-    const dny = ny - dragStart.ny;
-    if (deco.type === 'squiggle') {
-      const newPts = dragOriginal.points.map((p: number[]) => [
+    const dnx = nx - interaction.startNx;
+    const dny = ny - interaction.startNy;
+    if ('points' in interaction.origin) {
+      const newPts = interaction.origin.points.map((p: number[]) => [
         Math.max(0, Math.min(1, p[0] + dnx)),
         Math.max(0, Math.min(1, p[1] + dny)),
       ]);
       store.updateDecoration(deco.id, { points: newPts } as any);
     } else {
       store.updateDecoration(deco.id, {
-        x: Math.max(0, Math.min(1, dragOriginal.x + dnx)),
-        y: Math.max(0, Math.min(1, dragOriginal.y + dny)),
+        x: Math.max(0, Math.min(1, interaction.origin.x + dnx)),
+        y: Math.max(0, Math.min(1, interaction.origin.y + dny)),
       } as any);
     }
     return;
   }
 
-  if (interactionMode === 'deco-resizing') {
+  if (interaction.mode === 'deco-resizing') {
     const deco = getSelectedDeco();
     if (!deco) return;
-    const bounds = dragOriginal.bounds;
-    if (!bounds) return;
+    const { bounds, scale, points } = interaction.origin;
     const cx = bounds.x + bounds.w / 2;
     const cy = bounds.y + bounds.h / 2;
     const initDist = Math.hypot(bounds.w / 2, bounds.h / 2);
     const currDist = Math.hypot(px - cx, py - cy);
-    const newScale = Math.max(0.2, Math.min(5, dragOriginal.scale * (currDist / initDist)));
+    const newScale = Math.max(0.2, Math.min(5, scale * (currDist / initDist)));
     if (deco.type === 'squiggle') {
       // Scale points relative to their center
-      const origPts = dragOriginal.points || deco.points;
+      const origPts = points || deco.points;
       let sumX = 0,
         sumY = 0;
       for (const p of origPts) {
@@ -428,7 +420,7 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
       }
       const pcx = sumX / origPts.length;
       const pcy = sumY / origPts.length;
-      const ratio = newScale / dragOriginal.scale;
+      const ratio = newScale / scale;
       const newPts = origPts.map((p: number[]) => [
         Math.max(0, Math.min(1, pcx + (p[0] - pcx) * ratio)),
         Math.max(0, Math.min(1, pcy + (p[1] - pcy) * ratio)),
@@ -442,7 +434,7 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
 });
 
 canvas.addEventListener('mouseup', () => {
-  if (interactionMode === 'drawing') {
+  if (interaction.mode === 'drawing') {
     const decoId = decoTool.handleMouseUp();
     if (decoId) {
       // Squiggle finished — switch to select mode like shapes
@@ -454,16 +446,11 @@ canvas.addEventListener('mouseup', () => {
     needsRender = true;
   }
 
-  // No need to manually push undo — undo.snapshot() was called at mousedown
-  interactionMode = 'idle';
-  activeHandle = null;
-  activeADSRCorner = null;
-  dragOriginal = null;
-  triggeredShapes.clear();
+  interaction = IDLE;
 });
 
 canvas.addEventListener('mouseleave', () => {
-  if (interactionMode === 'drawing') {
+  if (interaction.mode === 'drawing') {
     const decoId = decoTool.handleMouseUp();
     if (decoId) {
       setSelection(null, decoId);
@@ -473,20 +460,12 @@ canvas.addEventListener('mouseleave', () => {
     }
     needsRender = true;
   }
-  if (interactionMode === 'arpeggio') {
-    triggeredShapes.clear();
+  if (interaction.mode === 'arpeggio') {
+    interaction.triggered.clear();
   }
 });
 
 // ---- Touch support ----
-
-let pinchRotateState: {
-  initDist: number;
-  initAngle: number;
-  initSize: number;
-  initRotation: number;
-  shapeId: string;
-} | null = null;
 
 function touchDist(a: Touch, b: Touch): number {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
@@ -503,7 +482,7 @@ canvas.addEventListener(
 
     if (e.touches.length === 2) {
       // Cancel any in-progress single-touch interaction
-      if (interactionMode !== 'idle') {
+      if (interaction.mode !== 'idle') {
         canvas.dispatchEvent(new MouseEvent('mouseup', {}));
       }
 
@@ -523,14 +502,14 @@ canvas.addEventListener(
 
       setSelection(shapeId);
       undo.snapshot();
-      pinchRotateState = {
+      interaction = {
+        mode: 'pinch-rotate',
         initDist: touchDist(a, b),
         initAngle: touchAngle(a, b),
         initSize: shape.size,
         initRotation: shape.rotation,
         shapeId,
       };
-      interactionMode = 'pinch-rotate';
       needsRender = true;
       return;
     }
@@ -552,18 +531,18 @@ canvas.addEventListener(
   (e: TouchEvent) => {
     e.preventDefault();
 
-    if (interactionMode === 'pinch-rotate' && e.touches.length >= 2 && pinchRotateState) {
+    if (interaction.mode === 'pinch-rotate' && e.touches.length >= 2) {
       const [a, b] = e.touches;
       const dist = touchDist(a, b);
       const angle = touchAngle(a, b);
 
-      const scale = dist / pinchRotateState.initDist;
-      const newSize = clampSize(pinchRotateState.initSize * scale);
+      const scale = dist / interaction.initDist;
+      const newSize = clampSize(interaction.initSize * scale);
 
-      const angleDelta = angle - pinchRotateState.initAngle;
-      const newRotation = (((pinchRotateState.initRotation + angleDelta) % 360) + 360) % 360;
+      const angleDelta = angle - interaction.initAngle;
+      const newRotation = (((interaction.initRotation + angleDelta) % 360) + 360) % 360;
 
-      store.updateShape(pinchRotateState.shapeId, {
+      store.updateShape(interaction.shapeId, {
         size: newSize,
         rotation: Math.round(newRotation) as Degrees,
       });
@@ -587,11 +566,10 @@ canvas.addEventListener(
   (e: TouchEvent) => {
     e.preventDefault();
 
-    if (interactionMode === 'pinch-rotate') {
+    if (interaction.mode === 'pinch-rotate') {
       if (e.touches.length < 2) {
         // Undo snapshot was already captured at touchstart
-        pinchRotateState = null;
-        interactionMode = 'idle';
+        interaction = IDLE;
         toolbar.syncToSelectedShape();
         needsRender = true;
       }
