@@ -26,6 +26,7 @@ function createStubOscillator() {
   return {
     type: 'sine',
     frequency: createStubAudioParam(440),
+    detune: createStubAudioParam(0),
     connect() {},
     disconnect() {},
     start() {},

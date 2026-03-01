@@ -1,6 +1,7 @@
 // audio.js — Web Audio engine: oscillators, filters, spatial mapping
 
 import { createEffect } from './effects.js';
+import { createVocoderChain } from './vocoder.js';
 
 // ---- Pentatonic scale ----
 const PENTATONIC_INTERVALS = [0, 2, 4, 7, 9];
@@ -63,6 +64,10 @@ export function areaToGain(type, size) {
 // Map rotation (0-360) to a parameter for wave shaping
 export function rotationToParam(rotation) {
   return rotation / 360; // 0.0 to 1.0
+}
+
+export function curlicuesToDetune(count) {
+  return count * 15; // 15 cents per curlicue
 }
 
 function oscillatorType(shapeType) {
@@ -245,12 +250,46 @@ export class AudioEngine {
     const totalLayers = sigilState.shapes.length;
     this.playingShapeIds.clear();
 
+    const curlicues = sigilState.decorations
+      ? sigilState.decorations.filter((d) => d.type === 'curlicue').length
+      : 0;
+
     for (let i = 0; i < totalLayers; i++) {
       const shape = sigilState.shapes[i];
-      const voice = this._buildVoice(ctx, shape, i, totalLayers);
+      const voice = this._buildVoice(ctx, shape, i, totalLayers, curlicues);
       voice.oscillator.start(now);
       this.activeVoices.push(voice);
       this.playingShapeIds.add(shape.id);
+    }
+
+    // Play text vocoders
+    const texts = sigilState.decorations
+      ? sigilState.decorations.filter((d) => d.type === 'text')
+      : [];
+    for (const textDeco of texts) {
+      const freq = yToFrequency(textDeco.y);
+      const carrier = ctx.createOscillator();
+      carrier.type = 'sawtooth';
+      carrier.frequency.value = freq;
+
+      const vocoder = createVocoderChain(ctx, textDeco.text, carrier);
+      if (vocoder) {
+        const panner = ctx.createStereoPanner();
+        panner.pan.value = xToPan(textDeco.x);
+
+        vocoder.output.connect(panner);
+        panner.connect(this.masterGain);
+
+        carrier.start(now);
+        carrier.stop(now + vocoder.duration);
+
+        this.activeVoices.push({
+          isTextVoice: true,
+          textCarrier: carrier,
+          outputNode: panner,
+          effectDispose: vocoder.dispose,
+        });
+      }
     }
 
     this.isPlaying = true;
@@ -306,7 +345,8 @@ export class AudioEngine {
     // Temporarily set masterGain so _buildVoice routes to our arpeggio chain
     const prevMaster = this.masterGain;
     this.masterGain = this._arpeggioGain;
-    const voice = this._buildVoice(ctx, shape, idx, total);
+    const curlicues = sigilState.decorations.filter((d) => d.type === 'curlicue').length;
+    const voice = this._buildVoice(ctx, shape, idx, total, curlicues);
     this.masterGain = prevMaster;
 
     // Mini envelope: quick attack, short sustain, quick release
@@ -370,6 +410,7 @@ export class AudioEngine {
     // Remove voices for deleted shapes
     for (let i = this.activeVoices.length - 1; i >= 0; i--) {
       const voice = this.activeVoices[i];
+      if (voice.isTextVoice) continue;
       if (!shapeMap.has(voice.shapeId)) {
         this._stopVoice(voice);
         this.activeVoices.splice(i, 1);
@@ -379,10 +420,14 @@ export class AudioEngine {
 
     // Add voices for new shapes
     const totalLayers = sigilState.shapes.length;
+    const curlicues = sigilState.decorations
+      ? sigilState.decorations.filter((d) => d.type === 'curlicue').length
+      : 0;
+
     for (let i = 0; i < totalLayers; i++) {
       const shape = sigilState.shapes[i];
       if (!this.playingShapeIds.has(shape.id)) {
-        const voice = this._buildVoice(ctx, shape, i, totalLayers);
+        const voice = this._buildVoice(ctx, shape, i, totalLayers, curlicues);
         voice.oscillator.start(now);
         this.activeVoices.push(voice);
         this.playingShapeIds.add(shape.id);
@@ -391,6 +436,7 @@ export class AudioEngine {
 
     // Update existing voices
     for (const voice of this.activeVoices) {
+      if (voice.isTextVoice) continue;
       const shape = shapeMap.get(voice.shapeId);
       if (!shape) continue;
 
@@ -500,24 +546,30 @@ export class AudioEngine {
       try {
         voice.pwmOffset.disconnect();
       } catch {}
+    if (voice.textCarrier)
+      try {
+        voice.textCarrier.disconnect();
+      } catch {}
     try {
       voice.outputNode.disconnect();
     } catch {}
     if (voice.effectDispose) voice.effectDispose();
   }
 
-  _buildVoice(ctx, shape, layerIndex, totalLayers) {
+  _buildVoice(ctx, shape, layerIndex, totalLayers, curlicues = 0) {
     const gain = ctx.createGain();
     gain.gain.value = areaToGain(shape.type, shape.size) * waveformGain(shape.type);
 
     const freq = yToFrequency(shape.y);
     const param = rotationToParam(shape.rotation);
+    const detuneCents = curlicuesToDetune(curlicues);
     let voiceSources = {};
 
     if (shape.type === 'square') {
       const osc = ctx.createOscillator();
       osc.type = 'sawtooth';
       osc.frequency.value = freq;
+      osc.detune.value = detuneCents;
 
       const pwmOffset = ctx.createConstantSource();
       // param 0..1 -> dc offset -0.9 .. +0.9
@@ -551,10 +603,12 @@ export class AudioEngine {
       const oscSaw = ctx.createOscillator();
       oscSaw.type = 'sawtooth';
       oscSaw.frequency.value = freq;
+      oscSaw.detune.value = detuneCents;
 
       const oscTri = ctx.createOscillator();
       oscTri.type = 'triangle';
       oscTri.frequency.value = freq;
+      oscTri.detune.value = detuneCents;
 
       const gainSaw = ctx.createGain();
       const gainTri = ctx.createGain();
@@ -592,6 +646,7 @@ export class AudioEngine {
       const osc = ctx.createOscillator();
       osc.type = oscillatorType(shape.type);
       osc.frequency.value = freq;
+      osc.detune.value = detuneCents;
       osc.connect(gain);
       voiceSources = { oscillator: osc };
     }
@@ -605,6 +660,7 @@ export class AudioEngine {
     const layerEQ = createLayerEQ(ctx, layerIndex, totalLayers);
 
     // Wire: gain -> filter -> [effect] -> [overdrive] -> layerEQ -> panner -> master
+    // (Note: Text vocoder voices bypass this and use: carrier -> filter bank -> vocoder output -> panner -> master)
     gain.connect(filter);
 
     let lastNode = filter;
