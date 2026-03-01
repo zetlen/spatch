@@ -675,7 +675,7 @@ export class AudioEngine {
             osc.start(time);
           } catch {}
         },
-        stop(time: number) {
+        stop(_time: number) {
           safeStop(osc);
           safeStop(pwmOffset);
         },
@@ -716,7 +716,7 @@ export class AudioEngine {
           oscSaw.start(time);
           oscTri.start(time);
         },
-        stop(time: number) {
+        stop(_time: number) {
           safeStop(oscSaw);
           safeStop(oscTri);
         },
@@ -737,7 +737,7 @@ export class AudioEngine {
       start(time: number) {
         osc.start(time);
       },
-      stop(time: number) {
+      stop(_time: number) {
         safeStop(osc);
       },
     };
