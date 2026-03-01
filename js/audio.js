@@ -60,8 +60,9 @@ export function areaToGain(type, size) {
   return Math.min(0.8, 0.05 + fraction);
 }
 
-export function rotationToDetune(rotation) {
-  return (rotation / 360) * 50; // 0–50 cents
+// Map rotation (0-360) to a parameter for wave shaping
+export function rotationToParam(rotation) {
+  return rotation / 360; // 0.0 to 1.0
 }
 
 function oscillatorType(shapeType) {
@@ -89,6 +90,28 @@ export function waveformGain(shapeType) {
     default:
       return 1.0; // sine is baseline
   }
+}
+
+// ---- PWM Waveshaper for Square (Pulse) ----
+
+function createPWMWaveshaper(audioCtx) {
+  const ws = audioCtx.createWaveShaper();
+  const samples = 1024;
+  const curve = new Float32Array(samples);
+  // Default to a 50% duty cycle threshold curve.
+  // The actual threshold will be adjusted by a constant source or we can
+  // just recreate/update the curve on rotation change.
+  // It's cheaper to rebuild a 1024-sample curve than to use a DC offset node in some cases,
+  // but a DC offset into a static hard-clipping waveshaper is truly continuous.
+  // Let's use a static clipping curve and DC bias for the pulse width.
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    curve[i] = x > 0 ? 1 : -1;
+  }
+  ws.curve = curve;
+  // Over-sampling reduces aliasing from the hard clipping
+  ws.oversample = '4x';
+  return ws;
 }
 
 // ---- Color-to-filter mapping ----
@@ -348,8 +371,33 @@ export class AudioEngine {
     for (const voice of this.activeVoices) {
       const shape = sigilState.shapes.find((s) => s.id === voice.shapeId);
       if (!shape) continue;
-      voice.oscillator.frequency.setValueAtTime(yToFrequency(shape.y), now);
-      voice.oscillator.detune.setValueAtTime(rotationToDetune(shape.rotation), now);
+
+      const param = rotationToParam(shape.rotation);
+      const freq = yToFrequency(shape.y);
+
+      if (shape.type === 'square') {
+        voice.oscRaw.frequency.setValueAtTime(freq, now);
+        // pulse width maps from 50% (param=0) to ~5% or ~95%
+        // param 0..1 -> dc offset -0.9 .. +0.9
+        voice.pwmOffset.offset.setValueAtTime((param * 2 - 1) * 0.9, now);
+      } else if (shape.type === 'triangle') {
+        voice.oscSaw.frequency.setValueAtTime(freq, now);
+        voice.oscTri.frequency.setValueAtTime(freq, now);
+        // equal power crossfade
+        // 0 degrees (param=0): pure sawtooth
+        // 180 degrees (param=0.5): pure triangle
+        // 360 degrees (param=1.0): back to sawtooth
+        // distance from 0.5 (180 deg) determines mix
+        const mix = 1.0 - Math.abs(param - 0.5) * 2; // mix = 0 at 0/360, mix = 1 at 180
+        // sin/cos for equal power
+        const gainTri = Math.sin((mix * Math.PI) / 2);
+        const gainSaw = Math.cos((mix * Math.PI) / 2);
+        voice.gainTri.gain.setValueAtTime(gainTri, now);
+        voice.gainSaw.gain.setValueAtTime(gainSaw, now);
+      } else {
+        voice.oscillator.frequency.setValueAtTime(freq, now);
+      }
+
       voice.gain.gain.setValueAtTime(
         areaToGain(shape.type, shape.size) * waveformGain(shape.type),
         now,
@@ -369,10 +417,40 @@ export class AudioEngine {
 
     for (const voice of this.activeVoices) {
       try {
-        voice.oscillator.stop();
+        if (voice.oscRaw)
+          try {
+            voice.oscRaw.stop();
+          } catch {}
+        if (voice.oscSaw)
+          try {
+            voice.oscSaw.stop();
+          } catch {}
+        if (voice.oscTri)
+          try {
+            voice.oscTri.stop();
+          } catch {}
       } catch {}
       try {
-        voice.oscillator.disconnect();
+        if (voice.oscillator && voice.oscillator.disconnect)
+          try {
+            voice.oscillator.disconnect();
+          } catch {}
+        if (voice.oscRaw)
+          try {
+            voice.oscRaw.disconnect();
+          } catch {}
+        if (voice.oscSaw)
+          try {
+            voice.oscSaw.disconnect();
+          } catch {}
+        if (voice.oscTri)
+          try {
+            voice.oscTri.disconnect();
+          } catch {}
+        if (voice.pwmOffset)
+          try {
+            voice.pwmOffset.disconnect();
+          } catch {}
       } catch {}
       try {
         voice.outputNode.disconnect();
@@ -411,13 +489,92 @@ export class AudioEngine {
   }
 
   _buildVoice(ctx, shape, layerIndex, totalLayers) {
-    const osc = ctx.createOscillator();
-    osc.type = oscillatorType(shape.type);
-    osc.frequency.value = yToFrequency(shape.y);
-    osc.detune.value = rotationToDetune(shape.rotation);
-
     const gain = ctx.createGain();
     gain.gain.value = areaToGain(shape.type, shape.size) * waveformGain(shape.type);
+
+    const freq = yToFrequency(shape.y);
+    const param = rotationToParam(shape.rotation);
+    let voiceSources = {};
+
+    if (shape.type === 'square') {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+
+      const pwmOffset = ctx.createConstantSource();
+      // param 0..1 -> dc offset -0.9 .. +0.9
+      pwmOffset.offset.value = (param * 2 - 1) * 0.9;
+
+      const ws = createPWMWaveshaper(ctx);
+
+      osc.connect(ws);
+      pwmOffset.connect(ws);
+      ws.connect(gain);
+
+      pwmOffset.start();
+
+      pwmOffset.start();
+
+      voiceSources = {
+        oscillator: {
+          start: () => {}, // pwmOffset already started
+          stop: (time) => {
+            try {
+              osc.stop(time);
+            } catch {}
+          },
+        },
+        oscRaw: osc,
+        pwmOffset: pwmOffset,
+      };
+    } else if (shape.type === 'triangle') {
+      const oscSaw = ctx.createOscillator();
+      oscSaw.type = 'sawtooth';
+      oscSaw.frequency.value = freq;
+
+      const oscTri = ctx.createOscillator();
+      oscTri.type = 'triangle';
+      oscTri.frequency.value = freq;
+
+      const gainSaw = ctx.createGain();
+      const gainTri = ctx.createGain();
+
+      const mix = 1.0 - Math.abs(param - 0.5) * 2;
+      gainTri.gain.value = Math.sin((mix * Math.PI) / 2);
+      gainSaw.gain.value = Math.cos((mix * Math.PI) / 2);
+
+      oscSaw.connect(gainSaw);
+      oscTri.connect(gainTri);
+      gainSaw.connect(gain);
+      gainTri.connect(gain);
+
+      voiceSources = {
+        oscillator: {
+          start: (time) => {
+            oscSaw.start(time);
+            oscTri.start(time);
+          },
+          stop: (time) => {
+            try {
+              oscSaw.stop(time);
+            } catch {}
+            try {
+              oscTri.stop(time);
+            } catch {}
+          },
+        },
+        oscSaw: oscSaw,
+        oscTri: oscTri,
+        gainSaw: gainSaw,
+        gainTri: gainTri,
+      };
+    } else {
+      const osc = ctx.createOscillator();
+      osc.type = oscillatorType(shape.type);
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      voiceSources = { oscillator: osc };
+    }
 
     const filter = ctx.createBiquadFilter();
     applyColorFilter(filter, shape.fill);
@@ -427,8 +584,7 @@ export class AudioEngine {
 
     const layerEQ = createLayerEQ(ctx, layerIndex, totalLayers);
 
-    // Wire: osc -> gain -> filter -> [effect] -> [overdrive] -> layerEQ -> panner -> master
-    osc.connect(gain);
+    // Wire: gain -> filter -> [effect] -> [overdrive] -> layerEQ -> panner -> master
     gain.connect(filter);
 
     let lastNode = filter;
@@ -454,7 +610,7 @@ export class AudioEngine {
     panner.connect(this.masterGain || ctx.destination);
 
     return {
-      oscillator: osc,
+      ...voiceSources,
       outputNode: panner,
       effectDispose,
       shapeId: shape.id,

@@ -76,9 +76,9 @@ export function hitTestHandles(shape, mx, my, canvasSize) {
   const lx = dx * cos - dy * sin;
   const ly = dx * sin + dy * cos;
 
-  // Rotation handle
+  // Rotation handle (disabled for circles)
   const rotY = -r - ROT_HANDLE_OFFSET;
-  if (Math.abs(lx) < 8 && Math.abs(ly - rotY) < 8) {
+  if (shape.type !== 'circle' && Math.abs(lx) < 8 && Math.abs(ly - rotY) < 8) {
     return 'rotate';
   }
 

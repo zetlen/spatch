@@ -75,7 +75,7 @@ describe('hitTestHandles', () => {
   });
 
   test('detects rotation handle above shape', () => {
-    const shape = makeShape({ x: 0.5, y: 0.5, size: 0.12 });
+    const shape = makeShape({ x: 0.5, y: 0.5, size: 0.12, type: 'square' });
     // Rotation handle is at (cx, cy - r - 25) = (400, 400 - 48 - 25) = (400, 327)
     const result = hitTestHandles(shape, 400, 327, CANVAS_SIZE);
     expect(result).toBe('rotate');
