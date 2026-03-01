@@ -18,23 +18,27 @@ if (!hash) {
     const ctx = canvas.getContext('2d');
     const audio = new AudioEngine();
 
-    render(ctx, state, 800, null, null);
-    updateCanvasBorderRadius(canvas, state.envelope, 800);
+    // Render loop (#10): continuously re-render so playback glow effects animate
+    function renderLoop() {
+      render(ctx, state, 800, null, audio.playingShapeIds);
+      updateCanvasBorderRadius(canvas, state.envelope, 800);
+      requestAnimationFrame(renderLoop);
+    }
+    renderLoop();
 
+    // Play button: click-to-toggle (#11) works on both mouse and touch
     const btn = document.getElementById('play-btn');
 
-    btn.addEventListener('mousedown', async () => {
-      if (state.shapes.length === 0) return;
-      await audio.play(state, state.envelope);
-      btn.classList.add('playing');
-      btn.textContent = '■ STOP';
-    });
-
-    btn.addEventListener('mouseup', () => {
+    btn.addEventListener('click', async () => {
       if (audio.isPlaying) {
         audio.release(state.envelope);
         btn.classList.remove('playing');
-        btn.innerHTML = '&#9654; PLAY';
+        btn.textContent = '\u25B6 PLAY';
+      } else {
+        if (state.shapes.length === 0) return;
+        await audio.play(state, state.envelope);
+        btn.classList.add('playing');
+        btn.textContent = '\u25A0 STOP';
       }
     });
   }
