@@ -2,7 +2,7 @@
 
 import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.ts';
 import type { SigilState } from './state.ts';
-import type { FillDraft, FillMode, Shape, PatternType } from './types.ts';
+import type { FillDraft, FillMode, PatternType } from './types.ts';
 import { fillToFillDraft, fillDraftToFill } from './types.ts';
 
 export class Toolbar {

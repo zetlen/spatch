@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { serializeState, deserializeState } from '../../js/serialize.ts';
+import LZString from 'lz-string';
+import { serializeState, deserializeState, _serializeToJSON } from '../../js/serialize.ts';
 
 function makeState(overrides = {}) {
   return {
@@ -231,5 +232,72 @@ describe('serializeState output', () => {
     );
     // LZ-string compressToEncodedURIComponent uses A-Z, a-z, 0-9, +, -, =
     expect(encoded).toMatch(/^[A-Za-z0-9+\-=]*$/);
+  });
+
+  test('serialized output includes v: 1 version field', () => {
+    const json = _serializeToJSON(makeState({ shapes: [makeShape()] }));
+    const compact = JSON.parse(json);
+    expect(compact.v).toBe(1);
+  });
+});
+
+describe('legacy format (no v field) backwards compat', () => {
+  test('deserializes legacy format without v field', () => {
+    // Manually construct a legacy compact format (no v field)
+    const legacy = {
+      e: { a: 0.1, d: 0.2, s: 0.7, r: 0.4 },
+      sh: [
+        {
+          i: 'legacy1',
+          t: 'c',
+          x: 0.5,
+          y: 0.5,
+          z: 0.12,
+          r: 45,
+          f: { m: 's', h: 200, s: 80, l: 50 },
+          p: 0,
+        },
+      ],
+      d: [],
+    };
+    const json = JSON.stringify(legacy);
+    const encoded = LZString.compressToEncodedURIComponent(json);
+    const decoded = deserializeState(encoded);
+
+    expect(decoded).not.toBeNull();
+    expect(decoded.shapes).toHaveLength(1);
+    expect(decoded.shapes[0].id).toBe('legacy1');
+    expect(decoded.shapes[0].type).toBe('circle');
+    expect(decoded.shapes[0].x).toBeCloseTo(0.5);
+    expect(decoded.shapes[0].fill.mode).toBe('solid');
+  });
+
+  test('legacy format with decorations still works', () => {
+    const legacy = {
+      e: { a: 0.1, d: 0.2, s: 0.7, r: 0.4 },
+      sh: [],
+      d: [
+        {
+          i: 'dlegacy1',
+          t: 't',
+          p: [],
+          x: 0.5,
+          y: 0.5,
+          c: '#fff',
+          w: 2,
+          tx: 'Legacy Text',
+          fs: 32,
+        },
+      ],
+    };
+    const json = JSON.stringify(legacy);
+    const encoded = LZString.compressToEncodedURIComponent(json);
+    const decoded = deserializeState(encoded);
+
+    expect(decoded).not.toBeNull();
+    expect(decoded.decorations).toHaveLength(1);
+    expect(decoded.decorations[0].type).toBe('text');
+    expect(decoded.decorations[0].text).toBe('Legacy Text');
+    expect(decoded.decorations[0].fontSize).toBe(32);
   });
 });

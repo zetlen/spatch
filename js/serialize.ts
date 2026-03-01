@@ -19,11 +19,18 @@ export function serializeState(state: SigilData): string {
   return LZString.compressToEncodedURIComponent(json);
 }
 
+/** Expose the raw compact JSON for testing. */
+export function _serializeToJSON(state: SigilData): string {
+  return JSON.stringify(compactify(state));
+}
+
 export function deserializeState(hash: string): SigilData | null {
   try {
     const json = LZString.decompressFromEncodedURIComponent(hash);
     if (!json) return null;
     const compact = JSON.parse(json);
+    // Legacy format (no v field) or v1 — both go through the same decompact path.
+    // Future versions can branch here.
     return decompactify(compact);
   } catch (e) {
     console.warn('Failed to deserialize state:', e);
@@ -105,14 +112,19 @@ interface CompactDecoration {
   ts?: string;
 }
 
-interface CompactState {
+interface CompactStateLegacy {
   e: CompactEnvelope;
   sh: CompactShape[];
   d: CompactDecoration[];
 }
 
-function compactify(state: SigilData): CompactState {
+interface CompactStateV1 extends CompactStateLegacy {
+  v: 1;
+}
+
+function compactify(state: SigilData): CompactStateV1 {
   return {
+    v: 1,
     e: {
       a: round2(state.envelope.attack),
       d: round2(state.envelope.decay),
@@ -149,7 +161,7 @@ function compactify(state: SigilData): CompactState {
   };
 }
 
-function decompactify(c: CompactState): SigilData {
+function decompactify(c: CompactStateLegacy | CompactStateV1): SigilData {
   const typeMap: Record<string, string> = { t: 'triangle', s: 'square', c: 'circle' };
   const patMap: Record<string, string> = {
     s: 'stripes',
@@ -243,36 +255,31 @@ function compactFill(f: Fill): CompactFill {
   }
 }
 
-function decompactFill(f: any): Fill {
+function decompactFill(f: CompactFill): Fill {
   switch (f.m) {
     case 's':
-      return { mode: 'solid', h: f.h ?? 200, s: f.s ?? 80, l: f.l ?? 50 } satisfies SolidFill;
+      return { mode: 'solid', h: f.h, s: f.s, l: f.l } satisfies SolidFill;
     case 'r':
-      if (f.h != null) {
-        return {
-          mode: 'radial',
-          h: f.h,
-          s: f.s,
-          l: f.l,
-          h2: f.h2 ?? 180,
-          s2: f.s2 ?? 80,
-          l2: f.l2 ?? 45,
-        } satisfies RadialFill;
-      }
-      return { mode: 'radial', h: 200, s: 80, l: 50, h2: 180, s2: 80, l2: 45 } satisfies RadialFill;
+      return {
+        mode: 'radial',
+        h: f.h,
+        s: f.s,
+        l: f.l,
+        h2: f.h2,
+        s2: f.s2,
+        l2: f.l2,
+      } satisfies RadialFill;
     case 'l':
       return {
         mode: 'linear',
-        gradAngle: f.g ?? 0,
-        h: f.h ?? f.h1 ?? 200,
-        s: f.s ?? f.s1 ?? 80,
-        l: f.l ?? f.l1 ?? 50,
-        h2: f.h2 ?? 180,
-        s2: f.s2 ?? 80,
-        l2: f.l2 ?? 45,
+        gradAngle: f.g,
+        h: f.h,
+        s: f.s,
+        l: f.l,
+        h2: f.h2,
+        s2: f.s2,
+        l2: f.l2,
       } satisfies LinearFill;
-    default:
-      return { mode: 'solid', h: 200, s: 80, l: 50 } satisfies SolidFill;
   }
 }
 
