@@ -1,8 +1,4 @@
 // embed.js — Embed snippet generator
-//
-// Not currently wired up — the share/embed buttons were removed while
-// the sharing workflow is being redesigned (see issue #15). These
-// functions should be re-integrated once the new UI is ready.
 
 import { serializeState } from './serialize.js';
 
