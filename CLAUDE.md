@@ -1,8 +1,8 @@
-# CLAUDE.md — Sigil Synth
+# CLAUDE.md — spatch
 
 ## What This Is
 
-Sigil Synth is a browser instrument. You compose visual sigils from geometric shapes
+spatch is a browser instrument. You compose visual sigils from geometric shapes
 and hear them as synthesized chords. Every visual property maps to an audio parameter.
 
 ## Project Structure
@@ -27,13 +27,15 @@ js/
   envelope.js        ADSR ↔ canvas corner radius conversion
   toolbar.js         Toolbar class: tool/pattern/color picker UI binding
   decorations.js     DecorationTool class: squiggle/curlicue/text placement
-  embed.js           Embed snippet generator + modal UI
+  vocoder.js         Formant synthesis for text decorations (bandpass filter bank)
+  embed.js           Embed snippet generator + modal UI (currently unwired)
   serialize.js       LZ-string URL serialization (compact single-char keys)
   worklets/
     bitcrusher.js    AudioWorkletProcessor for the "rough" pattern effect
 dist/                Build output (gitignored)
 plans/
-  sigil-synth-design.md  Full design document
+  sigil-synth-design.md  Original design document
+  spatch-architecture.md Runtime architecture reference
 ```
 
 ## How to Run
@@ -49,14 +51,14 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 ## Key Concepts
 
 - **Shapes** are the primary objects: triangle, square, circle. Each shape maps to
-  one oscillator voice. Position → pitch/pan, size → volume, rotation → detune,
+  one oscillator voice. Position → pitch/pan, size → volume, rotation → timbre,
   color → filter, pattern → effect.
 
 - **ADSR envelope** is encoded as the canvas corner radii. Drag corners to adjust.
   Bottom-left = attack, top-left = decay, top-right = sustain, bottom-right = release.
 
-- **Play is press-and-hold**: mousedown = gate on (attack → decay → sustain),
-  mouseup = gate off (release). Shift+drag = arpeggio mode.
+- **Play modes**: normal (press-and-hold), latch (click to toggle), loop
+  (auto-repeating). Shift+drag = arpeggio mode.
 
 - **State** lives in `SigilState` (js/state.js). It holds shapes, decorations, and
   envelope. All mutations go through this class. Undo/redo uses JSON snapshots.
