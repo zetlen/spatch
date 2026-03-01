@@ -74,11 +74,11 @@ describe('SigilState updateShape / updateFill / updateEnvelope', () => {
   test('updateFill modifies fill properties', () => {
     const state = new SigilState();
     const shape = state.addShape('circle', 0.5, 0.5);
-    state.updateFill(shape.id, { mode: 'radial', labL: 80 });
+    state.updateFill(shape.id, { mode: 'radial', h2: 100 });
 
     const updated = state.getShape(shape.id);
     expect(updated.fill.mode).toBe('radial');
-    expect(updated.fill.labL).toBe(80);
+    expect(updated.fill.h2).toBe(100);
     expect(updated.fill.h).toBe(200); // unchanged
   });
 

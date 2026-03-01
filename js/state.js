@@ -26,21 +26,12 @@ function createShape(type, x, y) {
       h: 200,
       s: 80,
       l: 50,
-      // radial gradient (Lab)
-      labL: 60,
-      labA: 0,
-      labB: 0,
-      labL2: 30,
-      labA2: 40,
-      labB2: -40,
-      // linear gradient
-      gradAngle: 0,
-      h1: 320,
-      s1: 90,
-      l1: 55,
+      // stop 2 (radial outer, linear end)
       h2: 180,
       s2: 80,
       l2: 45,
+      // linear gradient angle
+      gradAngle: 0,
     },
     pattern: null, // null | "stripes" | "checker" | "noise" | "gradient" | "rough"
   };

@@ -23,19 +23,10 @@ function makeShape(overrides = {}) {
       h: 200,
       s: 80,
       l: 50,
-      labL: 60,
-      labA: 0,
-      labB: 0,
-      labL2: 30,
-      labA2: 40,
-      labB2: -40,
-      gradAngle: 0,
-      h1: 320,
-      s1: 90,
-      l1: 55,
       h2: 180,
       s2: 80,
       l2: 45,
+      gradAngle: 0,
     },
     pattern: null,
     ...overrides,
@@ -114,12 +105,12 @@ describe('serializeState / deserializeState round-trip', () => {
       fill: {
         ...makeShape().fill,
         mode: 'radial',
-        labL: 70,
-        labA: 30,
-        labB: -20,
-        labL2: 40,
-        labA2: 10,
-        labB2: 50,
+        h: 200,
+        s: 80,
+        l: 50,
+        h2: 100,
+        s2: 60,
+        l2: 40,
       },
     });
     const linearShape = makeShape({
@@ -127,9 +118,9 @@ describe('serializeState / deserializeState round-trip', () => {
         ...makeShape().fill,
         mode: 'linear',
         gradAngle: 90,
-        h1: 100,
-        s1: 50,
-        l1: 40,
+        h: 100,
+        s: 50,
+        l: 40,
         h2: 200,
         s2: 70,
         l2: 60,
@@ -143,10 +134,12 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decoded.shapes[0].fill.h).toBe(120);
 
     expect(decoded.shapes[1].fill.mode).toBe('radial');
-    expect(decoded.shapes[1].fill.labL).toBe(70);
+    expect(decoded.shapes[1].fill.h).toBe(200);
+    expect(decoded.shapes[1].fill.h2).toBe(100);
 
     expect(decoded.shapes[2].fill.mode).toBe('linear');
     expect(decoded.shapes[2].fill.gradAngle).toBe(90);
+    expect(decoded.shapes[2].fill.h).toBe(100);
   });
 
   test('all patterns survive round-trip', () => {

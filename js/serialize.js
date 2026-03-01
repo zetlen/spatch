@@ -106,9 +106,9 @@ function compactFill(f) {
     case 'solid':
       return { m: 's', h: f.h, s: f.s, l: f.l };
     case 'radial':
-      return { m: 'r', L: f.labL, a: f.labA, b: f.labB, L2: f.labL2, a2: f.labA2, b2: f.labB2 };
+      return { m: 'r', h: f.h, s: f.s, l: f.l, h2: f.h2, s2: f.s2, l2: f.l2 };
     case 'linear':
-      return { m: 'l', g: f.gradAngle, h1: f.h1, s1: f.s1, l1: f.l1, h2: f.h2, s2: f.s2, l2: f.l2 };
+      return { m: 'l', g: f.gradAngle, h: f.h, s: f.s, l: f.l, h2: f.h2, s2: f.s2, l2: f.l2 };
     default:
       return { m: 's', h: 200, s: 80, l: 50 };
   }
@@ -120,43 +120,30 @@ function decompactFill(f) {
     h: 200,
     s: 80,
     l: 50,
-    labL: 60,
-    labA: 0,
-    labB: 0,
-    labL2: 30,
-    labA2: 40,
-    labB2: -40,
-    gradAngle: 0,
-    h1: 320,
-    s1: 90,
-    l1: 55,
     h2: 180,
     s2: 80,
     l2: 45,
+    gradAngle: 0,
   };
 
   switch (f.m) {
     case 's':
       return { ...base, mode: 'solid', h: f.h, s: f.s, l: f.l };
     case 'r':
-      return {
-        ...base,
-        mode: 'radial',
-        labL: f.L,
-        labA: f.a,
-        labB: f.b,
-        labL2: f.L2,
-        labA2: f.a2,
-        labB2: f.b2,
-      };
+      // New format uses h/s/l; old Lab format (with L/a/b keys) gets defaults
+      if (f.h != null) {
+        return { ...base, mode: 'radial', h: f.h, s: f.s, l: f.l, h2: f.h2, s2: f.s2, l2: f.l2 };
+      }
+      return { ...base, mode: 'radial' };
     case 'l':
+      // New format uses h/s/l; old format used h1/s1/l1
       return {
         ...base,
         mode: 'linear',
         gradAngle: f.g,
-        h1: f.h1,
-        s1: f.s1,
-        l1: f.l1,
+        h: f.h != null ? f.h : f.h1 != null ? f.h1 : base.h,
+        s: f.s != null ? f.s : f.s1 != null ? f.s1 : base.s,
+        l: f.l != null ? f.l : f.l1 != null ? f.l1 : base.l,
         h2: f.h2,
         s2: f.s2,
         l2: f.l2,
