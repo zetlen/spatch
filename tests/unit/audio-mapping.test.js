@@ -8,7 +8,7 @@ import {
   shapeAreaFraction,
   areaToGain,
   curlicuesToDetune,
-} from '../../js/audio.js';
+} from '../../js/audio.ts';
 
 describe('yToFrequency', () => {
   test('y=0 (top) returns highest pentatonic note', () => {

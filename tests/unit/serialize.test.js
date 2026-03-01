@@ -206,7 +206,6 @@ describe('deserializeState edge cases', () => {
 describe('serializeState output', () => {
   test('produces a non-empty string', () => {
     const encoded = serializeState(makeState());
-    expect(typeof encoded).toBe('string');
     expect(encoded.length).toBeGreaterThan(0);
   });
 

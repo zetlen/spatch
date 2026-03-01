@@ -5,7 +5,7 @@ import {
   hitTestADSRCorner,
   calcResize,
   calcRotation,
-} from '../../js/shapes.js';
+} from '../../js/shapes.ts';
 
 const CANVAS_SIZE = 800;
 
