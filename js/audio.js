@@ -98,12 +98,8 @@ function createPWMWaveshaper(audioCtx) {
   const ws = audioCtx.createWaveShaper();
   const samples = 1024;
   const curve = new Float32Array(samples);
-  // Default to a 50% duty cycle threshold curve.
-  // The actual threshold will be adjusted by a constant source or we can
-  // just recreate/update the curve on rotation change.
-  // It's cheaper to rebuild a 1024-sample curve than to use a DC offset node in some cases,
-  // but a DC offset into a static hard-clipping waveshaper is truly continuous.
-  // Let's use a static clipping curve and DC bias for the pulse width.
+  // Provide a static hard-clipping curve where pulse width is animated
+  // dynamically by passing a DC bias through it.
   for (let i = 0; i < samples; i++) {
     const x = (i * 2) / samples - 1;
     curve[i] = x > 0 ? 1 : -1;
@@ -416,42 +412,44 @@ export class AudioEngine {
     this._sessionId++;
 
     for (const voice of this.activeVoices) {
-      try {
-        if (voice.oscRaw)
-          try {
-            voice.oscRaw.stop();
-          } catch {}
-        if (voice.oscSaw)
-          try {
-            voice.oscSaw.stop();
-          } catch {}
-        if (voice.oscTri)
-          try {
-            voice.oscTri.stop();
-          } catch {}
-      } catch {}
-      try {
-        if (voice.oscillator && voice.oscillator.disconnect)
-          try {
-            voice.oscillator.disconnect();
-          } catch {}
-        if (voice.oscRaw)
-          try {
-            voice.oscRaw.disconnect();
-          } catch {}
-        if (voice.oscSaw)
-          try {
-            voice.oscSaw.disconnect();
-          } catch {}
-        if (voice.oscTri)
-          try {
-            voice.oscTri.disconnect();
-          } catch {}
-        if (voice.pwmOffset)
-          try {
-            voice.pwmOffset.disconnect();
-          } catch {}
-      } catch {}
+      if (voice.oscRaw)
+        try {
+          voice.oscRaw.stop();
+        } catch {}
+      if (voice.oscSaw)
+        try {
+          voice.oscSaw.stop();
+        } catch {}
+      if (voice.oscTri)
+        try {
+          voice.oscTri.stop();
+        } catch {}
+      if (voice.pwmOffset)
+        try {
+          voice.pwmOffset.stop();
+        } catch {}
+
+      if (voice.oscillator && voice.oscillator.disconnect)
+        try {
+          voice.oscillator.disconnect();
+        } catch {}
+      if (voice.oscRaw)
+        try {
+          voice.oscRaw.disconnect();
+        } catch {}
+      if (voice.oscSaw)
+        try {
+          voice.oscSaw.disconnect();
+        } catch {}
+      if (voice.oscTri)
+        try {
+          voice.oscTri.disconnect();
+        } catch {}
+      if (voice.pwmOffset)
+        try {
+          voice.pwmOffset.disconnect();
+        } catch {}
+
       try {
         voice.outputNode.disconnect();
       } catch {}
@@ -513,11 +511,13 @@ export class AudioEngine {
 
       pwmOffset.start();
 
-      pwmOffset.start();
-
       voiceSources = {
         oscillator: {
-          start: () => {}, // pwmOffset already started
+          start: (time) => {
+            try {
+              osc.start(time);
+            } catch {}
+          }, // pwmOffset already started
           stop: (time) => {
             try {
               osc.stop(time);
