@@ -344,15 +344,61 @@ canvas.addEventListener('mouseleave', () => {
 
 // ---- Touch support ----
 
+let pinchRotateState = null; // { initDist, initAngle, initSize, initRotation, shapeId }
+
+function touchDist(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
+function touchAngle(a, b) {
+  return (Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * 180) / Math.PI;
+}
+
 canvas.addEventListener(
   'touchstart',
   (e) => {
     e.preventDefault();
+
+    if (e.touches.length === 2) {
+      // Cancel any in-progress single-touch interaction
+      if (interactionMode !== 'idle') {
+        canvas.dispatchEvent(new MouseEvent('mouseup', {}));
+      }
+
+      const [a, b] = e.touches;
+      const midX = (a.clientX + b.clientX) / 2;
+      const midY = (a.clientY + b.clientY) / 2;
+      const rect = canvas.getBoundingClientRect();
+      const px = ((midX - rect.left) * CANVAS_SIZE) / rect.width;
+      const py = ((midY - rect.top) * CANVAS_SIZE) / rect.height;
+
+      // Select shape under midpoint, or use already-selected shape
+      let shapeId = hitTestShapes(state.data, px, py, CANVAS_SIZE) || state.selectedId;
+      if (!shapeId) return;
+
+      const shape = state.getShape(shapeId);
+      if (!shape) return;
+
+      state.selectedId = shapeId;
+      preManipSnapshot = state._snapshot();
+      pinchRotateState = {
+        initDist: touchDist(a, b),
+        initAngle: touchAngle(a, b),
+        initSize: shape.size,
+        initRotation: shape.rotation,
+        shapeId,
+      };
+      interactionMode = 'pinch-rotate';
+      needsRender = true;
+      return;
+    }
+
     const touch = e.touches[0];
     canvas.dispatchEvent(
       new MouseEvent('mousedown', {
         clientX: touch.clientX,
         clientY: touch.clientY,
+        shiftKey: e.shiftKey,
       }),
     );
   },
@@ -363,11 +409,31 @@ canvas.addEventListener(
   'touchmove',
   (e) => {
     e.preventDefault();
+
+    if (interactionMode === 'pinch-rotate' && e.touches.length >= 2 && pinchRotateState) {
+      const [a, b] = e.touches;
+      const dist = touchDist(a, b);
+      const angle = touchAngle(a, b);
+
+      const scale = dist / pinchRotateState.initDist;
+      const newSize = Math.max(0.03, Math.min(0.5, pinchRotateState.initSize * scale));
+
+      const angleDelta = angle - pinchRotateState.initAngle;
+      const newRotation = (((pinchRotateState.initRotation + angleDelta) % 360) + 360) % 360;
+
+      state.updateShape(pinchRotateState.shapeId, {
+        size: newSize,
+        rotation: Math.round(newRotation),
+      });
+      return;
+    }
+
     const touch = e.touches[0];
     canvas.dispatchEvent(
       new MouseEvent('mousemove', {
         clientX: touch.clientX,
         clientY: touch.clientY,
+        shiftKey: e.shiftKey,
       }),
     );
   },
@@ -378,6 +444,24 @@ canvas.addEventListener(
   'touchend',
   (e) => {
     e.preventDefault();
+
+    if (interactionMode === 'pinch-rotate') {
+      if (e.touches.length < 2) {
+        // Commit undo snapshot
+        if (preManipSnapshot) {
+          state.undoStack.push(preManipSnapshot);
+          if (state.undoStack.length > 50) state.undoStack.shift();
+          state.redoStack.length = 0;
+          preManipSnapshot = null;
+        }
+        pinchRotateState = null;
+        interactionMode = 'idle';
+        toolbar.syncToSelectedShape();
+        needsRender = true;
+      }
+      return;
+    }
+
     canvas.dispatchEvent(new MouseEvent('mouseup', {}));
   },
   { passive: false },
