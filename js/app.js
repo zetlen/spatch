@@ -353,6 +353,7 @@ canvas.addEventListener(
       new MouseEvent('mousedown', {
         clientX: touch.clientX,
         clientY: touch.clientY,
+        shiftKey: e.shiftKey,
       }),
     );
   },
@@ -368,6 +369,7 @@ canvas.addEventListener(
       new MouseEvent('mousemove', {
         clientX: touch.clientX,
         clientY: touch.clientY,
+        shiftKey: e.shiftKey,
       }),
     );
   },
