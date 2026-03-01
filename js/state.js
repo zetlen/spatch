@@ -106,6 +106,24 @@ export class SigilState {
     return shape;
   }
 
+  duplicateShape(id, offsetX = 0, offsetY = 0) {
+    const source = this.getShape(id);
+    if (!source) return null;
+    return this.pasteShape(source, offsetX, offsetY);
+  }
+
+  pasteShape(shapeData, offsetX = 0, offsetY = 0) {
+    this._pushUndo();
+    const clone = JSON.parse(JSON.stringify(shapeData));
+    clone.id = genId('s');
+    clone.x = Math.max(0, Math.min(1, clone.x + offsetX));
+    clone.y = Math.max(0, Math.min(1, clone.y + offsetY));
+    this.data.shapes.push(clone);
+    this.selectedId = clone.id;
+    this._notify();
+    return clone;
+  }
+
   removeShape(id) {
     const idx = this.data.shapes.findIndex((s) => s.id === id);
     if (idx === -1) return;

@@ -468,23 +468,53 @@ canvas.addEventListener(
   { passive: false },
 );
 
+// ---- Clipboard for copy/paste ----
+
+let clipboard = null; // JSON snapshot of a shape
+
 // ---- Keyboard shortcuts ----
 
 document.addEventListener('keydown', (e) => {
   // Don't intercept when typing in inputs
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+  const mod = e.ctrlKey || e.metaKey;
+
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (state.selectedId) {
       state.removeShape(state.selectedId);
     }
   }
-  if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+  if (e.key === 'c' && mod) {
+    if (state.selectedId) {
+      const shape = state.getShape(state.selectedId);
+      if (shape) clipboard = JSON.parse(JSON.stringify(shape));
+    }
+  }
+  if (e.key === 'v' && mod) {
+    e.preventDefault();
+    if (clipboard) {
+      state.pasteShape(clipboard, 0.03, 0.03);
+      toolbar.syncToSelectedShape();
+      needsRender = true;
+    }
+    return;
+  }
+  if (e.key === 'd' && mod) {
+    e.preventDefault();
+    if (state.selectedId) {
+      state.duplicateShape(state.selectedId, 0, 0);
+      toolbar.syncToSelectedShape();
+      needsRender = true;
+    }
+    return;
+  }
+  if (e.key === 'z' && mod) {
     e.preventDefault();
     if (e.shiftKey) state.redo();
     else state.undo();
   }
-  if (e.key === 'y' && (e.ctrlKey || e.metaKey)) {
+  if (e.key === 'y' && mod) {
     e.preventDefault();
     state.redo();
   }
@@ -497,7 +527,7 @@ document.addEventListener('keydown', (e) => {
     shareMenu.classList.add('hidden');
     needsRender = true;
   }
-  if (e.key === 'v') {
+  if (e.key === 'v' && !mod) {
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
     decoTool.setTool(null);
