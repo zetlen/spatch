@@ -83,17 +83,19 @@ function oscillatorType(shapeType) {
   }
 }
 
-// Per-waveform gain normalization: square and sawtooth have higher RMS energy
-// than sine, so we attenuate them for consistent perceived volume across shapes.
+// Per-waveform perceived-loudness normalization.  Square and sawtooth have
+// higher RMS *and* excite more auditory critical bands than a pure sine,
+// making them sound louder at the same amplitude.  Sine needs a boost (~3 dB)
+// to match perceived loudness; square and sawtooth are attenuated.
 export function waveformGain(shapeType) {
   switch (shapeType) {
     case 'square':
-      return 0.7; // square RMS ≈ 1.41× sine
+      return 0.7; // square RMS ≈ 1.41× sine, rich harmonics
     case 'triangle':
       return 0.85; // sawtooth RMS ≈ 1.15× sine
     case 'circle':
     default:
-      return 1.0; // sine is baseline
+      return 1.4; // sine is single-partial; boost to match perceived loudness
   }
 }
 
