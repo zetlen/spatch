@@ -7,6 +7,7 @@ import {
   waveformGain,
   shapeAreaFraction,
   areaToGain,
+  curlicuesToDetune,
 } from '../../js/audio.js';
 
 describe('yToFrequency', () => {
@@ -175,5 +176,16 @@ describe('areaToGain', () => {
     const sqGain = areaToGain('square', size);
     // Square has more area, so more gain
     expect(sqGain).toBeGreaterThan(circGain);
+  });
+});
+
+describe('curlicuesToDetune', () => {
+  test('0 curlicues returns 0 cents', () => {
+    expect(curlicuesToDetune(0)).toBe(0);
+  });
+
+  test('multiple curlicues add 15 cents each', () => {
+    expect(curlicuesToDetune(1)).toBe(15);
+    expect(curlicuesToDetune(3)).toBe(45);
   });
 });
