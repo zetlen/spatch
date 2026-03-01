@@ -2,6 +2,7 @@
 
 import { getFillStyle } from './colors.js';
 import { applyPattern } from './patterns.js';
+import { getDecoBounds } from './shapes.js';
 
 const CANVAS_BG = '#1a1a2e';
 
@@ -20,7 +21,7 @@ export function isLastInputTouch() {
   return lastInputWasTouch;
 }
 
-export function render(ctx, state, canvasSize, selectedId, playingShapeIds) {
+export function render(ctx, state, canvasSize, selectedId, playingShapeIds, selectedDecoId) {
   ctx.clearRect(0, 0, canvasSize, canvasSize);
 
   // Background
@@ -43,9 +44,15 @@ export function render(ctx, state, canvasSize, selectedId, playingShapeIds) {
   }
 
   // Selection handles (hidden when last input was touch — pinch/rotate replaces them)
-  if (selectedId && !lastInputWasTouch) {
-    const sel = state.shapes.find((s) => s.id === selectedId);
-    if (sel) drawSelectionHandles(ctx, sel, canvasSize);
+  if (!lastInputWasTouch) {
+    if (selectedId) {
+      const sel = state.shapes.find((s) => s.id === selectedId);
+      if (sel) drawSelectionHandles(ctx, sel, canvasSize);
+    }
+    if (selectedDecoId) {
+      const sel = state.decorations.find((d) => d.id === selectedDecoId);
+      if (sel) drawDecoSelectionHandles(ctx, sel, canvasSize);
+    }
   }
 }
 
@@ -208,6 +215,38 @@ function drawSelectionHandles(ctx, shape, canvasSize) {
   ctx.restore();
 }
 
+function drawDecoSelectionHandles(ctx, deco, canvasSize) {
+  const bounds = getDecoBounds(deco, canvasSize);
+  if (!bounds) return;
+
+  ctx.save();
+
+  // Bounding box
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = 'rgba(255, 225, 86, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+  ctx.setLineDash([]);
+
+  // Corner resize handles
+  const handleSize = 5;
+  const corners = [
+    [bounds.x, bounds.y],
+    [bounds.x + bounds.w, bounds.y],
+    [bounds.x + bounds.w, bounds.y + bounds.h],
+    [bounds.x, bounds.y + bounds.h],
+  ];
+  ctx.fillStyle = '#ffe156';
+  ctx.strokeStyle = '#0a0a1a';
+  ctx.lineWidth = 1;
+  for (const [hx, hy] of corners) {
+    ctx.fillRect(hx - handleSize, hy - handleSize, handleSize * 2, handleSize * 2);
+    ctx.strokeRect(hx - handleSize, hy - handleSize, handleSize * 2, handleSize * 2);
+  }
+
+  ctx.restore();
+}
+
 function drawDecoration(ctx, deco, canvasSize) {
   if (deco.type === 'squiggle' && deco.points.length >= 2) {
     ctx.save();
@@ -240,8 +279,9 @@ function drawDecoration(ctx, deco, canvasSize) {
   }
 
   if (deco.type === 'text' && deco.text) {
+    const s = deco.scale || 1;
     ctx.save();
-    ctx.font = `${deco.fontSize || 24}px 'Orbitron', sans-serif`;
+    ctx.font = `${(deco.fontSize || 24) * s}px 'Orbitron', sans-serif`;
     ctx.fillStyle = deco.strokeColor;
     ctx.shadowColor = deco.strokeColor;
     ctx.shadowBlur = 10;
@@ -256,7 +296,7 @@ function drawDecoration(ctx, deco, canvasSize) {
 function drawCurlicue(ctx, deco, canvasSize) {
   const cx = deco.x * canvasSize;
   const cy = deco.y * canvasSize;
-  const scale = 1.2;
+  const scale = 1.2 * (deco.scale || 1);
 
   ctx.save();
   ctx.translate(cx, cy);

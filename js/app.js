@@ -9,6 +9,9 @@ import {
   calcResize,
   calcRotation,
   clampSize,
+  hitTestDecorations,
+  hitTestDecoHandles,
+  getDecoBounds,
 } from './shapes.js';
 import { Toolbar } from './toolbar.js';
 import { AudioEngine } from './audio.js';
@@ -73,7 +76,14 @@ state.onChange(() => {
 
 function renderLoop() {
   if (needsRender || audio.isPlaying) {
-    render(ctx, state.data, CANVAS_SIZE, state.selectedId, audio.playingShapeIds);
+    render(
+      ctx,
+      state.data,
+      CANVAS_SIZE,
+      state.selectedId,
+      audio.playingShapeIds,
+      state.selectedDecoId,
+    );
 
     // Draw live squiggle preview
     const drawingPts = decoTool.getDrawingPoints();
@@ -123,7 +133,7 @@ function canvasCoords(e) {
 
 // ---- Interaction state ----
 
-let interactionMode = 'idle'; // 'idle' | 'dragging' | 'resizing' | 'rotating' | 'adsr' | 'drawing' | 'arpeggio'
+let interactionMode = 'idle'; // 'idle' | 'dragging' | 'resizing' | 'rotating' | 'adsr' | 'drawing' | 'arpeggio' | 'deco-dragging' | 'deco-resizing'
 let dragStart = { px: 0, py: 0, nx: 0, ny: 0 };
 let dragOriginal = null;
 let preManipSnapshot = null; // snapshot of full state before a drag/resize/rotate
@@ -216,6 +226,7 @@ canvas.addEventListener('mousedown', (e) => {
   const hitId = hitTestShapes(state.data, px, py, CANVAS_SIZE);
   if (hitId) {
     state.selectedId = hitId;
+    state.selectedDecoId = null;
     toolbar.syncToSelectedShape();
     interactionMode = 'dragging';
     preManipSnapshot = state._snapshot();
@@ -225,8 +236,43 @@ canvas.addEventListener('mousedown', (e) => {
     return;
   }
 
-  // 4. Deselect
+  // 4. Check resize handles on selected decoration
+  const selDeco = state.getSelectedDeco();
+  if (selDeco) {
+    const decoHandle = hitTestDecoHandles(selDeco, px, py, CANVAS_SIZE);
+    if (decoHandle) {
+      interactionMode = 'deco-resizing';
+      activeHandle = decoHandle;
+      preManipSnapshot = state._snapshot();
+      dragOriginal = {
+        scale: selDeco.scale || 1,
+        bounds: getDecoBounds(selDeco, CANVAS_SIZE),
+        points: selDeco.type === 'squiggle' ? selDeco.points.map((p) => [...p]) : null,
+      };
+      return;
+    }
+  }
+
+  // 5. Hit test decorations
+  const hitDecoId = hitTestDecorations(state.data, px, py, CANVAS_SIZE);
+  if (hitDecoId) {
+    state.selectedDecoId = hitDecoId;
+    state.selectedId = null;
+    interactionMode = 'deco-dragging';
+    preManipSnapshot = state._snapshot();
+    const deco = state.getDecoration(hitDecoId);
+    if (deco.type === 'squiggle') {
+      dragOriginal = { points: deco.points.map((p) => [...p]) };
+    } else {
+      dragOriginal = { x: deco.x, y: deco.y };
+    }
+    needsRender = true;
+    return;
+  }
+
+  // 6. Deselect
   state.selectedId = null;
+  state.selectedDecoId = null;
   needsRender = true;
 });
 
@@ -303,6 +349,59 @@ canvas.addEventListener('mousemove', (e) => {
     }
     return;
   }
+
+  if (interactionMode === 'deco-dragging') {
+    const deco = state.getSelectedDeco();
+    if (!deco) return;
+    const dnx = nx - dragStart.nx;
+    const dny = ny - dragStart.ny;
+    if (deco.type === 'squiggle') {
+      const newPts = dragOriginal.points.map((p) => [
+        Math.max(0, Math.min(1, p[0] + dnx)),
+        Math.max(0, Math.min(1, p[1] + dny)),
+      ]);
+      state.updateDecoration(deco.id, { points: newPts });
+    } else {
+      state.updateDecoration(deco.id, {
+        x: Math.max(0, Math.min(1, dragOriginal.x + dnx)),
+        y: Math.max(0, Math.min(1, dragOriginal.y + dny)),
+      });
+    }
+    return;
+  }
+
+  if (interactionMode === 'deco-resizing') {
+    const deco = state.getSelectedDeco();
+    if (!deco) return;
+    const bounds = dragOriginal.bounds;
+    if (!bounds) return;
+    const cx = bounds.x + bounds.w / 2;
+    const cy = bounds.y + bounds.h / 2;
+    const initDist = Math.hypot(bounds.w / 2, bounds.h / 2);
+    const currDist = Math.hypot(px - cx, py - cy);
+    const newScale = Math.max(0.2, Math.min(5, dragOriginal.scale * (currDist / initDist)));
+    if (deco.type === 'squiggle') {
+      // Scale points relative to their center
+      const origPts = dragOriginal.points || deco.points;
+      let sumX = 0,
+        sumY = 0;
+      for (const p of origPts) {
+        sumX += p[0];
+        sumY += p[1];
+      }
+      const pcx = sumX / origPts.length;
+      const pcy = sumY / origPts.length;
+      const ratio = newScale / dragOriginal.scale;
+      const newPts = origPts.map((p) => [
+        Math.max(0, Math.min(1, pcx + (p[0] - pcx) * ratio)),
+        Math.max(0, Math.min(1, pcy + (p[1] - pcy) * ratio)),
+      ]);
+      state.updateDecoration(deco.id, { points: newPts });
+    } else {
+      state.updateDecoration(deco.id, { scale: newScale });
+    }
+    return;
+  }
 });
 
 canvas.addEventListener('mouseup', () => {
@@ -315,7 +414,9 @@ canvas.addEventListener('mouseup', () => {
     interactionMode === 'dragging' ||
     interactionMode === 'resizing' ||
     interactionMode === 'rotating' ||
-    interactionMode === 'adsr'
+    interactionMode === 'adsr' ||
+    interactionMode === 'deco-dragging' ||
+    interactionMode === 'deco-resizing'
   ) {
     // Push the pre-manipulation snapshot onto the undo stack
     if (preManipSnapshot) {
@@ -483,6 +584,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (state.selectedId) {
       state.removeShape(state.selectedId);
+    } else if (state.selectedDecoId) {
+      state.removeDecoration(state.selectedDecoId);
     }
   }
   if (e.key === 'c' && mod) {
@@ -520,6 +623,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape') {
     state.selectedId = null;
+    state.selectedDecoId = null;
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
     decoTool.setTool(null);

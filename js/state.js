@@ -46,6 +46,7 @@ function createDecoration(type, points, color) {
     targetShapeId: null,
     x: 0,
     y: 0,
+    scale: 1,
     strokeColor: color || 'hsl(320, 100%, 60%)',
     strokeWidth: 3,
     fontSize: 24,
@@ -62,6 +63,7 @@ export class SigilState {
     this.undoStack = [];
     this.redoStack = [];
     this.selectedId = null;
+    this.selectedDecoId = null;
     this.listeners = [];
   }
 
@@ -217,6 +219,22 @@ export class SigilState {
     if (idx === -1) return;
     this._pushUndo();
     this.data.decorations.splice(idx, 1);
+    if (this.selectedDecoId === id) this.selectedDecoId = null;
+    this._notify();
+  }
+
+  getDecoration(id) {
+    return this.data.decorations.find((d) => d.id === id);
+  }
+
+  getSelectedDeco() {
+    return this.selectedDecoId ? this.getDecoration(this.selectedDecoId) : null;
+  }
+
+  updateDecoration(id, updates) {
+    const deco = this.getDecoration(id);
+    if (!deco) return;
+    Object.assign(deco, updates);
     this._notify();
   }
 
@@ -225,6 +243,7 @@ export class SigilState {
     this.undoStack = [];
     this.redoStack = [];
     this.selectedId = null;
+    this.selectedDecoId = null;
     this._notify();
   }
 }

@@ -166,3 +166,94 @@ export function calcRotation(shape, mx, my, canvasSize) {
   if (deg < 0) deg += 360;
   return deg % 360;
 }
+
+// ---- Decoration hit testing ----
+
+const DECO_HANDLE_SIZE = 8;
+const CURLICUE_EXTENT = 22; // approx max spiral radius in pixels at scale=1
+const TEXT_APPROX_CHAR_W = 14; // approximate character width for hit testing
+
+// Compute bounding box for a decoration in pixel coordinates
+export function getDecoBounds(deco, canvasSize) {
+  const scale = deco.scale || 1;
+  if (deco.type === 'squiggle' && deco.points.length >= 2) {
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    for (const [px, py] of deco.points) {
+      minX = Math.min(minX, px * canvasSize);
+      minY = Math.min(minY, py * canvasSize);
+      maxX = Math.max(maxX, px * canvasSize);
+      maxY = Math.max(maxY, py * canvasSize);
+    }
+    const pad = (deco.strokeWidth || 3) + 4;
+    return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
+  }
+  if (deco.type === 'curlicue') {
+    const cx = deco.x * canvasSize;
+    const cy = deco.y * canvasSize;
+    const extent = CURLICUE_EXTENT * scale + 6;
+    return { x: cx - extent, y: cy - extent, w: extent * 2, h: extent * 2 };
+  }
+  if (deco.type === 'text' && deco.text) {
+    const cx = deco.x * canvasSize;
+    const cy = deco.y * canvasSize;
+    const fontSize = (deco.fontSize || 24) * scale;
+    const tw = deco.text.length * TEXT_APPROX_CHAR_W * scale;
+    const th = fontSize * 1.2;
+    return { x: cx - tw / 2, y: cy - th / 2, w: tw, h: th };
+  }
+  return null;
+}
+
+// Hit test decorations (back-to-front, return topmost)
+export function hitTestDecorations(state, mx, my, canvasSize) {
+  for (let i = state.decorations.length - 1; i >= 0; i--) {
+    const deco = state.decorations[i];
+    const bounds = getDecoBounds(deco, canvasSize);
+    if (
+      bounds &&
+      mx >= bounds.x &&
+      mx <= bounds.x + bounds.w &&
+      my >= bounds.y &&
+      my <= bounds.y + bounds.h
+    ) {
+      return deco.id;
+    }
+  }
+  return null;
+}
+
+// Hit test decoration resize handles (corner handles only)
+export function hitTestDecoHandles(deco, mx, my, canvasSize) {
+  const bounds = getDecoBounds(deco, canvasSize);
+  if (!bounds) return null;
+
+  const corners = [
+    { x: bounds.x, y: bounds.y, type: 'nw' },
+    { x: bounds.x + bounds.w, y: bounds.y, type: 'ne' },
+    { x: bounds.x + bounds.w, y: bounds.y + bounds.h, type: 'se' },
+    { x: bounds.x, y: bounds.y + bounds.h, type: 'sw' },
+  ];
+
+  for (const c of corners) {
+    if (Math.abs(mx - c.x) < DECO_HANDLE_SIZE && Math.abs(my - c.y) < DECO_HANDLE_SIZE) {
+      return c.type;
+    }
+  }
+  return null;
+}
+
+// Move a decoration by a normalized delta
+export function moveDeco(deco, dnx, dny) {
+  if (deco.type === 'squiggle') {
+    for (const pt of deco.points) {
+      pt[0] = Math.max(0, Math.min(1, pt[0] + dnx));
+      pt[1] = Math.max(0, Math.min(1, pt[1] + dny));
+    }
+  } else {
+    deco.x = Math.max(0, Math.min(1, deco.x + dnx));
+    deco.y = Math.max(0, Math.min(1, deco.y + dny));
+  }
+}
