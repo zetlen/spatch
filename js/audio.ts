@@ -247,6 +247,7 @@ export class AudioEngine {
   _workletReady: boolean;
   _sessionId: number;
   _arpeggioGain: GainNode | null;
+  _arpeggioReady: boolean;
 
   constructor() {
     this.audioCtx = null;
@@ -259,6 +260,7 @@ export class AudioEngine {
     this._workletReady = false;
     this._sessionId = 0;
     this._arpeggioGain = null;
+    this._arpeggioReady = false;
   }
 
   async _init(): Promise<void> {

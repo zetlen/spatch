@@ -1,21 +1,27 @@
 // toolbar.ts — Toolbar UI, tool selection, color picker, pattern selector
 
 import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.ts';
-import type { SigilState } from './state.ts';
-import type { FillDraft, FillMode, PatternType } from './types.ts';
+import type { SigilStore, UndoManager } from './state.ts';
+import type { Shape, FillDraft, FillMode, PatternType } from './types.ts';
 import { fillToFillDraft, fillDraftToFill } from './types.ts';
 
 export class Toolbar {
-  state: SigilState;
+  store: SigilStore;
+  undo: UndoManager;
   currentTool: string;
   onToolChange: ((tool: string) => void) | null;
+  selectedId: string | null;
+  selectedDecoId: string | null;
   _activeStop: { radial: number; linear: number };
   _fillDraft: FillDraft;
 
-  constructor(state: SigilState) {
-    this.state = state;
+  constructor(store: SigilStore, undo: UndoManager) {
+    this.store = store;
+    this.undo = undo;
     this.currentTool = 'select';
     this.onToolChange = null;
+    this.selectedId = null;
+    this.selectedDecoId = null;
     this._activeStop = { radial: 1, linear: 1 };
     this._fillDraft = {
       mode: 'solid',
@@ -35,6 +41,10 @@ export class Toolbar {
     this._bindFillMode();
     this._bindLayerButtons();
     this._updateToolActive();
+  }
+
+  getSelected(): Shape | null {
+    return this.selectedId ? (this.store.getShape(this.selectedId) ?? null) : null;
   }
 
   _bindToolButtons(): void {
@@ -66,19 +76,20 @@ export class Toolbar {
     document.querySelectorAll<HTMLElement>('.pattern-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const pattern = btn.dataset.pattern;
-        const sel = this.state.getSelected();
+        const sel = this.getSelected();
         if (!sel) return;
 
         const newPattern = pattern === 'none' ? null : (pattern as PatternType);
         const finalPattern = sel.pattern === newPattern ? null : newPattern;
-        this.state.updateShapeWithUndo(sel.id, { pattern: finalPattern });
+        this.undo.snapshot();
+        this.store.updateShape(sel.id, { pattern: finalPattern });
         this._updatePatternActive();
       });
     });
   }
 
   _updatePatternActive(): void {
-    const sel = this.state.getSelected();
+    const sel = this.getSelected();
     const current = sel ? sel.pattern : null;
     document.querySelectorAll<HTMLElement>('.pattern-btn').forEach((btn) => {
       const p = btn.dataset.pattern;
@@ -87,30 +98,38 @@ export class Toolbar {
   }
 
   _bindActionButtons(): void {
-    document.getElementById('btn-undo')!.addEventListener('click', () => this.state.undo());
-    document.getElementById('btn-redo')!.addEventListener('click', () => this.state.redo());
+    document.getElementById('btn-undo')!.addEventListener('click', () => this.undo.undo());
+    document.getElementById('btn-redo')!.addEventListener('click', () => this.undo.redo());
     document.getElementById('btn-delete')!.addEventListener('click', () => {
-      if (this.state.selectedId) {
-        this.state.removeShape(this.state.selectedId);
-      } else if (this.state.selectedDecoId) {
-        this.state.removeDecoration(this.state.selectedDecoId);
+      if (this.selectedId) {
+        this.undo.snapshot();
+        this.store.removeShape(this.selectedId);
+      } else if (this.selectedDecoId) {
+        this.undo.snapshot();
+        this.store.removeDecoration(this.selectedDecoId);
       }
     });
   }
 
   _bindLayerButtons(): void {
     document.getElementById('btn-bring-front')!.addEventListener('click', () => {
-      if (this.state.selectedId) this.state.bringToFront(this.state.selectedId);
+      if (this.selectedId) {
+        this.undo.snapshot();
+        this.store.bringToFront(this.selectedId);
+      }
     });
     document.getElementById('btn-send-back')!.addEventListener('click', () => {
-      if (this.state.selectedId) this.state.sendToBack(this.state.selectedId);
+      if (this.selectedId) {
+        this.undo.snapshot();
+        this.store.sendToBack(this.selectedId);
+      }
     });
   }
 
   _bindFillMode(): void {
     const select = document.getElementById('fill-mode') as HTMLSelectElement;
     select.addEventListener('change', () => {
-      const sel = this.state.getSelected();
+      const sel = this.getSelected();
       if (sel) {
         this._fillDraft.mode = select.value as FillMode;
         this._commitFill(sel.id, true);
@@ -129,10 +148,9 @@ export class Toolbar {
   _commitFill(id: string, withUndo: boolean): void {
     const fill = fillDraftToFill(this._fillDraft);
     if (withUndo) {
-      this.state.updateFillWithUndo(id, fill);
-    } else {
-      this.state.updateFill(id, fill);
+      this.undo.snapshot();
     }
+    this.store.updateFill(id, fill);
   }
 
   _bindColorPicker(): void {
@@ -161,7 +179,7 @@ export class Toolbar {
         const tabId = 'tab-' + tab.dataset.tab;
         document.getElementById(tabId)!.classList.add('active');
 
-        const sel = this.state.getSelected();
+        const sel = this.getSelected();
         if (sel) {
           this._fillDraft.mode = tab.dataset.tab as FillMode;
           this._commitFill(sel.id, false);
@@ -191,7 +209,7 @@ export class Toolbar {
         const x = e.clientX - rect.left - 50;
         const y = e.clientY - rect.top - 50;
         const angle = Math.round((Math.atan2(y, x) * 180) / Math.PI);
-        const sel = this.state.getSelected();
+        const sel = this.getSelected();
         if (sel) {
           this._fillDraft.gradAngle = (angle + 360) % 360;
           this._commitFill(sel.id, false);
@@ -211,7 +229,7 @@ export class Toolbar {
       const y = e.clientY - rect.top;
       const s = Math.round((x / 160) * 100);
       const l = Math.round((1 - y / 160) * 100);
-      const sel = this.state.getSelected();
+      const sel = this.getSelected();
       if (sel) {
         const { sKey, lKey } = this._getStopFields(tab);
         this._fillDraft[sKey] = Math.max(0, Math.min(100, s));
@@ -227,7 +245,7 @@ export class Toolbar {
     const slider = document.getElementById(sliderId) as HTMLInputElement | null;
     if (!slider) return;
     slider.addEventListener('input', () => {
-      const sel = this.state.getSelected();
+      const sel = this.getSelected();
       if (sel) {
         const { hKey } = this._getStopFields(tab);
         this._fillDraft[hKey] = parseInt(slider.value);
@@ -245,7 +263,7 @@ export class Toolbar {
         document
           .querySelectorAll<HTMLElement>(`.stop-btn[data-tab="${tab}"]`)
           .forEach((b) => b.classList.toggle('active', b.dataset.stop === btn.dataset.stop));
-        const sel = this.state.getSelected();
+        const sel = this.getSelected();
         if (sel) {
           const { hKey } = this._getStopFields(tab);
           const sliderId = tab === 'radial' ? 'hue-slider-rad' : 'hue-slider-lin';
@@ -292,14 +310,14 @@ export class Toolbar {
 
   updateSwatchFromSelected(): void {
     const swatch = document.getElementById('fill-swatch')!;
-    const sel = this.state.getSelected();
+    const sel = this.getSelected();
     if (sel) {
       swatch.style.background = getSwatchColor(sel.fill);
     }
   }
 
   syncToSelectedShape(): void {
-    const sel = this.state.getSelected();
+    const sel = this.getSelected();
     if (!sel) return;
 
     // Populate draft from selected shape's fill

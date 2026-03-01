@@ -1,18 +1,25 @@
 // decorations.ts — Squiggle drawing, curlicue placement, text vocoder decoration
 
-import type { SigilState } from './state.ts';
+import type { SigilStore, UndoManager } from './state.ts';
 import type { NormalizedCoord } from './types.ts';
 
 export class DecorationTool {
-  state: SigilState;
+  store: SigilStore;
+  undo: UndoManager;
   canvas: HTMLCanvasElement;
   canvasSize: number;
   isDrawing: boolean;
   currentPoints: [number, number][];
   currentTool: string | null;
 
-  constructor(state: SigilState, canvasEl: HTMLCanvasElement, canvasSize: number) {
-    this.state = state;
+  constructor(
+    store: SigilStore,
+    undo: UndoManager,
+    canvasEl: HTMLCanvasElement,
+    canvasSize: number,
+  ) {
+    this.store = store;
+    this.undo = undo;
     this.canvas = canvasEl;
     this.canvasSize = canvasSize;
     this.isDrawing = false;
@@ -34,13 +41,15 @@ export class DecorationTool {
       return { drawing: true };
     }
     if (this.currentTool === 'curlicue') {
-      const deco = this.state.addCurlicue(nx, ny);
+      this.undo.snapshot();
+      const deco = this.store.addCurlicue(nx, ny);
       return { placed: deco.id };
     }
     if (this.currentTool === 'text') {
       const text = (document.getElementById('text-input') as HTMLInputElement).value.trim();
       if (!text) return null;
-      const deco = this.state.addTextDeco(text, nx, ny);
+      this.undo.snapshot();
+      const deco = this.store.addTextDeco(text, nx, ny);
       return { placed: deco.id };
     }
     return null;
@@ -61,7 +70,8 @@ export class DecorationTool {
     this.isDrawing = false;
     let decoId: string | null = null;
     if (this.currentPoints.length >= 2) {
-      const deco = this.state.addSquiggle(
+      this.undo.snapshot();
+      const deco = this.store.addSquiggle(
         this.currentPoints as [NormalizedCoord, NormalizedCoord][],
         'hsl(320, 100%, 60%)',
       );
