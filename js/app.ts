@@ -24,7 +24,6 @@ import type {
   Decoration,
   HandleType,
   ADSRCorner,
-  SigilData,
   NormalizedCoord,
   Degrees,
 } from './types.ts';
