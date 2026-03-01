@@ -1,8 +1,8 @@
 // canvas.js — Canvas rendering pipeline
 
-import { getFillStyle } from './colors.js';
+import { getFillStyle } from './colors.ts';
 import { applyPattern } from './patterns.js';
-import { getDecoBounds } from './shapes.js';
+import { getDecoBounds } from './shapes.ts';
 
 const CANVAS_BG = '#1a1a2e';
 

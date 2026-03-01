@@ -1,12 +1,18 @@
-// colors.js — Color conversions (HSL, RGB) and color picker logic
+// colors.ts — Color conversions (HSL, RGB) and color picker logic
 
-export function hslToString(h, s, l) {
+import type { Fill } from './types.ts';
+
+export function hslToString(h: number, s: number, l: number): string {
   return `hsl(${h}, ${s}%, ${l}%)`;
 }
 
 // ---- Get fill CSS string for a shape ----
 
-export function getFillStyle(ctx, fill, radius) {
+export function getFillStyle(
+  ctx: CanvasRenderingContext2D,
+  fill: Fill,
+  radius: number,
+): string | CanvasGradient {
   switch (fill.mode) {
     case 'solid':
       return hslToString(fill.h, fill.s, fill.l);
@@ -35,7 +41,7 @@ export function getFillStyle(ctx, fill, radius) {
 
 // ---- Get swatch display color for toolbar ----
 
-export function getSwatchColor(fill) {
+export function getSwatchColor(fill: Fill): string {
   switch (fill.mode) {
     case 'solid':
       return hslToString(fill.h, fill.s, fill.l);
@@ -50,7 +56,14 @@ export function getSwatchColor(fill) {
 
 // ---- SL square rendering ----
 
-export function drawSLSquare(ctx, x, y, w, h, hue) {
+export function drawSLSquare(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  hue: number,
+): void {
   const imgData = ctx.createImageData(w, h);
   for (let py = 0; py < h; py++) {
     for (let px = 0; px < w; px++) {
@@ -67,7 +80,7 @@ export function drawSLSquare(ctx, x, y, w, h, hue) {
   ctx.putImageData(imgData, x, y);
 }
 
-function hslToRgb(h, s, l) {
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   s /= 100;
   l /= 100;
   const c = (1 - Math.abs(2 * l - 1)) * s;
@@ -104,7 +117,13 @@ function hslToRgb(h, s, l) {
 
 // ---- Angle dial rendering ----
 
-export function drawAngleDial(ctx, cx, cy, r, angle) {
+export function drawAngleDial(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  angle: number,
+): void {
   ctx.clearRect(cx - r - 2, cy - r - 2, (r + 2) * 2, (r + 2) * 2);
   // Outer ring
   ctx.beginPath();

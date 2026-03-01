@@ -1,7 +1,7 @@
 // serialize.js — URL encode/decode sigil state with lz-string
 
 import LZString from 'lz-string';
-import { genId } from './state.js';
+import { genId } from './state.ts';
 
 export function serializeState(state) {
   const compact = compactify(state);
