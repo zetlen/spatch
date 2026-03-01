@@ -1,4 +1,16 @@
-// shapes.js — Hit testing, selection, drag/resize/rotate
+// shapes.ts — Hit testing, selection, drag/resize/rotate
+
+import type {
+  Shape,
+  Decoration,
+  Envelope,
+  SigilData,
+  NormalizedCoord,
+  Degrees,
+  HandleType,
+  ADSRCorner,
+  DecoBounds,
+} from './types.ts';
 
 const HANDLE_SIZE = 8;
 const ROT_HANDLE_OFFSET = 25;
@@ -6,12 +18,17 @@ const ROT_HANDLE_OFFSET = 25;
 const MIN_SIZE = 0.025;
 const MAX_SIZE = 0.9;
 
-export function clampSize(size) {
-  return Math.max(MIN_SIZE, Math.min(MAX_SIZE, size));
+export function clampSize(size: number): NormalizedCoord {
+  return Math.max(MIN_SIZE, Math.min(MAX_SIZE, size)) as NormalizedCoord;
 }
 
 // Hit test against all shapes (back-to-front, return topmost)
-export function hitTestShapes(state, mx, my, canvasSize) {
+export function hitTestShapes(
+  state: SigilData,
+  mx: number,
+  my: number,
+  canvasSize: number,
+): string | null {
   // Iterate in reverse (front shapes first)
   for (let i = state.shapes.length - 1; i >= 0; i--) {
     const shape = state.shapes[i];
@@ -22,7 +39,7 @@ export function hitTestShapes(state, mx, my, canvasSize) {
   return null;
 }
 
-function isPointInShape(shape, mx, my, canvasSize) {
+function isPointInShape(shape: Shape, mx: number, my: number, canvasSize: number): boolean {
   const cx = shape.x * canvasSize;
   const cy = shape.y * canvasSize;
   const r = (shape.size / 2) * canvasSize;
@@ -45,7 +62,7 @@ function isPointInShape(shape, mx, my, canvasSize) {
 
     case 'triangle': {
       // Equilateral triangle inscribed in circle of radius r
-      const verts = [];
+      const verts: [number, number][] = [];
       for (let i = 0; i < 3; i++) {
         const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
         verts.push([Math.cos(angle) * r, Math.sin(angle) * r]);
@@ -58,7 +75,13 @@ function isPointInShape(shape, mx, my, canvasSize) {
   }
 }
 
-function pointInTriangle(px, py, v0, v1, v2) {
+function pointInTriangle(
+  px: number,
+  py: number,
+  v0: [number, number],
+  v1: [number, number],
+  v2: [number, number],
+): boolean {
   // Use barycentric coordinates
   const denom = (v1[0] - v0[0]) * (v2[1] - v0[1]) - (v2[0] - v0[0]) * (v1[1] - v0[1]);
   if (Math.abs(denom) < 0.001) return false;
@@ -68,7 +91,12 @@ function pointInTriangle(px, py, v0, v1, v2) {
 }
 
 // Hit test selection handles. Returns handle type or null.
-export function hitTestHandles(shape, mx, my, canvasSize) {
+export function hitTestHandles(
+  shape: Shape | null,
+  mx: number,
+  my: number,
+  canvasSize: number,
+): HandleType | null {
   if (!shape) return null;
   const cx = shape.x * canvasSize;
   const cy = shape.y * canvasSize;
@@ -90,7 +118,7 @@ export function hitTestHandles(shape, mx, my, canvasSize) {
   }
 
   // Resize handles (corners and midpoints)
-  const handles = [
+  const handles: { x: number; y: number; type: HandleType }[] = [
     { x: -r, y: -r, type: 'nw' },
     { x: r, y: -r, type: 'ne' },
     { x: r, y: r, type: 'se' },
@@ -111,9 +139,14 @@ export function hitTestHandles(shape, mx, my, canvasSize) {
 }
 
 // Hit test ADSR corners. Returns corner name if mouse is near a canvas corner.
-export function hitTestADSRCorner(envelope, mx, my, canvasSize) {
+export function hitTestADSRCorner(
+  envelope: Envelope,
+  mx: number,
+  my: number,
+  canvasSize: number,
+): ADSRCorner | null {
   const hitRadius = canvasSize * 0.08;
-  const corners = [
+  const corners: { name: ADSRCorner; cx: number; cy: number }[] = [
     { name: 'attack', cx: 0, cy: canvasSize },
     { name: 'decay', cx: 0, cy: 0 },
     { name: 'sustain', cx: canvasSize, cy: 0 },
@@ -130,7 +163,13 @@ export function hitTestADSRCorner(envelope, mx, my, canvasSize) {
 }
 
 // Calculate new size from a resize handle drag
-export function calcResize(shape, handleType, localDx, localDy, canvasSize) {
+export function calcResize(
+  shape: Shape,
+  handleType: HandleType,
+  localDx: number,
+  localDy: number,
+  canvasSize: number,
+): NormalizedCoord {
   const r = (shape.size / 2) * canvasSize;
   let newR = r;
 
@@ -157,14 +196,14 @@ export function calcResize(shape, handleType, localDx, localDy, canvasSize) {
 }
 
 // Calculate rotation from mouse position relative to shape center
-export function calcRotation(shape, mx, my, canvasSize) {
+export function calcRotation(shape: Shape, mx: number, my: number, canvasSize: number): Degrees {
   const cx = shape.x * canvasSize;
   const cy = shape.y * canvasSize;
   const angle = Math.atan2(my - cy, mx - cx);
   // Convert to degrees, offset so "up" = 0
   let deg = (angle * 180) / Math.PI + 90;
   if (deg < 0) deg += 360;
-  return deg % 360;
+  return (deg % 360) as Degrees;
 }
 
 // ---- Decoration hit testing ----
@@ -174,7 +213,7 @@ const CURLICUE_EXTENT = 22; // approx max spiral radius in pixels at scale=1
 const TEXT_APPROX_CHAR_W = 14; // approximate character width for hit testing
 
 // Compute bounding box for a decoration in pixel coordinates
-export function getDecoBounds(deco, canvasSize) {
+export function getDecoBounds(deco: Decoration, canvasSize: number): DecoBounds | null {
   const scale = deco.scale || 1;
   if (deco.type === 'squiggle' && deco.points.length >= 2) {
     let minX = Infinity,
@@ -208,7 +247,12 @@ export function getDecoBounds(deco, canvasSize) {
 }
 
 // Hit test decorations (back-to-front, return topmost)
-export function hitTestDecorations(state, mx, my, canvasSize) {
+export function hitTestDecorations(
+  state: SigilData,
+  mx: number,
+  my: number,
+  canvasSize: number,
+): string | null {
   for (let i = state.decorations.length - 1; i >= 0; i--) {
     const deco = state.decorations[i];
     const bounds = getDecoBounds(deco, canvasSize);
@@ -226,11 +270,16 @@ export function hitTestDecorations(state, mx, my, canvasSize) {
 }
 
 // Hit test decoration resize handles (corner handles only)
-export function hitTestDecoHandles(deco, mx, my, canvasSize) {
+export function hitTestDecoHandles(
+  deco: Decoration,
+  mx: number,
+  my: number,
+  canvasSize: number,
+): HandleType | null {
   const bounds = getDecoBounds(deco, canvasSize);
   if (!bounds) return null;
 
-  const corners = [
+  const corners: { x: number; y: number; type: HandleType }[] = [
     { x: bounds.x, y: bounds.y, type: 'nw' },
     { x: bounds.x + bounds.w, y: bounds.y, type: 'ne' },
     { x: bounds.x + bounds.w, y: bounds.y + bounds.h, type: 'se' },
@@ -246,14 +295,14 @@ export function hitTestDecoHandles(deco, mx, my, canvasSize) {
 }
 
 // Move a decoration by a normalized delta
-export function moveDeco(deco, dnx, dny) {
+export function moveDeco(deco: Decoration, dnx: number, dny: number): void {
   if (deco.type === 'squiggle') {
     for (const pt of deco.points) {
-      pt[0] = Math.max(0, Math.min(1, pt[0] + dnx));
-      pt[1] = Math.max(0, Math.min(1, pt[1] + dny));
+      pt[0] = Math.max(0, Math.min(1, pt[0] + dnx)) as NormalizedCoord;
+      pt[1] = Math.max(0, Math.min(1, pt[1] + dny)) as NormalizedCoord;
     }
   } else {
-    deco.x = Math.max(0, Math.min(1, deco.x + dnx));
-    deco.y = Math.max(0, Math.min(1, deco.y + dny));
+    deco.x = Math.max(0, Math.min(1, deco.x + dnx)) as NormalizedCoord;
+    deco.y = Math.max(0, Math.min(1, deco.y + dny)) as NormalizedCoord;
   }
 }

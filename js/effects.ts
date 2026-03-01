@@ -1,6 +1,12 @@
-// effects.js — Audio effect builders mapped to visual patterns
+// effects.ts — Audio effect builders mapped to visual patterns
 
-export function createEffect(audioCtx, pattern, workletReady) {
+import type { PatternType, AudioEffect } from './types.ts';
+
+export function createEffect(
+  audioCtx: AudioContext,
+  pattern: PatternType,
+  workletReady: boolean,
+): AudioEffect | null {
   switch (pattern) {
     case 'stripes':
       return createChorus(audioCtx);
@@ -18,7 +24,7 @@ export function createEffect(audioCtx, pattern, workletReady) {
 }
 
 // Raster stripes → Chorus
-function createChorus(ctx) {
+function createChorus(ctx: AudioContext): AudioEffect {
   const input = ctx.createGain();
   const output = ctx.createGain();
   const dry = ctx.createGain();
@@ -50,7 +56,7 @@ function createChorus(ctx) {
 }
 
 // Checkerboard → LFO Tremolo
-function createTremolo(ctx) {
+function createTremolo(ctx: AudioContext): AudioEffect {
   const input = ctx.createGain();
   const output = ctx.createGain();
   const tremoloGain = ctx.createGain();
@@ -74,7 +80,7 @@ function createTremolo(ctx) {
 }
 
 // Noise texture → Flanger
-function createFlanger(ctx) {
+function createFlanger(ctx: AudioContext): AudioEffect {
   const input = ctx.createGain();
   const output = ctx.createGain();
   const dry = ctx.createGain();
@@ -111,7 +117,7 @@ function createFlanger(ctx) {
 }
 
 // Gradient overlay → Phaser
-function createPhaser(ctx) {
+function createPhaser(ctx: AudioContext): AudioEffect {
   const input = ctx.createGain();
   const output = ctx.createGain();
   const dry = ctx.createGain();
@@ -132,13 +138,11 @@ function createPhaser(ctx) {
   lfo.type = 'sine';
   lfo.frequency.value = 0.5;
 
-  const lfos = [];
   for (const f of filters) {
     const lg = ctx.createGain();
     lg.gain.value = 500;
     lfo.connect(lg);
     lg.connect(f.frequency);
-    lfos.push(lg);
   }
   lfo.start();
 
@@ -157,12 +161,12 @@ function createPhaser(ctx) {
 }
 
 // Rough/distressed → Bitcrusher
-function createBitcrusher(ctx, workletReady) {
+function createBitcrusher(ctx: AudioContext, workletReady: boolean): AudioEffect {
   if (workletReady) {
     try {
       const node = new AudioWorkletNode(ctx, 'bitcrusher-processor');
-      node.parameters.get('bitDepth').value = 6;
-      node.parameters.get('frequencyReduction').value = 0.3;
+      node.parameters.get('bitDepth')!.value = 6;
+      node.parameters.get('frequencyReduction')!.value = 0.3;
       return { input: node, output: node, dispose: () => {} };
     } catch {
       // fall through to waveshaper

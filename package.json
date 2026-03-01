@@ -10,6 +10,7 @@
     "test": "bun test && bunx playwright test",
     "test:unit": "bun test",
     "test:e2e": "bunx playwright test",
+    "check": "tsc --noEmit",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
     "fmt": "oxfmt .",
@@ -22,7 +23,8 @@
     "@playwright/test": "^1.58.2",
     "lefthook": "^2.1.1",
     "oxfmt": "^0.35.0",
-    "oxlint": "^1.50.0"
+    "oxlint": "^1.50.0",
+    "typescript": "^5.9.3"
   },
   "trustedDependencies": [
     "lefthook"

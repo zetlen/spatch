@@ -1,6 +1,6 @@
 // toolbar.js — Toolbar UI, tool selection, color picker, pattern selector
 
-import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.js';
+import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.ts';
 
 export class Toolbar {
   constructor(state) {

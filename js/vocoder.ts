@@ -1,7 +1,9 @@
-// vocoder.js — Formant-based vocoder pipeline
+// vocoder.ts — Formant-based vocoder pipeline
+
+import type { VocoderChain } from './types.ts';
 
 // Formant frequencies for vowels (F1, F2, F3)
-const VOWEL_FORMANTS = {
+const VOWEL_FORMANTS: Record<string, [number, number, number]> = {
   a: [800, 1200, 2500],
   e: [350, 2000, 2800],
   i: [270, 2300, 3000],
@@ -20,14 +22,18 @@ const BAND_LOW = 100;
 const BAND_HIGH = 8000;
 
 // Create a vocoder effect that modulates a carrier oscillator based on text
-export function createVocoderChain(audioCtx, text, carrierNode) {
+export function createVocoderChain(
+  audioCtx: AudioContext,
+  text: string | null,
+  carrierNode: OscillatorNode,
+): VocoderChain | null {
   if (!text || text.length === 0) return null;
 
   const output = audioCtx.createGain();
   output.gain.value = 0.6;
 
   // Create bandpass filter bank
-  const bands = [];
+  const bands: { filter: BiquadFilterNode; gain: GainNode; freq: number }[] = [];
   for (let i = 0; i < NUM_BANDS; i++) {
     const freq = BAND_LOW * Math.pow(BAND_HIGH / BAND_LOW, i / (NUM_BANDS - 1));
     const filter = audioCtx.createBiquadFilter();
@@ -84,7 +90,7 @@ export function createVocoderChain(audioCtx, text, carrierNode) {
   };
 }
 
-function getFormants(char) {
+function getFormants(char: string): [number, number, number] | null {
   // Vowels
   if (VOWEL_FORMANTS[char]) return VOWEL_FORMANTS[char];
 
@@ -107,7 +113,7 @@ function getFormants(char) {
   return null;
 }
 
-function getFormantGain(bandFreq, formants) {
+function getFormantGain(bandFreq: number, formants: [number, number, number]): number {
   // Calculate how much this band should be boosted based on proximity to formant frequencies
   let maxGain = 0;
   for (const f of formants) {

@@ -1,8 +1,8 @@
 // embed-entry.js — entry point for the embed viewer
 import { render } from './canvas.js';
-import { AudioEngine } from './audio.js';
+import { AudioEngine } from './audio.ts';
 import { deserializeState } from './serialize.js';
-import { updateCanvasBorderRadius } from './envelope.js';
+import { updateCanvasBorderRadius } from './envelope.ts';
 
 const hash = window.location.hash.slice(1);
 if (!hash) {
