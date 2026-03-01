@@ -1,5 +1,13 @@
 import { describe, test, expect } from 'bun:test';
-import { yToFrequency, xToPan, sizeToGain, rotationToDetune } from '../../js/audio.js';
+import {
+  yToFrequency,
+  xToPan,
+  sizeToGain,
+  rotationToDetune,
+  waveformGain,
+  shapeAreaFraction,
+  areaToGain,
+} from '../../js/audio.js';
 
 describe('yToFrequency', () => {
   test('y=0 (top) returns highest pentatonic note', () => {
@@ -89,5 +97,83 @@ describe('rotationToDetune', () => {
 
   test('rotation=90 returns 12.5 cents', () => {
     expect(rotationToDetune(90)).toBeCloseTo(12.5);
+  });
+});
+
+describe('waveformGain', () => {
+  test('circle (sine) returns 1.0 baseline', () => {
+    expect(waveformGain('circle')).toBe(1.0);
+  });
+
+  test('square is attenuated below 1.0', () => {
+    expect(waveformGain('square')).toBeLessThan(1.0);
+    expect(waveformGain('square')).toBeGreaterThan(0);
+  });
+
+  test('triangle (sawtooth) is attenuated below 1.0', () => {
+    expect(waveformGain('triangle')).toBeLessThan(1.0);
+    expect(waveformGain('triangle')).toBeGreaterThan(0);
+  });
+
+  test('square is attenuated more than triangle', () => {
+    expect(waveformGain('square')).toBeLessThan(waveformGain('triangle'));
+  });
+
+  test('unknown shape type returns 1.0 baseline', () => {
+    expect(waveformGain('hexagon')).toBe(1.0);
+  });
+});
+
+describe('shapeAreaFraction', () => {
+  test('circle area = π × (size/2)²', () => {
+    expect(shapeAreaFraction('circle', 0.5)).toBeCloseTo(Math.PI * 0.25 * 0.25);
+  });
+
+  test('square area = size²', () => {
+    expect(shapeAreaFraction('square', 0.5)).toBeCloseTo(0.25);
+  });
+
+  test('triangle area < circle area < square area at same size', () => {
+    const size = 0.4;
+    const tri = shapeAreaFraction('triangle', size);
+    const circ = shapeAreaFraction('circle', size);
+    const sq = shapeAreaFraction('square', size);
+    expect(tri).toBeLessThan(circ);
+    expect(circ).toBeLessThan(sq);
+  });
+
+  test('area scales with size squared', () => {
+    for (const type of ['circle', 'square', 'triangle']) {
+      const small = shapeAreaFraction(type, 0.2);
+      const big = shapeAreaFraction(type, 0.4);
+      // Doubling size should quadruple area
+      expect(big / small).toBeCloseTo(4.0);
+    }
+  });
+});
+
+describe('areaToGain', () => {
+  test('tiny shape returns near-minimum gain', () => {
+    expect(areaToGain('circle', 0.025)).toBeCloseTo(0.05, 1);
+  });
+
+  test('large shape caps at 0.8', () => {
+    expect(areaToGain('square', 0.95)).toBe(0.8);
+  });
+
+  test('gain increases with size for all shape types', () => {
+    for (const type of ['circle', 'square', 'triangle']) {
+      const small = areaToGain(type, 0.2);
+      const big = areaToGain(type, 0.5);
+      expect(big).toBeGreaterThan(small);
+    }
+  });
+
+  test('same-size shapes produce gain proportional to visual area', () => {
+    const size = 0.4;
+    const circGain = areaToGain('circle', size);
+    const sqGain = areaToGain('square', size);
+    // Square has more area, so more gain
+    expect(sqGain).toBeGreaterThan(circGain);
   });
 });

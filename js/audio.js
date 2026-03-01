@@ -36,6 +36,30 @@ export function sizeToGain(size) {
   return Math.min(0.8, 0.05 + size * 3);
 }
 
+// Area of a shape as a fraction of the 1×1 normalized canvas.
+// All shapes use r = size/2 as bounding radius.
+export function shapeAreaFraction(type, size) {
+  const halfSize = size / 2;
+  switch (type) {
+    case 'circle':
+      return Math.PI * halfSize * halfSize;
+    case 'square':
+      return size * size; // side = 2r = size
+    case 'triangle':
+      // Equilateral inscribed in circle of radius size/2
+      return ((3 * Math.sqrt(3)) / 4) * halfSize * halfSize;
+    default:
+      return size * size;
+  }
+}
+
+// Map a shape's canvas area fraction to gain.
+// Max area for a shape at size 0.9: square = 0.81, circle ≈ 0.636, triangle ≈ 0.263.
+export function areaToGain(type, size) {
+  const fraction = shapeAreaFraction(type, size);
+  return Math.min(0.8, 0.05 + fraction);
+}
+
 export function rotationToDetune(rotation) {
   return (rotation / 360) * 50; // 0–50 cents
 }
@@ -50,6 +74,20 @@ function oscillatorType(shapeType) {
       return 'sine';
     default:
       return 'sine';
+  }
+}
+
+// Per-waveform gain normalization: square and sawtooth have higher RMS energy
+// than sine, so we attenuate them for consistent perceived volume across shapes.
+export function waveformGain(shapeType) {
+  switch (shapeType) {
+    case 'square':
+      return 0.7; // square RMS ≈ 1.41× sine
+    case 'triangle':
+      return 0.85; // sawtooth RMS ≈ 1.15× sine
+    case 'circle':
+    default:
+      return 1.0; // sine is baseline
   }
 }
 
@@ -158,7 +196,7 @@ export class AudioEngine {
 
     // Master chain
     this.compressor = ctx.createDynamicsCompressor();
-    this.compressor.threshold.value = -24;
+    this.compressor.threshold.value = -6;
     this.compressor.knee.value = 12;
     this.compressor.ratio.value = 4;
     this.compressor.attack.value = 0.003;
@@ -236,7 +274,7 @@ export class AudioEngine {
     if (!this._arpeggioGain) {
       if (!this.compressor) {
         this.compressor = ctx.createDynamicsCompressor();
-        this.compressor.threshold.value = -24;
+        this.compressor.threshold.value = -6;
         this.compressor.knee.value = 12;
         this.compressor.ratio.value = 4;
         this.compressor.connect(ctx.destination);
@@ -312,7 +350,10 @@ export class AudioEngine {
       if (!shape) continue;
       voice.oscillator.frequency.setValueAtTime(yToFrequency(shape.y), now);
       voice.oscillator.detune.setValueAtTime(rotationToDetune(shape.rotation), now);
-      voice.gain.gain.setValueAtTime(sizeToGain(shape.size), now);
+      voice.gain.gain.setValueAtTime(
+        areaToGain(shape.type, shape.size) * waveformGain(shape.type),
+        now,
+      );
       voice.panner.pan.setValueAtTime(xToPan(shape.x), now);
       applyColorFilter(voice.filter, shape.fill);
     }
@@ -376,7 +417,7 @@ export class AudioEngine {
     osc.detune.value = rotationToDetune(shape.rotation);
 
     const gain = ctx.createGain();
-    gain.gain.value = sizeToGain(shape.size);
+    gain.gain.value = areaToGain(shape.type, shape.size) * waveformGain(shape.type);
 
     const filter = ctx.createBiquadFilter();
     applyColorFilter(filter, shape.fill);
