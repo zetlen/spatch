@@ -4,7 +4,7 @@
 
 spatch is a visual instrument where geometric shapes are synthesized chords. Every
 visual property of a shape maps bidirectionally to an audio parameter. The canvas
-*is* the interface — there is no separation between the score and the instrument.
+_is_ the interface — there is no separation between the score and the instrument.
 
 All state lives in the URL. No backend, no database, no accounts.
 
@@ -80,23 +80,23 @@ serialization and the embed viewer work at any display size.
 This is the heart of spatch. Every visual property has a corresponding audio
 parameter:
 
-| Visual Property       | Audio Parameter       | Mapping                                                      |
-|-----------------------|-----------------------|--------------------------------------------------------------|
-| Shape type            | Oscillator waveform   | circle → sine, triangle → saw/tri blend, square → PWM       |
-| Y position            | Pitch                 | Pentatonic scale, 3 octaves from C3. Top = high, bottom = low |
-| X position            | Stereo pan            | Linear. Left edge = full left, right edge = full right       |
-| Size                  | Volume                | Area-proportional. Larger shapes are louder                  |
-| Rotation              | Timbre                | Square: PWM duty cycle. Triangle: saw↔tri crossfade. Circle: none |
-| Fill hue (solid)      | Filter type           | 0–89° lowpass, 90–179° bandpass, 180–269° highpass, 270–360° notch |
-| Fill saturation       | Filter Q/resonance    | Low saturation = gentle, high = resonant                     |
-| Fill lightness        | Filter cutoff         | Exponential: ~200 Hz at 0, ~8 kHz at 100                    |
-| Fill (radial/Lab)     | Filter (Lab-mapped)   | L → cutoff, a → Q, b → type                                 |
-| Fill (linear)         | Filter + overdrive    | h1 → frequency, s1 → Q, l1 → drive amount                  |
-| Pattern               | Audio effect          | stripes → chorus, checker → tremolo, noise → flanger, gradient → phaser, rough → bitcrusher |
-| Layer order (z-index) | EQ shelving           | Back shapes get bass boost, front shapes get treble boost    |
-| Canvas corner radii   | ADSR envelope         | Bottom-left = attack, top-left = decay, top-right = sustain, bottom-right = release |
-| Curlicue count        | Global detune         | +15 cents per curlicue on the canvas                         |
-| Text decorations      | Vocoder voice         | Formant synthesis at the text's Y-mapped pitch               |
+| Visual Property       | Audio Parameter     | Mapping                                                                                     |
+| --------------------- | ------------------- | ------------------------------------------------------------------------------------------- |
+| Shape type            | Oscillator waveform | circle → sine, triangle → saw/tri blend, square → PWM                                       |
+| Y position            | Pitch               | Pentatonic scale, 3 octaves from C3. Top = high, bottom = low                               |
+| X position            | Stereo pan          | Linear. Left edge = full left, right edge = full right                                      |
+| Size                  | Volume              | Area-proportional. Larger shapes are louder                                                 |
+| Rotation              | Timbre              | Square: PWM duty cycle. Triangle: saw↔tri crossfade. Circle: none                           |
+| Fill hue (solid)      | Filter type         | 0–89° lowpass, 90–179° bandpass, 180–269° highpass, 270–360° notch                          |
+| Fill saturation       | Filter Q/resonance  | Low saturation = gentle, high = resonant                                                    |
+| Fill lightness        | Filter cutoff       | Exponential: ~200 Hz at 0, ~8 kHz at 100                                                    |
+| Fill (radial/Lab)     | Filter (Lab-mapped) | L → cutoff, a → Q, b → type                                                                 |
+| Fill (linear)         | Filter + overdrive  | h1 → frequency, s1 → Q, l1 → drive amount                                                   |
+| Pattern               | Audio effect        | stripes → chorus, checker → tremolo, noise → flanger, gradient → phaser, rough → bitcrusher |
+| Layer order (z-index) | EQ shelving         | Back shapes get bass boost, front shapes get treble boost                                   |
+| Canvas corner radii   | ADSR envelope       | Bottom-left = attack, top-left = decay, top-right = sustain, bottom-right = release         |
+| Curlicue count        | Global detune       | +15 cents per curlicue on the canvas                                                        |
+| Text decorations      | Vocoder voice       | Formant synthesis at the text's Y-mapped pitch                                              |
 
 ### Waveform Details
 
@@ -137,6 +137,7 @@ suspend `AudioContext` until a user gesture. Init also registers the bitcrusher
 ### ADSR Scheduling
 
 On `play()`, the envelope gain is automated:
+
 ```
 gain = 0 at t=0
 gain = 1.0 at t=attack                (linear ramp)
@@ -144,6 +145,7 @@ gain = sustain at t=attack+decay       (linear ramp, holds here)
 ```
 
 On `release()`:
+
 ```
 gain = current value at t=now          (cancel prior automation)
 gain = 0 at t=now+release              (linear ramp)
@@ -155,6 +157,7 @@ after the release completes, guarded by a session ID to prevent stale cleanup.
 ### Live Voice Updates
 
 During playback, `state.onChange` calls `audio.updateVoices()`, which:
+
 1. Removes voices for deleted shapes (stops oscillators, disposes effects)
 2. Adds voices for new shapes
 3. Updates existing voices' frequency, gain, pan, and filter via `setValueAtTime`
@@ -234,6 +237,7 @@ idle → dragging | resizing | rotating | adsr | drawing | arpeggio → idle
 ```
 
 **Mousedown priority** (first match wins):
+
 1. Shift+drag in select mode with shapes → arpeggio
 2. Decoration tool active → delegate to DecorationTool
 3. Shape tool active → create shape, switch to select
@@ -280,6 +284,7 @@ fires all registered `onChange` callbacks.
 ### Observer Chain
 
 `state.onChange` drives three systems:
+
 1. **Render scheduling** — sets `needsRender = true` for the next animation frame
 2. **Audio voice updates** — calls `audio.updateVoices()` if currently playing
 3. **URL auto-save** — debounced (1 second) `saveToURL()` updates the hash

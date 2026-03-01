@@ -294,6 +294,22 @@ select {
   cursor: pointer;
 }
 
+.duration-control {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+  gap: 8px;
+}
+
+.duration-label {
+  margin: 0;
+}
+
+.duration-val {
+  font-size: 10px;
+  min-width: 25px;
+}
+
 /* ---- Canvas playing glow ---- */
 
 #canvas-wrap.playing #sigil-canvas {

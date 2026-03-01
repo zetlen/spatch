@@ -309,11 +309,8 @@
           </div>
           <button id="btn-play" class="play-btn" title="Play Sigil">&#9654; PLAY</button>
 
-          <div
-            class="duration-control"
-            style="display: flex; align-items: center; margin-left: 10px; gap: 8px"
-          >
-            <label for="duration-slider" class="toolbar-label" style="margin: 0">Duration</label>
+          <div class="duration-control">
+            <label for="duration-slider" class="toolbar-label duration-label">Duration</label>
             <input
               type="range"
               id="duration-slider"
@@ -323,7 +320,7 @@
               value="2"
               title="Length of sound (seconds)"
             />
-            <span id="duration-val" style="font-size: 10px; min-width: 25px">2.0s</span>
+            <span id="duration-val" class="duration-val">2.0s</span>
           </div>
 
           <input

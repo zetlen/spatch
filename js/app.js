@@ -21,6 +21,9 @@ const canvas = document.getElementById('sigil-canvas');
 const ctx = canvas.getContext('2d');
 const CANVAS_SIZE = 800;
 
+const durationSlider = document.getElementById('duration-slider');
+const durationVal = document.getElementById('duration-val');
+
 const state = new SigilState();
 const toolbar = new Toolbar(state);
 const audio = new AudioEngine();
@@ -67,8 +70,6 @@ state.onChange(() => {
   if (audio.isPlaying) {
     audio.updateVoices(state.data);
   }
-  const durationSlider = document.getElementById('duration-slider');
-  const durationVal = document.getElementById('duration-val');
   if (durationSlider && parseFloat(durationSlider.value) !== state.data.duration) {
     durationSlider.value = state.data.duration;
     durationVal.textContent = state.data.duration.toFixed(1) + 's';
@@ -449,6 +450,13 @@ function setPlayMode(mode) {
   if (mode !== 'latch') latchSlider.classList.add('hidden');
 }
 
+function getEffectiveEnvelope() {
+  const env = { ...state.data.envelope };
+  // Ensure release does not exceed the total duration minus a tiny buffer
+  env.release = Math.min(env.release, Math.max(0.01, state.data.duration - 0.05));
+  return env;
+}
+
 async function startPlayback() {
   if (releaseGlowTimeoutId != null) {
     clearTimeout(releaseGlowTimeoutId);
@@ -458,7 +466,8 @@ async function startPlayback() {
     clearTimeout(playbackTimeoutId);
     playbackTimeoutId = null;
   }
-  await audio.play(state.data, state.data.envelope);
+  const env = getEffectiveEnvelope();
+  await audio.play(state.data, env);
   playBtn.classList.add('playing');
   canvasWrap.classList.add('playing');
   playBtn.textContent = '\u25A0 STOP';
@@ -466,7 +475,7 @@ async function startPlayback() {
 
   if (playMode === 'normal') {
     const totalMs = state.data.duration * 1000;
-    const releaseMs = state.data.envelope.release * 1000;
+    const releaseMs = env.release * 1000;
     const holdMs = Math.max(10, totalMs - releaseMs);
     playbackTimeoutId = setTimeout(() => {
       stopPlayback();
@@ -483,11 +492,12 @@ function stopPlayback() {
     clearTimeout(playbackTimeoutId);
     playbackTimeoutId = null;
   }
-  audio.release(state.data.envelope);
+  const env = getEffectiveEnvelope();
+  audio.release(env);
   playBtn.classList.remove('playing');
   playBtn.textContent = '\u25B6 PLAY';
   latchSlider.classList.add('hidden');
-  const releaseMs = state.data.envelope.release * 1000 + 100;
+  const releaseMs = env.release * 1000 + 100;
   releaseGlowTimeoutId = setTimeout(() => {
     releaseGlowTimeoutId = null;
     canvasWrap.classList.remove('playing');
@@ -496,14 +506,14 @@ function stopPlayback() {
 }
 
 function scheduleLoopRestart() {
-  const env = state.data.envelope;
+  const env = getEffectiveEnvelope();
   const totalMs = state.data.duration * 1000;
   const releaseMs = env.release * 1000;
   const holdMs = Math.max(10, totalMs - releaseMs);
 
   loopTimeoutId = setTimeout(() => {
     // Trigger release phase
-    audio.release(state.data.envelope);
+    audio.release(env);
     // After release completes, restart
     loopTimeoutId = setTimeout(() => {
       if (playMode === 'loop') {
@@ -555,17 +565,27 @@ latchSlider.addEventListener('input', () => {
 
 // ---- Auto-save to URL (debounced) ----
 
-const durationSlider = document.getElementById('duration-slider');
-const durationVal = document.getElementById('duration-val');
+let durationPreDragState = null;
 
 if (durationSlider) {
+  const savePreDragState = () => {
+    durationPreDragState = state._snapshot();
+  };
+  durationSlider.addEventListener('mousedown', savePreDragState);
+  durationSlider.addEventListener('touchstart', savePreDragState, { passive: true });
+
   durationSlider.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);
     durationVal.textContent = val.toFixed(1) + 's';
     state.updateDuration(val);
   });
+
   durationSlider.addEventListener('change', (e) => {
-    state.updateDurationWithUndo(parseFloat(e.target.value));
+    if (durationPreDragState) {
+      state.undoStack.push(durationPreDragState);
+      state.redoStack = [];
+      durationPreDragState = null;
+    }
   });
 }
 
