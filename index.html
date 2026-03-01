@@ -47,6 +47,17 @@
               <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" />
             </svg>
           </button>
+          <div class="separator"></div>
+          <button class="tool-btn" data-tool="squiggle" title="Draw Squiggle">&#8766;</button>
+          <button class="tool-btn" data-tool="curlicue" title="Place Curlicue">&#10048;</button>
+          <button class="tool-btn" data-tool="text" title="Add Text">T</button>
+          <input
+            type="text"
+            id="text-input"
+            class="text-input hidden"
+            placeholder="Type a word..."
+            maxlength="40"
+          />
         </div>
         <div class="toolbar-group fill-group">
           <div id="fill-swatch" class="swatch" title="Pick color"></div>
@@ -216,18 +227,6 @@
       </div>
 
       <footer id="toolbar-bottom">
-        <div class="toolbar-group deco-group">
-          <button class="tool-btn" data-tool="squiggle" title="Draw Squiggle">&#8766;</button>
-          <button class="tool-btn" data-tool="curlicue" title="Place Curlicue">&#10048;</button>
-          <button class="tool-btn" data-tool="text" title="Add Text">T</button>
-          <input
-            type="text"
-            id="text-input"
-            class="text-input hidden"
-            placeholder="Type a word..."
-            maxlength="40"
-          />
-        </div>
         <div class="toolbar-group layer-group">
           <button id="btn-bring-front" class="action-btn" title="Bring to Front">
             <svg viewBox="0 0 24 24" width="16" height="16">

@@ -75,6 +75,8 @@ export class Toolbar {
     document.getElementById('btn-delete').addEventListener('click', () => {
       if (this.state.selectedId) {
         this.state.removeShape(this.state.selectedId);
+      } else if (this.state.selectedDecoId) {
+        this.state.removeDecoration(this.state.selectedDecoId);
       }
     });
   }

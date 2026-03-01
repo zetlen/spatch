@@ -18,7 +18,7 @@ export class DecorationTool {
     if (this.currentTool === 'squiggle') {
       this.isDrawing = true;
       this.currentPoints = [[nx, ny]];
-      return true;
+      return { drawing: true };
     }
     if (this.currentTool === 'curlicue') {
       this.state.addDecoration('curlicue', [], 'hsl(280, 100%, 65%)');
@@ -26,19 +26,19 @@ export class DecorationTool {
       deco.x = nx;
       deco.y = ny;
       this.state._notify();
-      return true;
+      return { placed: deco.id };
     }
     if (this.currentTool === 'text') {
       const text = document.getElementById('text-input').value.trim();
-      if (!text) return false;
+      if (!text) return null;
       const deco = this.state.addDecoration('text', [], 'hsl(50, 100%, 60%)');
       deco.text = text;
       deco.x = nx;
       deco.y = ny;
       this.state._notify();
-      return true;
+      return { placed: deco.id };
     }
-    return false;
+    return null;
   }
 
   handleMouseMove(nx, ny) {
@@ -53,12 +53,19 @@ export class DecorationTool {
   }
 
   handleMouseUp() {
-    if (!this.isDrawing) return;
+    if (!this.isDrawing) return null;
     this.isDrawing = false;
+    let decoId = null;
     if (this.currentPoints.length >= 2) {
-      this.state.addDecoration('squiggle', [...this.currentPoints], 'hsl(320, 100%, 60%)');
+      const deco = this.state.addDecoration(
+        'squiggle',
+        [...this.currentPoints],
+        'hsl(320, 100%, 60%)',
+      );
+      decoId = deco.id;
     }
     this.currentPoints = [];
+    return decoId;
   }
 
   // Get points currently being drawn (for live preview)
