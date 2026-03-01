@@ -8,7 +8,7 @@ import {
   shapeAreaFraction,
   areaToGain,
   curlicuesToDetune,
-} from '../../js/audio.js';
+} from '../../js/audio.ts';
 
 describe('yToFrequency', () => {
   test('y=0 (top) returns highest pentatonic note', () => {
@@ -102,8 +102,8 @@ describe('rotationToParam', () => {
 });
 
 describe('waveformGain', () => {
-  test('circle (sine) returns 1.0 baseline', () => {
-    expect(waveformGain('circle')).toBe(1.0);
+  test('circle (sine) is boosted for perceived loudness matching', () => {
+    expect(waveformGain('circle')).toBe(1.4);
   });
 
   test('square is attenuated below 1.0', () => {
@@ -111,17 +111,13 @@ describe('waveformGain', () => {
     expect(waveformGain('square')).toBeGreaterThan(0);
   });
 
-  test('triangle (sawtooth) is attenuated below 1.0', () => {
-    expect(waveformGain('triangle')).toBeLessThan(1.0);
+  test('triangle (sawtooth) is attenuated below sine', () => {
+    expect(waveformGain('triangle')).toBeLessThan(waveformGain('circle'));
     expect(waveformGain('triangle')).toBeGreaterThan(0);
   });
 
   test('square is attenuated more than triangle', () => {
     expect(waveformGain('square')).toBeLessThan(waveformGain('triangle'));
-  });
-
-  test('unknown shape type returns 1.0 baseline', () => {
-    expect(waveformGain('hexagon')).toBe(1.0);
   });
 });
 

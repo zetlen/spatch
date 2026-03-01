@@ -1,15 +1,17 @@
 // shapes.ts — Hit testing, selection, drag/resize/rotate
 
-import type {
-  Shape,
-  Decoration,
-  Envelope,
-  SigilData,
-  NormalizedCoord,
-  Degrees,
-  HandleType,
-  ADSRCorner,
-  DecoBounds,
+import {
+  normalizedCoord,
+  degrees,
+  type Shape,
+  type Decoration,
+  type Envelope,
+  type SigilData,
+  type NormalizedCoord,
+  type HandleType,
+  type ADSRCorner,
+  type Degrees,
+  type DecoBounds,
 } from './types.ts';
 
 const HANDLE_SIZE = 8;
@@ -19,7 +21,7 @@ const MIN_SIZE = 0.025;
 const MAX_SIZE = 0.9;
 
 export function clampSize(size: number): NormalizedCoord {
-  return Math.max(MIN_SIZE, Math.min(MAX_SIZE, size)) as NormalizedCoord;
+  return normalizedCoord(Math.max(MIN_SIZE, Math.min(MAX_SIZE, size)));
 }
 
 // Hit test against all shapes (back-to-front, return topmost)
@@ -203,7 +205,7 @@ export function calcRotation(shape: Shape, mx: number, my: number, canvasSize: n
   // Convert to degrees, offset so "up" = 0
   let deg = (angle * 180) / Math.PI + 90;
   if (deg < 0) deg += 360;
-  return (deg % 360) as Degrees;
+  return degrees(deg);
 }
 
 // ---- Decoration hit testing ----
@@ -214,36 +216,40 @@ const TEXT_APPROX_CHAR_W = 14; // approximate character width for hit testing
 
 // Compute bounding box for a decoration in pixel coordinates
 export function getDecoBounds(deco: Decoration, canvasSize: number): DecoBounds | null {
-  const scale = deco.scale || 1;
-  if (deco.type === 'squiggle' && deco.points.length >= 2) {
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-    for (const [px, py] of deco.points) {
-      minX = Math.min(minX, px * canvasSize);
-      minY = Math.min(minY, py * canvasSize);
-      maxX = Math.max(maxX, px * canvasSize);
-      maxY = Math.max(maxY, py * canvasSize);
+  switch (deco.type) {
+    case 'squiggle': {
+      if (deco.points.length < 2) return null;
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      for (const [px, py] of deco.points) {
+        minX = Math.min(minX, px * canvasSize);
+        minY = Math.min(minY, py * canvasSize);
+        maxX = Math.max(maxX, px * canvasSize);
+        maxY = Math.max(maxY, py * canvasSize);
+      }
+      const pad = (deco.strokeWidth || 3) + 4;
+      return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
     }
-    const pad = (deco.strokeWidth || 3) + 4;
-    return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
+    case 'curlicue': {
+      const cx = deco.x * canvasSize;
+      const cy = deco.y * canvasSize;
+      const scale = deco.scale || 1;
+      const extent = CURLICUE_EXTENT * scale + 6;
+      return { x: cx - extent, y: cy - extent, w: extent * 2, h: extent * 2 };
+    }
+    case 'text': {
+      if (!deco.text) return null;
+      const cx = deco.x * canvasSize;
+      const cy = deco.y * canvasSize;
+      const scale = deco.scale || 1;
+      const fontSize = deco.fontSize * scale;
+      const tw = deco.text.length * TEXT_APPROX_CHAR_W * scale;
+      const th = fontSize * 1.2;
+      return { x: cx - tw / 2, y: cy - th / 2, w: tw, h: th };
+    }
   }
-  if (deco.type === 'curlicue') {
-    const cx = deco.x * canvasSize;
-    const cy = deco.y * canvasSize;
-    const extent = CURLICUE_EXTENT * scale + 6;
-    return { x: cx - extent, y: cy - extent, w: extent * 2, h: extent * 2 };
-  }
-  if (deco.type === 'text' && deco.text) {
-    const cx = deco.x * canvasSize;
-    const cy = deco.y * canvasSize;
-    const fontSize = (deco.fontSize || 24) * scale;
-    const tw = deco.text.length * TEXT_APPROX_CHAR_W * scale;
-    const th = fontSize * 1.2;
-    return { x: cx - tw / 2, y: cy - th / 2, w: tw, h: th };
-  }
-  return null;
 }
 
 // Hit test decorations (back-to-front, return topmost)
@@ -296,13 +302,17 @@ export function hitTestDecoHandles(
 
 // Move a decoration by a normalized delta
 export function moveDeco(deco: Decoration, dnx: number, dny: number): void {
-  if (deco.type === 'squiggle') {
-    for (const pt of deco.points) {
-      pt[0] = Math.max(0, Math.min(1, pt[0] + dnx)) as NormalizedCoord;
-      pt[1] = Math.max(0, Math.min(1, pt[1] + dny)) as NormalizedCoord;
-    }
-  } else {
-    deco.x = Math.max(0, Math.min(1, deco.x + dnx)) as NormalizedCoord;
-    deco.y = Math.max(0, Math.min(1, deco.y + dny)) as NormalizedCoord;
+  switch (deco.type) {
+    case 'squiggle':
+      for (const pt of deco.points) {
+        pt[0] = normalizedCoord(pt[0] + dnx);
+        pt[1] = normalizedCoord(pt[1] + dny);
+      }
+      break;
+    case 'curlicue':
+    case 'text':
+      deco.x = normalizedCoord(deco.x + dnx);
+      deco.y = normalizedCoord(deco.y + dny);
+      break;
   }
 }

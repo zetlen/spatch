@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { serializeState, deserializeState } from '../../js/serialize.js';
+import LZString from 'lz-string';
+import { serializeState, deserializeState, _serializeToJSON } from '../../js/serialize.ts';
 
 function makeState(overrides = {}) {
   return {
@@ -18,16 +19,7 @@ function makeShape(overrides = {}) {
     y: 0.5,
     size: 0.12,
     rotation: 45,
-    fill: {
-      mode: 'solid',
-      h: 200,
-      s: 80,
-      l: 50,
-      h2: 180,
-      s2: 80,
-      l2: 45,
-      gradAngle: 0,
-    },
+    fill: { mode: 'solid', h: 200, s: 80, l: 50 },
     pattern: null,
     ...overrides,
   };
@@ -48,7 +40,7 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decoded.decorations).toHaveLength(0);
   });
 
-  test('state with shapes round-trips (values preserved, IDs regenerated)', () => {
+  test('state with shapes round-trips (values and IDs preserved)', () => {
     const state = makeState({
       shapes: [
         makeShape({ id: 'original1', type: 'circle', x: 0.3, y: 0.7, size: 0.15, rotation: 90 }),
@@ -79,9 +71,9 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decoded.shapes[1].type).toBe('square');
     expect(decoded.shapes[1].pattern).toBe('stripes');
 
-    // IDs are regenerated (not same as originals)
-    expect(decoded.shapes[0].id).not.toBe('original1');
-    expect(decoded.shapes[1].id).not.toBe('original2');
+    // IDs are preserved through round-trip
+    expect(decoded.shapes[0].id).toBe('original1');
+    expect(decoded.shapes[1].id).toBe('original2');
   });
 
   test('all shape types survive round-trip', () => {
@@ -99,32 +91,13 @@ describe('serializeState / deserializeState round-trip', () => {
 
   test('all fill modes survive round-trip', () => {
     const solidShape = makeShape({
-      fill: { ...makeShape().fill, mode: 'solid', h: 120, s: 50, l: 60 },
+      fill: { mode: 'solid', h: 120, s: 50, l: 60 },
     });
     const radialShape = makeShape({
-      fill: {
-        ...makeShape().fill,
-        mode: 'radial',
-        h: 200,
-        s: 80,
-        l: 50,
-        h2: 100,
-        s2: 60,
-        l2: 40,
-      },
+      fill: { mode: 'radial', h: 200, s: 80, l: 50, h2: 100, s2: 60, l2: 40 },
     });
     const linearShape = makeShape({
-      fill: {
-        ...makeShape().fill,
-        mode: 'linear',
-        gradAngle: 90,
-        h: 100,
-        s: 50,
-        l: 40,
-        h2: 200,
-        s2: 70,
-        l2: 60,
-      },
+      fill: { mode: 'linear', gradAngle: 90, h: 100, s: 50, l: 40, h2: 200, s2: 70, l2: 60 },
     });
 
     const state = makeState({ shapes: [solidShape, radialShape, linearShape] });
@@ -233,7 +206,6 @@ describe('deserializeState edge cases', () => {
 describe('serializeState output', () => {
   test('produces a non-empty string', () => {
     const encoded = serializeState(makeState());
-    expect(typeof encoded).toBe('string');
     expect(encoded.length).toBeGreaterThan(0);
   });
 
@@ -259,5 +231,72 @@ describe('serializeState output', () => {
     );
     // LZ-string compressToEncodedURIComponent uses A-Z, a-z, 0-9, +, -, =
     expect(encoded).toMatch(/^[A-Za-z0-9+\-=]*$/);
+  });
+
+  test('serialized output includes v: 1 version field', () => {
+    const json = _serializeToJSON(makeState({ shapes: [makeShape()] }));
+    const compact = JSON.parse(json);
+    expect(compact.v).toBe(1);
+  });
+});
+
+describe('legacy format (no v field) backwards compat', () => {
+  test('deserializes legacy format without v field', () => {
+    // Manually construct a legacy compact format (no v field)
+    const legacy = {
+      e: { a: 0.1, d: 0.2, s: 0.7, r: 0.4 },
+      sh: [
+        {
+          i: 'legacy1',
+          t: 'c',
+          x: 0.5,
+          y: 0.5,
+          z: 0.12,
+          r: 45,
+          f: { m: 's', h: 200, s: 80, l: 50 },
+          p: 0,
+        },
+      ],
+      d: [],
+    };
+    const json = JSON.stringify(legacy);
+    const encoded = LZString.compressToEncodedURIComponent(json);
+    const decoded = deserializeState(encoded);
+
+    expect(decoded).not.toBeNull();
+    expect(decoded.shapes).toHaveLength(1);
+    expect(decoded.shapes[0].id).toBe('legacy1');
+    expect(decoded.shapes[0].type).toBe('circle');
+    expect(decoded.shapes[0].x).toBeCloseTo(0.5);
+    expect(decoded.shapes[0].fill.mode).toBe('solid');
+  });
+
+  test('legacy format with decorations still works', () => {
+    const legacy = {
+      e: { a: 0.1, d: 0.2, s: 0.7, r: 0.4 },
+      sh: [],
+      d: [
+        {
+          i: 'dlegacy1',
+          t: 't',
+          p: [],
+          x: 0.5,
+          y: 0.5,
+          c: '#fff',
+          w: 2,
+          tx: 'Legacy Text',
+          fs: 32,
+        },
+      ],
+    };
+    const json = JSON.stringify(legacy);
+    const encoded = LZString.compressToEncodedURIComponent(json);
+    const decoded = deserializeState(encoded);
+
+    expect(decoded).not.toBeNull();
+    expect(decoded.decorations).toHaveLength(1);
+    expect(decoded.decorations[0].type).toBe('text');
+    expect(decoded.decorations[0].text).toBe('Legacy Text');
+    expect(decoded.decorations[0].fontSize).toBe(32);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { hslToString, getSwatchColor } from '../../js/colors.js';
+import { hslToString, getSwatchColor } from '../../js/colors.ts';
 
 describe('hslToString', () => {
   test('formats HSL values correctly', () => {
@@ -42,8 +42,6 @@ describe('getSwatchColor', () => {
     expect(result).toContain('45deg');
   });
 
-  test('unknown fill mode returns fallback magenta', () => {
-    const fill = { mode: 'unknown' };
-    expect(getSwatchColor(fill)).toBe('#ff00ff');
-  });
+  // Unknown fill mode test removed: Fill is now a discriminated union,
+  // so only valid modes can be constructed.
 });

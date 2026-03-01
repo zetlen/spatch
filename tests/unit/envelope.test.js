@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { envelopeToCornerRadii, dragToEnvelopeValue } from '../../js/envelope.js';
+import { envelopeToCornerRadii, dragToEnvelopeValue } from '../../js/envelope.ts';
 
 const CANVAS_SIZE = 800;
 const MAX_RADIUS = CANVAS_SIZE * 0.15; // 120

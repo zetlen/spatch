@@ -1,7 +1,7 @@
-// app.js — Entry point, event wiring, render loop
+// app.ts — Entry point, event wiring, render loop
 
-import { SigilState } from './state.ts';
-import { render } from './canvas.js';
+import { SigilStore, UndoManager } from './state.ts';
+import { render } from './canvas.ts';
 import {
   hitTestShapes,
   hitTestHandles,
@@ -13,40 +13,63 @@ import {
   hitTestDecoHandles,
   getDecoBounds,
 } from './shapes.ts';
-import { Toolbar } from './toolbar.js';
+import { Toolbar } from './toolbar.ts';
 import { AudioEngine } from './audio.ts';
 import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.ts';
-import { DecorationTool } from './decorations.js';
-import { saveToURL, loadFromURL } from './serialize.js';
-import { generateEmbedSnippet, copyToClipboard } from './embed.js';
+import { DecorationTool } from './decorations.ts';
+import { saveToURL, loadFromURL } from './serialize.ts';
+import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
+import { IDLE, type InteractionState } from './interaction.ts';
+import { normalizedCoord, degrees, type Shape, type Decoration } from './types.ts';
 
 // ---- Init ----
 
-const canvas = document.getElementById('sigil-canvas');
-const ctx = canvas.getContext('2d');
+const canvas = document.getElementById('sigil-canvas') as HTMLCanvasElement;
+const ctx = canvas.getContext('2d')!;
 const CANVAS_SIZE = 800;
 
-const state = new SigilState();
-const toolbar = new Toolbar(state);
+const store = new SigilStore();
+const undo = new UndoManager(store);
+const toolbar = new Toolbar(store, undo);
 const audio = new AudioEngine();
-const decoTool = new DecorationTool(state, canvas, CANVAS_SIZE);
+const decoTool = new DecorationTool(store, undo, canvas, CANVAS_SIZE);
+
+// ---- Selection state (app-level, not in store) ----
+
+let selectedId: string | null = null;
+let selectedDecoId: string | null = null;
+
+function setSelection(shapeId: string | null, decoId: string | null = null): void {
+  selectedId = shapeId;
+  selectedDecoId = decoId;
+  toolbar.selectedId = shapeId;
+  toolbar.selectedDecoId = decoId;
+}
+
+function getSelected(): Shape | null {
+  return selectedId ? (store.getShape(selectedId) ?? null) : null;
+}
+
+function getSelectedDeco(): Decoration | null {
+  return selectedDecoId ? (store.getDecoration(selectedDecoId) ?? null) : null;
+}
 
 // ---- Check for saved state in URL ----
 
 const loaded = loadFromURL();
 if (loaded) {
-  state.loadState(loaded);
+  store.loadState(loaded);
 }
 
 // ---- Responsive canvas sizing ----
 
-function resizeCanvas() {
-  const area = document.getElementById('canvas-area');
+function resizeCanvas(): void {
+  const area = document.getElementById('canvas-area')!;
   const maxH = area.clientHeight - 24;
   const maxW = area.clientWidth - 24;
   const size = Math.min(maxH, maxW, 800);
 
-  const wrap = document.getElementById('canvas-wrap');
+  const wrap = document.getElementById('canvas-wrap')!;
   wrap.style.width = size + 'px';
   wrap.style.height = size + 'px';
 
@@ -56,7 +79,7 @@ function resizeCanvas() {
   canvas.width = CANVAS_SIZE;
   canvas.height = CANVAS_SIZE;
 
-  updateCanvasBorderRadius(canvas, state.data.envelope, size);
+  updateCanvasBorderRadius(canvas, store.data.envelope, size);
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -66,24 +89,17 @@ resizeCanvas();
 
 let needsRender = true;
 
-state.onChange(() => {
+store.onChange(() => {
   needsRender = true;
   debouncedSave();
   if (audio.isPlaying) {
-    audio.updateVoices(state.data);
+    audio.updateVoices(store.data);
   }
 });
 
-function renderLoop() {
+function renderLoop(): void {
   if (needsRender || audio.isPlaying) {
-    render(
-      ctx,
-      state.data,
-      CANVAS_SIZE,
-      state.selectedId,
-      audio.playingShapeIds,
-      state.selectedDecoId,
-    );
+    render(ctx, store.data, CANVAS_SIZE, selectedId, audio.playingShapeIds, selectedDecoId);
 
     // Draw live squiggle preview
     const drawingPts = decoTool.getDrawingPoints();
@@ -107,7 +123,7 @@ function renderLoop() {
 
     updateCanvasBorderRadius(
       canvas,
-      state.data.envelope,
+      store.data.envelope,
       parseInt(canvas.style.width) || CANVAS_SIZE,
     );
 
@@ -119,7 +135,14 @@ renderLoop();
 
 // ---- Mouse → canvas coordinate transform ----
 
-function canvasCoords(e) {
+interface CanvasCoords {
+  px: number;
+  py: number;
+  nx: number;
+  ny: number;
+}
+
+function canvasCoords(e: MouseEvent): CanvasCoords {
   const rect = canvas.getBoundingClientRect();
   const scaleX = CANVAS_SIZE / rect.width;
   const scaleY = CANVAS_SIZE / rect.height;
@@ -133,21 +156,14 @@ function canvasCoords(e) {
 
 // ---- Interaction state ----
 
-let interactionMode = 'idle'; // 'idle' | 'dragging' | 'resizing' | 'rotating' | 'adsr' | 'drawing' | 'arpeggio' | 'deco-dragging' | 'deco-resizing'
-let dragStart = { px: 0, py: 0, nx: 0, ny: 0 };
-let dragOriginal = null;
-let preManipSnapshot = null; // snapshot of full state before a drag/resize/rotate
-let activeHandle = null;
-let activeADSRCorner = null;
-let triggeredShapes = new Set(); // for arpeggio mode
+let interaction: InteractionState = IDLE;
 
 // ---- Tool change callback ----
 
-toolbar.onToolChange = (tool) => {
+toolbar.onToolChange = (tool: string) => {
   if (tool === 'squiggle' || tool === 'curlicue' || tool === 'text') {
     decoTool.setTool(tool);
-    state.selectedId = null;
-    state.selectedDecoId = null;
+    setSelection(null);
     needsRender = true;
   } else {
     decoTool.setTool(null);
@@ -156,14 +172,12 @@ toolbar.onToolChange = (tool) => {
 
 // ---- Mouse events ----
 
-canvas.addEventListener('mousedown', (e) => {
+canvas.addEventListener('mousedown', (e: MouseEvent) => {
   const { px, py, nx, ny } = canvasCoords(e);
-  dragStart = { px, py, nx, ny };
 
   // Arpeggio: shift+drag across canvas
-  if (e.shiftKey && state.data.shapes.length > 0 && toolbar.currentTool === 'select') {
-    interactionMode = 'arpeggio';
-    triggeredShapes.clear();
+  if (e.shiftKey && store.data.shapes.length > 0 && toolbar.currentTool === 'select') {
+    interaction = { mode: 'arpeggio', triggered: new Set() };
     audio._init().then(() => {
       audio._arpeggioReady = true;
     });
@@ -175,18 +189,17 @@ canvas.addEventListener('mousedown', (e) => {
 
   // Decoration tools
   if (tool === 'squiggle' || tool === 'curlicue' || tool === 'text') {
-    const result = decoTool.handleMouseDown(nx, ny);
+    const result = decoTool.handleMouseDown(nx as any, ny as any);
     if (result) {
-      if (result.placed) {
+      if ('placed' in result) {
         // Curlicue / text: placed instantly — switch to select mode like shapes
-        state.selectedDecoId = result.placed;
-        state.selectedId = null;
+        setSelection(null, result.placed);
         toolbar.currentTool = 'select';
         toolbar._updateToolActive();
         decoTool.setTool(null);
       } else {
         // Squiggle: drawing in progress
-        interactionMode = 'drawing';
+        interaction = { mode: 'drawing' };
       }
       needsRender = true;
       return;
@@ -195,7 +208,9 @@ canvas.addEventListener('mousedown', (e) => {
 
   // Shape placement tools
   if (tool === 'triangle' || tool === 'square' || tool === 'circle') {
-    state.addShape(tool, nx, ny);
+    undo.snapshot();
+    const shape = store.addShape(tool, nx as any, ny as any);
+    setSelection(shape.id);
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
     decoTool.setTool(null);
@@ -206,195 +221,197 @@ canvas.addEventListener('mousedown', (e) => {
 
   // Select mode
   // 1. Check ADSR corners
-  const adsrCorner = hitTestADSRCorner(state.data.envelope, px, py, CANVAS_SIZE);
+  const adsrCorner = hitTestADSRCorner(store.data.envelope, px, py, CANVAS_SIZE);
   if (adsrCorner) {
-    interactionMode = 'adsr';
-    activeADSRCorner = adsrCorner;
-    preManipSnapshot = state._snapshot();
-    dragOriginal = { ...state.data.envelope };
+    undo.snapshot();
+    interaction = { mode: 'adsr', corner: adsrCorner, origin: { ...store.data.envelope } };
     return;
   }
 
   // 2. Check handles on selected shape
-  const selShape = state.getSelected();
+  const selShape = getSelected();
   if (selShape) {
     const handle = hitTestHandles(selShape, px, py, CANVAS_SIZE);
     if (handle === 'rotate') {
-      interactionMode = 'rotating';
-      preManipSnapshot = state._snapshot();
-      dragOriginal = { rotation: selShape.rotation };
+      undo.snapshot();
+      interaction = { mode: 'rotating' };
       return;
     }
     if (handle) {
-      interactionMode = 'resizing';
-      activeHandle = handle;
-      preManipSnapshot = state._snapshot();
-      dragOriginal = { size: selShape.size };
+      undo.snapshot();
+      interaction = {
+        mode: 'resizing',
+        handle,
+        origin: { size: selShape.size },
+        startPx: px,
+        startPy: py,
+      };
       return;
     }
   }
 
   // 3. Hit test shapes
-  const hitId = hitTestShapes(state.data, px, py, CANVAS_SIZE);
+  const hitId = hitTestShapes(store.data, px, py, CANVAS_SIZE);
   if (hitId) {
-    state.selectedId = hitId;
-    state.selectedDecoId = null;
+    setSelection(hitId);
     toolbar.syncToSelectedShape();
-    interactionMode = 'dragging';
-    preManipSnapshot = state._snapshot();
-    const shape = state.getShape(hitId);
-    dragOriginal = { x: shape.x, y: shape.y };
+    undo.snapshot();
+    const shape = store.getShape(hitId)!;
+    interaction = {
+      mode: 'dragging',
+      origin: { x: shape.x, y: shape.y },
+      startNx: nx,
+      startNy: ny,
+    };
     needsRender = true;
     return;
   }
 
   // 4. Check resize handles on selected decoration
-  const selDeco = state.getSelectedDeco();
+  const selDeco = getSelectedDeco();
   if (selDeco) {
     const decoHandle = hitTestDecoHandles(selDeco, px, py, CANVAS_SIZE);
     if (decoHandle) {
-      interactionMode = 'deco-resizing';
-      activeHandle = decoHandle;
-      preManipSnapshot = state._snapshot();
-      dragOriginal = {
-        scale: selDeco.scale || 1,
-        bounds: getDecoBounds(selDeco, CANVAS_SIZE),
-        points: selDeco.type === 'squiggle' ? selDeco.points.map((p) => [...p]) : null,
+      undo.snapshot();
+      interaction = {
+        mode: 'deco-resizing',
+        handle: decoHandle,
+        origin: {
+          scale: selDeco.type !== 'squiggle' ? selDeco.scale : 1,
+          bounds: getDecoBounds(selDeco, CANVAS_SIZE)!,
+          points: selDeco.type === 'squiggle' ? selDeco.points.map((p) => [...p]) : null,
+        },
       };
       return;
     }
   }
 
   // 5. Hit test decorations
-  const hitDecoId = hitTestDecorations(state.data, px, py, CANVAS_SIZE);
+  const hitDecoId = hitTestDecorations(store.data, px, py, CANVAS_SIZE);
   if (hitDecoId) {
-    state.selectedDecoId = hitDecoId;
-    state.selectedId = null;
-    interactionMode = 'deco-dragging';
-    preManipSnapshot = state._snapshot();
-    const deco = state.getDecoration(hitDecoId);
-    if (deco.type === 'squiggle') {
-      dragOriginal = { points: deco.points.map((p) => [...p]) };
-    } else {
-      dragOriginal = { x: deco.x, y: deco.y };
-    }
+    setSelection(null, hitDecoId);
+    undo.snapshot();
+    const deco = store.getDecoration(hitDecoId)!;
+    const origin =
+      deco.type === 'squiggle'
+        ? { points: deco.points.map((p) => [...p]) }
+        : { x: deco.x, y: deco.y };
+    interaction = { mode: 'deco-dragging', origin, startNx: nx, startNy: ny };
     needsRender = true;
     return;
   }
 
   // 6. Deselect
-  state.selectedId = null;
-  state.selectedDecoId = null;
+  setSelection(null);
   needsRender = true;
 });
 
-canvas.addEventListener('mousemove', (e) => {
+canvas.addEventListener('mousemove', (e: MouseEvent) => {
   const { px, py, nx, ny } = canvasCoords(e);
 
-  if (interactionMode === 'drawing') {
+  if (interaction.mode === 'drawing') {
     decoTool.handleMouseMove(nx, ny);
     needsRender = true;
     return;
   }
 
-  if (interactionMode === 'dragging') {
-    const shape = state.getSelected();
+  if (interaction.mode === 'dragging') {
+    const shape = getSelected();
     if (!shape) return;
-    const dx = nx - dragStart.nx;
-    const dy = ny - dragStart.ny;
-    state.updateShape(shape.id, {
-      x: Math.max(0, Math.min(1, dragOriginal.x + dx)),
-      y: Math.max(0, Math.min(1, dragOriginal.y + dy)),
+    const dx = nx - interaction.startNx;
+    const dy = ny - interaction.startNy;
+    store.updateShape(shape.id, {
+      x: normalizedCoord(interaction.origin.x + dx),
+      y: normalizedCoord(interaction.origin.y + dy),
     });
     return;
   }
 
-  if (interactionMode === 'resizing') {
-    const shape = state.getSelected();
+  if (interaction.mode === 'resizing') {
+    const shape = getSelected();
     if (!shape) return;
     // Transform delta to shape-local coordinates
     const rotRad = (shape.rotation * Math.PI) / 180;
-    const dpx = px - dragStart.px;
-    const dpy = py - dragStart.py;
+    const dpx = px - interaction.startPx;
+    const dpy = py - interaction.startPy;
     const cos = Math.cos(-rotRad);
     const sin = Math.sin(-rotRad);
     const localDx = dpx * cos - dpy * sin;
     const localDy = dpx * sin + dpy * cos;
     const newSize = calcResize(
-      { ...shape, size: dragOriginal.size },
-      activeHandle,
+      { ...shape, size: normalizedCoord(interaction.origin.size) },
+      interaction.handle,
       localDx,
       localDy,
       CANVAS_SIZE,
     );
-    state.updateShape(shape.id, { size: newSize });
+    store.updateShape(shape.id, { size: newSize });
     return;
   }
 
-  if (interactionMode === 'rotating') {
-    const shape = state.getSelected();
+  if (interaction.mode === 'rotating') {
+    const shape = getSelected();
     if (!shape) return;
     const rotation = calcRotation(shape, px, py, CANVAS_SIZE);
-    state.updateShape(shape.id, { rotation });
+    store.updateShape(shape.id, { rotation });
     return;
   }
 
-  if (interactionMode === 'adsr') {
+  if (interaction.mode === 'adsr') {
     // Drag distance from corner determines value
-    const cornerPos = getCornerPosition(activeADSRCorner, CANVAS_SIZE);
+    const cornerPos = getCornerPosition(interaction.corner, CANVAS_SIZE);
     const dist = Math.hypot(px - cornerPos.x, py - cornerPos.y);
-    const val = dragToEnvelopeValue(activeADSRCorner, dist, CANVAS_SIZE);
-    state.updateEnvelope({ [activeADSRCorner]: val });
+    const val = dragToEnvelopeValue(interaction.corner, dist, CANVAS_SIZE);
+    store.updateEnvelope({ [interaction.corner]: val });
     return;
   }
 
-  if (interactionMode === 'arpeggio') {
+  if (interaction.mode === 'arpeggio') {
     if (!audio._arpeggioReady) return;
     // Trigger shapes as pointer crosses their X position
-    for (const shape of state.data.shapes) {
+    for (const shape of store.data.shapes) {
       const shapePx = shape.x * CANVAS_SIZE;
-      if (!triggeredShapes.has(shape.id) && Math.abs(px - shapePx) < 20) {
-        triggeredShapes.add(shape.id);
-        audio.triggerArpeggio(state.data, state.data.envelope, shape.id);
+      if (!interaction.triggered.has(shape.id) && Math.abs(px - shapePx) < 20) {
+        interaction.triggered.add(shape.id);
+        audio.triggerArpeggio(store.data, store.data.envelope, shape.id);
         needsRender = true;
       }
     }
     return;
   }
 
-  if (interactionMode === 'deco-dragging') {
-    const deco = state.getSelectedDeco();
+  if (interaction.mode === 'deco-dragging') {
+    const deco = getSelectedDeco();
     if (!deco) return;
-    const dnx = nx - dragStart.nx;
-    const dny = ny - dragStart.ny;
-    if (deco.type === 'squiggle') {
-      const newPts = dragOriginal.points.map((p) => [
+    const dnx = nx - interaction.startNx;
+    const dny = ny - interaction.startNy;
+    if ('points' in interaction.origin) {
+      const newPts = interaction.origin.points.map((p: number[]) => [
         Math.max(0, Math.min(1, p[0] + dnx)),
         Math.max(0, Math.min(1, p[1] + dny)),
       ]);
-      state.updateDecoration(deco.id, { points: newPts });
+      store.updateDecoration(deco.id, { points: newPts } as any);
     } else {
-      state.updateDecoration(deco.id, {
-        x: Math.max(0, Math.min(1, dragOriginal.x + dnx)),
-        y: Math.max(0, Math.min(1, dragOriginal.y + dny)),
-      });
+      store.updateDecoration(deco.id, {
+        x: Math.max(0, Math.min(1, interaction.origin.x + dnx)),
+        y: Math.max(0, Math.min(1, interaction.origin.y + dny)),
+      } as any);
     }
     return;
   }
 
-  if (interactionMode === 'deco-resizing') {
-    const deco = state.getSelectedDeco();
+  if (interaction.mode === 'deco-resizing') {
+    const deco = getSelectedDeco();
     if (!deco) return;
-    const bounds = dragOriginal.bounds;
-    if (!bounds) return;
+    const { bounds, scale, points } = interaction.origin;
     const cx = bounds.x + bounds.w / 2;
     const cy = bounds.y + bounds.h / 2;
     const initDist = Math.hypot(bounds.w / 2, bounds.h / 2);
     const currDist = Math.hypot(px - cx, py - cy);
-    const newScale = Math.max(0.2, Math.min(5, dragOriginal.scale * (currDist / initDist)));
+    const newScale = Math.max(0.2, Math.min(5, scale * (currDist / initDist)));
     if (deco.type === 'squiggle') {
       // Scale points relative to their center
-      const origPts = dragOriginal.points || deco.points;
+      const origPts = points || deco.points;
       let sumX = 0,
         sumY = 0;
       for (const p of origPts) {
@@ -403,26 +420,25 @@ canvas.addEventListener('mousemove', (e) => {
       }
       const pcx = sumX / origPts.length;
       const pcy = sumY / origPts.length;
-      const ratio = newScale / dragOriginal.scale;
-      const newPts = origPts.map((p) => [
+      const ratio = newScale / scale;
+      const newPts = origPts.map((p: number[]) => [
         Math.max(0, Math.min(1, pcx + (p[0] - pcx) * ratio)),
         Math.max(0, Math.min(1, pcy + (p[1] - pcy) * ratio)),
       ]);
-      state.updateDecoration(deco.id, { points: newPts });
+      store.updateDecoration(deco.id, { points: newPts } as any);
     } else {
-      state.updateDecoration(deco.id, { scale: newScale });
+      store.updateDecoration(deco.id, { scale: newScale } as any);
     }
     return;
   }
 });
 
 canvas.addEventListener('mouseup', () => {
-  if (interactionMode === 'drawing') {
+  if (interaction.mode === 'drawing') {
     const decoId = decoTool.handleMouseUp();
     if (decoId) {
       // Squiggle finished — switch to select mode like shapes
-      state.selectedDecoId = decoId;
-      state.selectedId = null;
+      setSelection(null, decoId);
       toolbar.currentTool = 'select';
       toolbar._updateToolActive();
       decoTool.setTool(null);
@@ -430,67 +446,43 @@ canvas.addEventListener('mouseup', () => {
     needsRender = true;
   }
 
-  if (
-    interactionMode === 'dragging' ||
-    interactionMode === 'resizing' ||
-    interactionMode === 'rotating' ||
-    interactionMode === 'adsr' ||
-    interactionMode === 'deco-dragging' ||
-    interactionMode === 'deco-resizing'
-  ) {
-    // Push the pre-manipulation snapshot onto the undo stack
-    if (preManipSnapshot) {
-      state.undoStack.push(preManipSnapshot);
-      if (state.undoStack.length > 50) state.undoStack.shift();
-      state.redoStack.length = 0;
-      preManipSnapshot = null;
-    }
-  }
-
-  interactionMode = 'idle';
-  activeHandle = null;
-  activeADSRCorner = null;
-  dragOriginal = null;
-  triggeredShapes.clear();
+  interaction = IDLE;
 });
 
 canvas.addEventListener('mouseleave', () => {
-  if (interactionMode === 'drawing') {
+  if (interaction.mode === 'drawing') {
     const decoId = decoTool.handleMouseUp();
     if (decoId) {
-      state.selectedDecoId = decoId;
-      state.selectedId = null;
+      setSelection(null, decoId);
       toolbar.currentTool = 'select';
       toolbar._updateToolActive();
       decoTool.setTool(null);
     }
     needsRender = true;
   }
-  if (interactionMode === 'arpeggio') {
-    triggeredShapes.clear();
+  if (interaction.mode === 'arpeggio') {
+    interaction.triggered.clear();
   }
 });
 
 // ---- Touch support ----
 
-let pinchRotateState = null; // { initDist, initAngle, initSize, initRotation, shapeId }
-
-function touchDist(a, b) {
+function touchDist(a: Touch, b: Touch): number {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-function touchAngle(a, b) {
+function touchAngle(a: Touch, b: Touch): number {
   return (Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * 180) / Math.PI;
 }
 
 canvas.addEventListener(
   'touchstart',
-  (e) => {
+  (e: TouchEvent) => {
     e.preventDefault();
 
     if (e.touches.length === 2) {
       // Cancel any in-progress single-touch interaction
-      if (interactionMode !== 'idle') {
+      if (interaction.mode !== 'idle') {
         canvas.dispatchEvent(new MouseEvent('mouseup', {}));
       }
 
@@ -502,22 +494,22 @@ canvas.addEventListener(
       const py = ((midY - rect.top) * CANVAS_SIZE) / rect.height;
 
       // Select shape under midpoint, or use already-selected shape
-      let shapeId = hitTestShapes(state.data, px, py, CANVAS_SIZE) || state.selectedId;
+      const shapeId = hitTestShapes(store.data, px, py, CANVAS_SIZE) || selectedId;
       if (!shapeId) return;
 
-      const shape = state.getShape(shapeId);
+      const shape = store.getShape(shapeId);
       if (!shape) return;
 
-      state.selectedId = shapeId;
-      preManipSnapshot = state._snapshot();
-      pinchRotateState = {
+      setSelection(shapeId);
+      undo.snapshot();
+      interaction = {
+        mode: 'pinch-rotate',
         initDist: touchDist(a, b),
         initAngle: touchAngle(a, b),
         initSize: shape.size,
         initRotation: shape.rotation,
         shapeId,
       };
-      interactionMode = 'pinch-rotate';
       needsRender = true;
       return;
     }
@@ -536,23 +528,23 @@ canvas.addEventListener(
 
 canvas.addEventListener(
   'touchmove',
-  (e) => {
+  (e: TouchEvent) => {
     e.preventDefault();
 
-    if (interactionMode === 'pinch-rotate' && e.touches.length >= 2 && pinchRotateState) {
+    if (interaction.mode === 'pinch-rotate' && e.touches.length >= 2) {
       const [a, b] = e.touches;
       const dist = touchDist(a, b);
       const angle = touchAngle(a, b);
 
-      const scale = dist / pinchRotateState.initDist;
-      const newSize = clampSize(pinchRotateState.initSize * scale);
+      const scale = dist / interaction.initDist;
+      const newSize = clampSize(interaction.initSize * scale);
 
-      const angleDelta = angle - pinchRotateState.initAngle;
-      const newRotation = (((pinchRotateState.initRotation + angleDelta) % 360) + 360) % 360;
+      const angleDelta = angle - interaction.initAngle;
+      const newRotation = (((interaction.initRotation + angleDelta) % 360) + 360) % 360;
 
-      state.updateShape(pinchRotateState.shapeId, {
+      store.updateShape(interaction.shapeId, {
         size: newSize,
-        rotation: Math.round(newRotation),
+        rotation: degrees(Math.round(newRotation)),
       });
       return;
     }
@@ -571,20 +563,13 @@ canvas.addEventListener(
 
 canvas.addEventListener(
   'touchend',
-  (e) => {
+  (e: TouchEvent) => {
     e.preventDefault();
 
-    if (interactionMode === 'pinch-rotate') {
+    if (interaction.mode === 'pinch-rotate') {
       if (e.touches.length < 2) {
-        // Commit undo snapshot
-        if (preManipSnapshot) {
-          state.undoStack.push(preManipSnapshot);
-          if (state.undoStack.length > 50) state.undoStack.shift();
-          state.redoStack.length = 0;
-          preManipSnapshot = null;
-        }
-        pinchRotateState = null;
-        interactionMode = 'idle';
+        // Undo snapshot was already captured at touchstart
+        interaction = IDLE;
         toolbar.syncToSelectedShape();
         needsRender = true;
       }
@@ -598,33 +583,43 @@ canvas.addEventListener(
 
 // ---- Clipboard for copy/paste ----
 
-let clipboard = null; // JSON snapshot of a shape
+let clipboard: Shape | null = null;
 
 // ---- Keyboard shortcuts ----
 
-document.addEventListener('keydown', (e) => {
+document.addEventListener('keydown', (e: KeyboardEvent) => {
   // Don't intercept when typing in inputs
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (
+    (e.target as HTMLElement).tagName === 'INPUT' ||
+    (e.target as HTMLElement).tagName === 'TEXTAREA'
+  )
+    return;
 
   const mod = e.ctrlKey || e.metaKey;
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
-    if (state.selectedId) {
-      state.removeShape(state.selectedId);
-    } else if (state.selectedDecoId) {
-      state.removeDecoration(state.selectedDecoId);
+    if (selectedId) {
+      undo.snapshot();
+      store.removeShape(selectedId);
+      setSelection(null);
+    } else if (selectedDecoId) {
+      undo.snapshot();
+      store.removeDecoration(selectedDecoId);
+      setSelection(null);
     }
   }
   if (e.key === 'c' && mod) {
-    if (state.selectedId) {
-      const shape = state.getShape(state.selectedId);
+    if (selectedId) {
+      const shape = store.getShape(selectedId);
       if (shape) clipboard = JSON.parse(JSON.stringify(shape));
     }
   }
   if (e.key === 'v' && mod) {
     e.preventDefault();
     if (clipboard) {
-      state.pasteShape(clipboard, 0.03, 0.03);
+      undo.snapshot();
+      const pasted = store.pasteShape(clipboard, 0.03, 0.03);
+      setSelection(pasted.id);
       toolbar.syncToSelectedShape();
       needsRender = true;
     }
@@ -632,29 +627,32 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'd' && mod) {
     e.preventDefault();
-    if (state.selectedId) {
-      state.duplicateShape(state.selectedId, 0, 0);
-      toolbar.syncToSelectedShape();
-      needsRender = true;
+    if (selectedId) {
+      undo.snapshot();
+      const dup = store.duplicateShape(selectedId, 0, 0);
+      if (dup) {
+        setSelection(dup.id);
+        toolbar.syncToSelectedShape();
+        needsRender = true;
+      }
     }
     return;
   }
   if (e.key === 'z' && mod) {
     e.preventDefault();
-    if (e.shiftKey) state.redo();
-    else state.undo();
+    if (e.shiftKey) undo.redo();
+    else undo.undo();
   }
   if (e.key === 'y' && mod) {
     e.preventDefault();
-    state.redo();
+    undo.redo();
   }
   if (e.key === 'Escape') {
-    state.selectedId = null;
-    state.selectedDecoId = null;
+    setSelection(null);
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
     decoTool.setTool(null);
-    document.getElementById('text-input').classList.add('hidden');
+    document.getElementById('text-input')!.classList.add('hidden');
     shareMenu.classList.add('hidden');
     needsRender = true;
   }
@@ -667,7 +665,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (playState !== 'idle') {
       stopPlayback();
-    } else if (state.data.shapes.length > 0) {
+    } else if (store.data.shapes.length > 0) {
       startPlayback().then(() => {
         playState = 'latched';
       });
@@ -677,29 +675,29 @@ document.addEventListener('keydown', (e) => {
 
 // ---- Play mode selector & Play button ----
 
-const playBtn = document.getElementById('btn-play');
-const canvasWrap = document.getElementById('canvas-wrap');
-const playFan = document.getElementById('play-fan');
-const fanLock = playFan.querySelector('.fan-lock');
-const fanLoop = playFan.querySelector('.fan-loop');
+const playBtn = document.getElementById('btn-play')!;
+const canvasWrap = document.getElementById('canvas-wrap')!;
+const playFan = document.getElementById('play-fan')!;
+const fanLock = playFan.querySelector('.fan-lock')!;
+const fanLoop = playFan.querySelector('.fan-loop')! as HTMLElement;
 
 let playState = 'idle'; // 'idle' | 'latched' | 'looping'
 let gestureActive = false;
-let gestureTimerId = null;
-let gesturePointerId = null;
-let lastFanInfo = null; // zone info from most recent pointermove
+let gestureTimerId: ReturnType<typeof setTimeout> | null = null;
+let gesturePointerId: number | null = null;
+let lastFanInfo: { zone: string; ms?: number; pull?: number } | null = null;
 let loopHoldMs = 500;
-let loopTimeoutId = null;
-let releaseGlowTimeoutId = null;
-let playGeneration = 0; // incremented on stop, checked after async audio init
+let loopTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let releaseGlowTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let playGeneration = 0;
 
-async function startPlayback() {
+async function startPlayback(): Promise<void> {
   if (releaseGlowTimeoutId != null) {
     clearTimeout(releaseGlowTimeoutId);
     releaseGlowTimeoutId = null;
   }
   const gen = playGeneration;
-  await audio.play(state.data, state.data.envelope);
+  await audio.play(store.data, store.data.envelope);
   if (gen !== playGeneration) return; // cancelled during init
   playBtn.classList.add('playing');
   canvasWrap.classList.add('playing');
@@ -707,17 +705,17 @@ async function startPlayback() {
   needsRender = true;
 }
 
-function stopPlayback() {
+function stopPlayback(): void {
   playGeneration++;
   if (loopTimeoutId != null) {
     clearTimeout(loopTimeoutId);
     loopTimeoutId = null;
   }
-  audio.release(state.data.envelope);
+  audio.release(store.data.envelope);
   playBtn.classList.remove('playing');
   playBtn.textContent = '\u25B6 PLAY';
   playState = 'idle';
-  const releaseMs = state.data.envelope.release * 1000 + 100;
+  const releaseMs = store.data.envelope.release * 1000 + 100;
   releaseGlowTimeoutId = setTimeout(() => {
     releaseGlowTimeoutId = null;
     canvasWrap.classList.remove('playing');
@@ -725,12 +723,12 @@ function stopPlayback() {
   }, releaseMs);
 }
 
-function scheduleLoopRestart() {
-  const env = state.data.envelope;
+function scheduleLoopRestart(): void {
+  const env = store.data.envelope;
   const releaseMs = env.release * 1000;
 
   loopTimeoutId = setTimeout(() => {
-    audio.release(state.data.envelope);
+    audio.release(store.data.envelope);
     loopTimeoutId = setTimeout(() => {
       if (playState === 'looping') {
         startPlayback();
@@ -750,7 +748,7 @@ const LOOP_MS_MIN = 100;
 const LOOP_MS_MAX = 2000;
 const FAN_DELAY_MS = 250;
 
-function fanZone(clientY) {
+function fanZone(clientY: number): { zone: string; ms?: number; pull?: number } {
   const r = playBtn.getBoundingClientRect();
   const dy = r.top + r.height / 2 - clientY;
   if (dy < LOCK_MIN) return { zone: 'button' };
@@ -760,12 +758,12 @@ function fanZone(clientY) {
   return { zone: 'loop', ms, pull: Math.max(0, dy - LOOP_MIN) };
 }
 
-function openFan() {
+function openFan(): void {
   gestureActive = true;
   playFan.classList.add('open');
 }
 
-function closeFan() {
+function closeFan(): void {
   gestureActive = false;
   lastFanInfo = null;
   playFan.classList.remove('open');
@@ -774,7 +772,7 @@ function closeFan() {
   fanLoop.style.transform = '';
 }
 
-playBtn.addEventListener('pointerdown', (e) => {
+playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
   e.preventDefault();
 
   // If already playing (latched or looping), stop
@@ -783,7 +781,7 @@ playBtn.addEventListener('pointerdown', (e) => {
     return;
   }
 
-  if (state.data.shapes.length === 0) return;
+  if (store.data.shapes.length === 0) return;
 
   gesturePointerId = e.pointerId;
   lastFanInfo = null;
@@ -796,7 +794,7 @@ playBtn.addEventListener('pointerdown', (e) => {
   }, FAN_DELAY_MS);
 
   // Track early drag to open fan immediately
-  const earlyMove = (me) => {
+  const earlyMove = (me: PointerEvent) => {
     if (me.pointerId !== gesturePointerId) return;
     const r = playBtn.getBoundingClientRect();
     const dy = r.top + r.height / 2 - me.clientY;
@@ -822,7 +820,7 @@ playBtn.addEventListener('pointerdown', (e) => {
   startPlayback();
 });
 
-playBtn.addEventListener('pointermove', (e) => {
+playBtn.addEventListener('pointermove', (e: PointerEvent) => {
   if (!gestureActive || e.pointerId !== gesturePointerId) return;
 
   const info = fanZone(e.clientY);
@@ -839,7 +837,7 @@ playBtn.addEventListener('pointermove', (e) => {
   }
 });
 
-playBtn.addEventListener('pointerup', (e) => {
+playBtn.addEventListener('pointerup', (e: PointerEvent) => {
   if (e.pointerId !== gesturePointerId) return;
 
   if (gestureTimerId != null) {
@@ -862,7 +860,7 @@ playBtn.addEventListener('pointerup', (e) => {
   if (info.zone === 'lock') {
     playState = 'latched';
   } else if (info.zone === 'loop') {
-    loopHoldMs = info.ms;
+    loopHoldMs = info.ms!;
     playState = 'looping';
     scheduleLoopRestart();
   } else {
@@ -874,7 +872,7 @@ playBtn.addEventListener('pointerup', (e) => {
   gesturePointerId = null;
 });
 
-playBtn.addEventListener('lostpointercapture', (e) => {
+playBtn.addEventListener('lostpointercapture', (e: PointerEvent) => {
   // pointerup already handled this gesture
   if (gesturePointerId == null) return;
   if (e.pointerId !== gesturePointerId) return;
@@ -893,44 +891,44 @@ playBtn.addEventListener('lostpointercapture', (e) => {
 
 // ---- Auto-save to URL (debounced) ----
 
-let saveTimeout = null;
-function debouncedSave() {
-  clearTimeout(saveTimeout);
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+function debouncedSave(): void {
+  if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
-    if (state.data.shapes.length > 0 || state.data.decorations.length > 0) {
-      saveToURL(state.data);
+    if (store.data.shapes.length > 0 || store.data.decorations.length > 0) {
+      saveToURL(store.data);
     }
   }, 1000);
 }
 
 // ---- Share menu ----
 
-const menuBtn = document.getElementById('btn-menu');
-const shareMenu = document.getElementById('share-menu');
+const menuBtn = document.getElementById('btn-menu')!;
+const shareMenu = document.getElementById('share-menu')!;
 
-menuBtn.addEventListener('click', (e) => {
+menuBtn.addEventListener('click', (e: MouseEvent) => {
   e.stopPropagation();
   shareMenu.classList.toggle('hidden');
 });
 
-document.addEventListener('click', (e) => {
-  if (!shareMenu.contains(e.target) && e.target !== menuBtn) {
+document.addEventListener('click', (e: MouseEvent) => {
+  if (!shareMenu.contains(e.target as Node) && e.target !== menuBtn) {
     shareMenu.classList.add('hidden');
   }
 });
 
-shareMenu.addEventListener('click', async (e) => {
-  const item = e.target.closest('.share-menu-item');
+shareMenu.addEventListener('click', async (e: MouseEvent) => {
+  const item = (e.target as HTMLElement).closest('.share-menu-item') as HTMLElement | null;
   if (!item) return;
 
   const action = item.dataset.action;
-  const label = item.querySelector('span');
-  const originalText = label.textContent;
+  const label = item.querySelector('span')!;
+  const originalText = label.textContent!;
 
   if (action === 'share') {
     await copyToClipboard(window.location.href);
   } else if (action === 'embed') {
-    const snippet = generateEmbedSnippet(state.data);
+    const snippet = generateEmbedSnippet(store.data);
     await copyToClipboard(snippet);
   }
 
@@ -942,7 +940,7 @@ shareMenu.addEventListener('click', async (e) => {
 
 // ---- Corner position helper ----
 
-function getCornerPosition(cornerName, size) {
+function getCornerPosition(cornerName: string, size: number): { x: number; y: number } {
   switch (cornerName) {
     case 'attack':
       return { x: 0, y: size };

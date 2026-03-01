@@ -1,8 +1,9 @@
-// embed.js — Embed snippet generator
+// embed.ts — Embed snippet generator
 
-import { serializeState } from './serialize.js';
+import { serializeState } from './serialize.ts';
+import type { SigilData } from './types.ts';
 
-export function generateEmbedSnippet(state, host) {
+export function generateEmbedSnippet(state: SigilData, host?: string): string {
   const encoded = serializeState(state);
   const base =
     host || window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'embed.html';
@@ -13,7 +14,7 @@ export function generateEmbedSnippet(state, host) {
   return iframe;
 }
 
-export function copyToClipboard(text) {
+export function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard) {
     return navigator.clipboard.writeText(text);
   }
@@ -29,7 +30,7 @@ export function copyToClipboard(text) {
   return Promise.resolve();
 }
 
-export function showEmbedModal(state) {
+export function showEmbedModal(state: SigilData): void {
   const snippet = generateEmbedSnippet(state);
 
   // Remove existing modal
@@ -43,6 +44,8 @@ export function showEmbedModal(state) {
     display: flex; align-items: center; justify-content: center; z-index: 200;
   `;
 
+  // Static modal structure — no user input is interpolated into innerHTML.
+  // The snippet is set via DOM property (textContent/value) below.
   modal.innerHTML = `
     <div style="background: #12122a; border: 1px solid rgba(0,240,255,0.3); border-radius: 8px;
                 padding: 20px; max-width: 500px; width: 90%; color: #e0e0ff; font-family: 'Share Tech Mono', monospace;">
@@ -52,7 +55,7 @@ export function showEmbedModal(state) {
       <textarea id="embed-code" readonly style="
         width: 100%; height: 80px; background: #0a0a1a; color: #e0e0ff; border: 1px solid rgba(255,255,255,0.1);
         border-radius: 4px; padding: 8px; font-family: 'Share Tech Mono', monospace; font-size: 11px; resize: none;
-      ">${snippet}</textarea>
+      "></textarea>
       <div style="display: flex; gap: 8px; margin-top: 12px;">
         <button id="embed-copy" style="
           background: linear-gradient(135deg, #ff2d95, #b44dff); border: none; color: white;
@@ -69,10 +72,12 @@ export function showEmbedModal(state) {
   `;
 
   document.body.appendChild(modal);
+  // Set snippet text safely via DOM property (not interpolated into innerHTML)
+  (document.getElementById('embed-code') as HTMLTextAreaElement).value = snippet;
 
-  document.getElementById('embed-copy').addEventListener('click', () => {
+  document.getElementById('embed-copy')!.addEventListener('click', () => {
     copyToClipboard(snippet).then(() => {
-      document.getElementById('embed-copy').textContent = 'COPIED!';
+      document.getElementById('embed-copy')!.textContent = 'COPIED!';
       setTimeout(() => {
         const btn = document.getElementById('embed-copy');
         if (btn) btn.textContent = 'COPY';
@@ -80,7 +85,7 @@ export function showEmbedModal(state) {
     });
   });
 
-  document.getElementById('embed-close').addEventListener('click', () => modal.remove());
+  document.getElementById('embed-close')!.addEventListener('click', () => modal.remove());
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.remove();
   });

@@ -12,11 +12,26 @@ type Brand<T, B extends string> = T & { readonly [__brand]: B };
 /** A number normalized to the 0–1 range (canvas coordinates, sizes). */
 export type NormalizedCoord = Brand<number, 'NormalizedCoord'>;
 
+/** Clamp to [0, 1] and brand as NormalizedCoord. */
+export function normalizedCoord(n: number): NormalizedCoord {
+  return Math.max(0, Math.min(1, n)) as NormalizedCoord;
+}
+
 /** An angle in degrees, 0–360. */
 export type Degrees = Brand<number, 'Degrees'>;
 
+/** Wrap to [0, 360) and brand as Degrees. */
+export function degrees(n: number): Degrees {
+  return (((n % 360) + 360) % 360) as Degrees;
+}
+
 /** A detuning offset in cents. */
 export type Cents = Brand<number, 'Cents'>;
+
+/** Brand as Cents (no range restriction). */
+export function cents(n: number): Cents {
+  return n as Cents;
+}
 
 // ---- Shape types ----
 
@@ -26,22 +41,94 @@ export type PatternType = 'stripes' | 'checker' | 'noise' | 'gradient' | 'rough'
 
 export type FillMode = 'solid' | 'radial' | 'linear';
 
-export interface Fill {
-  mode: FillMode;
-  /** Hue for stop 1 (0–360) */
+interface FillBase {
   h: number;
-  /** Saturation for stop 1 (0–100) */
   s: number;
-  /** Lightness for stop 1 (0–100) */
   l: number;
-  /** Hue for stop 2 — radial outer / linear end (0–360) */
+}
+
+export interface SolidFill extends FillBase {
+  mode: 'solid';
+}
+
+export interface RadialFill extends FillBase {
+  mode: 'radial';
   h2: number;
-  /** Saturation for stop 2 (0–100) */
   s2: number;
-  /** Lightness for stop 2 (0–100) */
   l2: number;
-  /** Linear gradient angle in degrees (0–360) */
+}
+
+export interface LinearFill extends FillBase {
+  mode: 'linear';
+  h2: number;
+  s2: number;
+  l2: number;
   gradAngle: number;
+}
+
+export type Fill = SolidFill | RadialFill | LinearFill;
+
+/** Flat bag used internally by toolbar for mode-switching without data loss. */
+export interface FillDraft {
+  mode: FillMode;
+  h: number;
+  s: number;
+  l: number;
+  h2: number;
+  s2: number;
+  l2: number;
+  gradAngle: number;
+}
+
+export function fillToFillDraft(fill: Fill): FillDraft {
+  const base = { h: fill.h, s: fill.s, l: fill.l, h2: 180, s2: 80, l2: 45, gradAngle: 0 };
+  switch (fill.mode) {
+    case 'solid':
+      return { ...base, mode: 'solid' };
+    case 'radial':
+      return { ...base, mode: 'radial', h2: fill.h2, s2: fill.s2, l2: fill.l2 };
+    case 'linear':
+      return {
+        ...base,
+        mode: 'linear',
+        h2: fill.h2,
+        s2: fill.s2,
+        l2: fill.l2,
+        gradAngle: fill.gradAngle,
+      };
+  }
+}
+
+export function fillDraftToFill(draft: FillDraft): Fill {
+  switch (draft.mode) {
+    case 'solid':
+      return { mode: 'solid', h: draft.h, s: draft.s, l: draft.l };
+    case 'radial':
+      return {
+        mode: 'radial',
+        h: draft.h,
+        s: draft.s,
+        l: draft.l,
+        h2: draft.h2,
+        s2: draft.s2,
+        l2: draft.l2,
+      };
+    case 'linear':
+      return {
+        mode: 'linear',
+        h: draft.h,
+        s: draft.s,
+        l: draft.l,
+        h2: draft.h2,
+        s2: draft.s2,
+        l2: draft.l2,
+        gradAngle: draft.gradAngle,
+      };
+  }
+}
+
+export function createDefaultFill(): SolidFill {
+  return { mode: 'solid', h: 200, s: 80, l: 50 };
 }
 
 export interface Shape {
@@ -64,28 +151,35 @@ export interface Shape {
 
 export type DecorationType = 'squiggle' | 'curlicue' | 'text';
 
-export interface Decoration {
+interface DecorationBase {
   id: string;
-  type: DecorationType;
-  /** Array of [x, y] normalized coordinate pairs */
-  points: [NormalizedCoord, NormalizedCoord][];
-  /** Text content (only for type: "text") */
-  text: string | null;
-  /** Optional linked shape ID */
-  targetShapeId: string | null;
-  /** Normalized 0–1, horizontal position */
-  x: NormalizedCoord;
-  /** Normalized 0–1, vertical position */
-  y: NormalizedCoord;
-  /** Scale factor (0.2–5) */
-  scale: number;
-  /** CSS color string, e.g. "hsl(320, 100%, 60%)" */
   strokeColor: string;
-  /** Stroke width in pixels */
   strokeWidth: number;
-  /** Font size in pixels (used when type is "text") */
+  targetShapeId: string | null;
+}
+
+export interface SquiggleDecoration extends DecorationBase {
+  type: 'squiggle';
+  points: [NormalizedCoord, NormalizedCoord][];
+}
+
+export interface CurlicueDecoration extends DecorationBase {
+  type: 'curlicue';
+  x: NormalizedCoord;
+  y: NormalizedCoord;
+  scale: number;
+}
+
+export interface TextDecoration extends DecorationBase {
+  type: 'text';
+  text: string;
+  x: NormalizedCoord;
+  y: NormalizedCoord;
+  scale: number;
   fontSize: number;
 }
+
+export type Decoration = SquiggleDecoration | CurlicueDecoration | TextDecoration;
 
 // ---- Envelope ----
 
