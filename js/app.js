@@ -417,39 +417,44 @@ document.addEventListener('keydown', (e) => {
     toolbar._updateToolActive();
     decoTool.setTool(null);
   }
-  if (e.key === 'n') setPlayMode('normal');
-  if (e.key === 'l') setPlayMode('latch');
-  if (e.key === 'o') setPlayMode('loop');
-  if (e.key === ' ' && playMode !== 'normal') {
+  if (e.key === ' ') {
     e.preventDefault();
-    playBtn.click();
+    if (playState !== 'idle') {
+      stopPlayback();
+    } else if (state.data.shapes.length > 0) {
+      startPlayback().then(() => {
+        playState = 'latched';
+      });
+    }
   }
 });
 
 // ---- Play mode selector & Play button ----
 
 const playBtn = document.getElementById('btn-play');
-const latchSlider = document.getElementById('latch-position');
 const canvasWrap = document.getElementById('canvas-wrap');
-const modeBtns = document.querySelectorAll('.mode-btn');
+const playFan = document.getElementById('play-fan');
+const fanLock = playFan.querySelector('.fan-lock');
+const fanLoop = playFan.querySelector('.fan-loop');
 
-let playMode = 'normal'; // 'normal' | 'latch' | 'loop'
+let playState = 'idle'; // 'idle' | 'latched' | 'looping'
+let gestureActive = false;
+let gestureTimerId = null;
+let gesturePointerId = null;
+let lastFanInfo = null; // zone info from most recent pointermove
+let loopHoldMs = 500;
 let loopTimeoutId = null;
 let releaseGlowTimeoutId = null;
-
-function setPlayMode(mode) {
-  if (audio.isPlaying) stopPlayback();
-  playMode = mode;
-  modeBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === mode));
-  if (mode !== 'latch') latchSlider.classList.add('hidden');
-}
+let playGeneration = 0; // incremented on stop, checked after async audio init
 
 async function startPlayback() {
   if (releaseGlowTimeoutId != null) {
     clearTimeout(releaseGlowTimeoutId);
     releaseGlowTimeoutId = null;
   }
+  const gen = playGeneration;
   await audio.play(state.data, state.data.envelope);
+  if (gen !== playGeneration) return; // cancelled during init
   playBtn.classList.add('playing');
   canvasWrap.classList.add('playing');
   playBtn.textContent = '\u25A0 STOP';
@@ -457,6 +462,7 @@ async function startPlayback() {
 }
 
 function stopPlayback() {
+  playGeneration++;
   if (loopTimeoutId != null) {
     clearTimeout(loopTimeoutId);
     loopTimeoutId = null;
@@ -464,7 +470,7 @@ function stopPlayback() {
   audio.release(state.data.envelope);
   playBtn.classList.remove('playing');
   playBtn.textContent = '\u25B6 PLAY';
-  latchSlider.classList.add('hidden');
+  playState = 'idle';
   const releaseMs = state.data.envelope.release * 1000 + 100;
   releaseGlowTimeoutId = setTimeout(() => {
     releaseGlowTimeoutId = null;
@@ -475,60 +481,168 @@ function stopPlayback() {
 
 function scheduleLoopRestart() {
   const env = state.data.envelope;
-  const sustainHoldMs = (0.3 + env.sustain * 0.5) * 1000;
-  const attackDecayMs = (env.attack + env.decay) * 1000;
   const releaseMs = env.release * 1000;
 
   loopTimeoutId = setTimeout(() => {
-    // Trigger release phase
     audio.release(state.data.envelope);
-    // After release completes, restart
     loopTimeoutId = setTimeout(() => {
-      if (playMode === 'loop') {
+      if (playState === 'looping') {
         startPlayback();
         scheduleLoopRestart();
       }
     }, releaseMs + 50);
-  }, attackDecayMs + sustainHoldMs);
+  }, loopHoldMs);
 }
 
-modeBtns.forEach((btn) => {
-  btn.addEventListener('click', () => setPlayMode(btn.dataset.mode));
-});
+// ---- Play fan gesture constants ----
 
-playBtn.addEventListener('mousedown', async (e) => {
+const LOCK_MIN = 35;
+const LOCK_MAX = 70;
+const LOOP_MIN = 70;
+const LOOP_RANGE = 130;
+const LOOP_MS_MIN = 100;
+const LOOP_MS_MAX = 2000;
+const FAN_DELAY_MS = 250;
+
+function fanZone(clientY) {
+  const r = playBtn.getBoundingClientRect();
+  const dy = r.top + r.height / 2 - clientY;
+  if (dy < LOCK_MIN) return { zone: 'button' };
+  if (dy < LOCK_MAX) return { zone: 'lock' };
+  const t = Math.min(1, Math.max(0, (dy - LOOP_MIN) / LOOP_RANGE));
+  const ms = Math.round((LOOP_MS_MIN + t * (LOOP_MS_MAX - LOOP_MS_MIN)) / 50) * 50;
+  return { zone: 'loop', ms, pull: Math.max(0, dy - LOOP_MIN) };
+}
+
+function openFan() {
+  gestureActive = true;
+  playFan.classList.add('open');
+}
+
+function closeFan() {
+  gestureActive = false;
+  lastFanInfo = null;
+  playFan.classList.remove('open');
+  fanLock.classList.remove('hot');
+  fanLoop.classList.remove('hot', 'dragging');
+  fanLoop.style.transform = '';
+}
+
+playBtn.addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  if (playMode !== 'normal') return;
-  if (state.data.shapes.length === 0) return;
-  await startPlayback();
-});
 
-playBtn.addEventListener('mouseup', () => {
-  if (playMode !== 'normal') return;
-  if (audio.isPlaying) stopPlayback();
-});
-
-playBtn.addEventListener('click', async () => {
-  if (playMode === 'normal') return;
-  if (state.data.shapes.length === 0) return;
-
-  if (audio.isPlaying) {
+  // If already playing (latched or looping), stop
+  if (playState !== 'idle') {
     stopPlayback();
-  } else {
-    await startPlayback();
-    if (playMode === 'latch') {
-      latchSlider.value = 1;
-      latchSlider.classList.remove('hidden');
-    } else if (playMode === 'loop') {
-      scheduleLoopRestart();
+    return;
+  }
+
+  if (state.data.shapes.length === 0) return;
+
+  gesturePointerId = e.pointerId;
+  lastFanInfo = null;
+  playBtn.setPointerCapture(e.pointerId);
+
+  // Set up gesture tracking synchronously — before audio init
+  gestureTimerId = setTimeout(() => {
+    gestureTimerId = null;
+    if (gesturePointerId != null) openFan();
+  }, FAN_DELAY_MS);
+
+  // Track early drag to open fan immediately
+  const earlyMove = (me) => {
+    if (me.pointerId !== gesturePointerId) return;
+    const r = playBtn.getBoundingClientRect();
+    const dy = r.top + r.height / 2 - me.clientY;
+    if (dy > 10 && gestureTimerId != null) {
+      clearTimeout(gestureTimerId);
+      gestureTimerId = null;
+      openFan();
+      playBtn.removeEventListener('pointermove', earlyMove);
     }
+  };
+  playBtn.addEventListener('pointermove', earlyMove);
+
+  // Clean up early-move listener once gesture ends
+  const cleanup = () => {
+    playBtn.removeEventListener('pointermove', earlyMove);
+    playBtn.removeEventListener('pointerup', cleanup);
+    playBtn.removeEventListener('lostpointercapture', cleanup);
+  };
+  playBtn.addEventListener('pointerup', cleanup, { once: true });
+  playBtn.addEventListener('lostpointercapture', cleanup, { once: true });
+
+  // Start audio (non-blocking — gesture is already wired)
+  startPlayback();
+});
+
+playBtn.addEventListener('pointermove', (e) => {
+  if (!gestureActive || e.pointerId !== gesturePointerId) return;
+
+  const info = fanZone(e.clientY);
+  lastFanInfo = info;
+
+  fanLock.classList.toggle('hot', info.zone === 'lock');
+
+  if (info.zone === 'loop') {
+    fanLoop.classList.add('hot', 'dragging');
+    fanLoop.style.transform = `translateY(-${info.pull}px)`;
+  } else {
+    fanLoop.classList.remove('hot', 'dragging');
+    fanLoop.style.transform = '';
   }
 });
 
-latchSlider.addEventListener('input', () => {
-  if (audio.isPlaying) {
-    audio.setEnvelopePosition(parseFloat(latchSlider.value), state.data.envelope);
+playBtn.addEventListener('pointerup', (e) => {
+  if (e.pointerId !== gesturePointerId) return;
+
+  if (gestureTimerId != null) {
+    clearTimeout(gestureTimerId);
+    gestureTimerId = null;
   }
+
+  if (!gestureActive) {
+    // Quick click — normal release
+    stopPlayback();
+    closeFan();
+    gesturePointerId = null;
+    return;
+  }
+
+  // Use the last tracked zone from pointermove — avoids drift during finger lift.
+  // Fall back to computing from the pointerup position if no move was recorded.
+  const info = lastFanInfo || fanZone(e.clientY);
+
+  if (info.zone === 'lock') {
+    playState = 'latched';
+  } else if (info.zone === 'loop') {
+    loopHoldMs = info.ms;
+    playState = 'looping';
+    scheduleLoopRestart();
+  } else {
+    // Released back on button
+    stopPlayback();
+  }
+
+  closeFan();
+  gesturePointerId = null;
+});
+
+playBtn.addEventListener('lostpointercapture', (e) => {
+  // pointerup already handled this gesture
+  if (gesturePointerId == null) return;
+  if (e.pointerId !== gesturePointerId) return;
+
+  if (gestureTimerId != null) {
+    clearTimeout(gestureTimerId);
+    gestureTimerId = null;
+  }
+
+  if (audio.isPlaying && playState === 'idle') {
+    stopPlayback();
+  }
+  closeFan();
+  gesturePointerId = null;
 });
 
 // ---- Auto-save to URL (debounced) ----

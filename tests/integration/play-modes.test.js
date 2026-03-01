@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-test.describe('Play modes', () => {
+test.describe('Play fan gesture', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/audio-tap.js') });
     await page.goto('/');
@@ -14,99 +14,124 @@ test.describe('Play modes', () => {
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
   });
 
-  test('mode selector highlights active mode', async ({ page }) => {
-    const normalBtn = page.locator('.mode-btn[data-mode="normal"]');
-    const latchBtn = page.locator('.mode-btn[data-mode="latch"]');
-    const loopBtn = page.locator('.mode-btn[data-mode="loop"]');
-
-    // Normal is active by default
-    await expect(normalBtn).toHaveClass(/active/);
-    await expect(latchBtn).not.toHaveClass(/active/);
-    await expect(loopBtn).not.toHaveClass(/active/);
-
-    // Switch to latch
-    await latchBtn.click();
-    await expect(normalBtn).not.toHaveClass(/active/);
-    await expect(latchBtn).toHaveClass(/active/);
-    await expect(loopBtn).not.toHaveClass(/active/);
-
-    // Switch to loop
-    await loopBtn.click();
-    await expect(normalBtn).not.toHaveClass(/active/);
-    await expect(latchBtn).not.toHaveClass(/active/);
-    await expect(loopBtn).toHaveClass(/active/);
-
-    // Switch back to normal
-    await normalBtn.click();
-    await expect(normalBtn).toHaveClass(/active/);
-    await expect(latchBtn).not.toHaveClass(/active/);
-    await expect(loopBtn).not.toHaveClass(/active/);
-  });
-
-  test('latch mode sustains audio after click', async ({ page }) => {
-    const latchBtn = page.locator('.mode-btn[data-mode="latch"]');
+  test('quick click plays and stops', async ({ page }) => {
     const playBtn = page.locator('#btn-play');
+    const box = await playBtn.boundingBox();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
 
-    // Enable latch mode
-    await latchBtn.click();
-    await expect(latchBtn).toHaveClass(/active/);
-
-    // Click play (in latch mode, click toggles)
-    await playBtn.click();
-
-    // Should be playing
+    // Real pointer down starts playback
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
     await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
 
-    // Wait and verify audio is still sustaining
-    await page.waitForTimeout(500);
-    const isPlaying = await page.evaluate(() => window.__audioTap?.isPlaying());
-    expect(isPlaying).toBe(true);
-
-    // Latch slider should be visible
-    await expect(page.locator('#latch-position')).not.toHaveClass(/hidden/);
-
-    // Click play again to stop
-    await playBtn.click();
+    // Quick release stops playback
+    await page.mouse.up();
     await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
-  test('switching mode while playing stops audio', async ({ page }) => {
-    const latchBtn = page.locator('.mode-btn[data-mode="latch"]');
-    const normalBtn = page.locator('.mode-btn[data-mode="normal"]');
+  test('hold opens fan', async ({ page }) => {
     const playBtn = page.locator('#btn-play');
 
-    // Enable latch and start playing
-    await latchBtn.click();
-    await playBtn.click();
-    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
+    await playBtn.dispatchEvent('pointerdown', { pointerId: 1 });
+    await page.waitForTimeout(400);
 
-    // Switch to normal mode — should stop playback
-    await normalBtn.click();
-    await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
+    // Fan should be open
+    await expect(page.locator('.play-fan')).toHaveClass(/open/);
+
+    // Release on button to stop
+    await playBtn.dispatchEvent('pointerup', { pointerId: 1 });
+    await expect(page.locator('.play-fan')).not.toHaveClass(/open/);
   });
 
-  test('loop mode auto-restarts playback', async ({ page }) => {
-    const loopBtn = page.locator('.mode-btn[data-mode="loop"]');
+  test('drag to lock latches playback', async ({ page }) => {
     const playBtn = page.locator('#btn-play');
+    const box = await playBtn.boundingBox();
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
 
-    // Enable loop mode
-    await loopBtn.click();
-    await expect(loopBtn).toHaveClass(/active/);
+    // pointerdown + wait for fan
+    await playBtn.dispatchEvent('pointerdown', {
+      pointerId: 1,
+      clientX: centerX,
+      clientY: centerY,
+    });
+    await page.waitForTimeout(400);
+    await expect(page.locator('.play-fan')).toHaveClass(/open/);
 
-    // Start playback
-    await playBtn.click();
-    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
+    // Simulate pointermove into lock zone (50px above center)
+    await playBtn.dispatchEvent('pointermove', {
+      pointerId: 1,
+      clientX: centerX,
+      clientY: centerY - 50,
+    });
 
-    // Wait for audio to initialize, then verify
+    // Release in lock zone
+    await playBtn.dispatchEvent('pointerup', {
+      pointerId: 1,
+      clientX: centerX,
+      clientY: centerY - 50,
+    });
+
+    // Should still be playing (latched)
     await page.waitForTimeout(200);
+    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
     const isPlaying = await page.evaluate(() => window.__audioTap?.isPlaying());
     expect(isPlaying).toBe(true);
 
-    // Latch slider should NOT be visible in loop mode
-    await expect(page.locator('#latch-position')).toHaveClass(/hidden/);
+    // Click play to stop
+    await playBtn.dispatchEvent('pointerdown', { pointerId: 2 });
+    await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
+  });
 
-    // Stop playback
-    await playBtn.click();
+  test('drag to loop starts loop', async ({ page }) => {
+    const playBtn = page.locator('#btn-play');
+    const box = await playBtn.boundingBox();
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+
+    // pointerdown + wait for fan
+    await playBtn.dispatchEvent('pointerdown', {
+      pointerId: 1,
+      clientX: centerX,
+      clientY: centerY,
+    });
+    await page.waitForTimeout(400);
+
+    // Move into loop zone (120px above center)
+    await playBtn.dispatchEvent('pointermove', {
+      pointerId: 1,
+      clientX: centerX,
+      clientY: centerY - 120,
+    });
+
+    // Release in loop zone
+    await playBtn.dispatchEvent('pointerup', {
+      pointerId: 1,
+      clientX: centerX,
+      clientY: centerY - 120,
+    });
+
+    // Should be playing (looping)
+    await page.waitForTimeout(200);
+    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
+
+    // Click play to stop
+    await playBtn.dispatchEvent('pointerdown', { pointerId: 2 });
+    await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
+  });
+
+  test('space toggles latch', async ({ page }) => {
+    // Press Space to start (latched)
+    await page.keyboard.press('Space');
+    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
+
+    await page.waitForTimeout(300);
+    const isPlaying = await page.evaluate(() => window.__audioTap?.isPlaying());
+    expect(isPlaying).toBe(true);
+
+    // Press Space to stop
+    await page.keyboard.press('Space');
     await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 });
