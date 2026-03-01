@@ -35,6 +35,7 @@ export function loadFromURL() {
 
 function compactify(state) {
   return {
+    du: round2(state.duration || 2.0),
     e: {
       a: round2(state.envelope.attack),
       d: round2(state.envelope.decay),
@@ -70,6 +71,7 @@ function decompactify(c) {
   const decoMap = { s: 'squiggle', c: 'curlicue', t: 'text' };
 
   return {
+    duration: c.du !== undefined ? c.du : 2.0,
     envelope: {
       attack: c.e.a,
       decay: c.e.d,

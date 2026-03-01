@@ -286,7 +286,8 @@ select {
   box-shadow: inset 0 0 8px rgba(0, 240, 255, 0.2);
 }
 
-.latch-slider {
+.latch-slider,
+#duration-slider {
   width: 80px;
   height: 4px;
   accent-color: var(--neon-cyan);

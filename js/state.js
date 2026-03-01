@@ -7,6 +7,7 @@ function genId(prefix = 's') {
 
 export function createDefaultState() {
   return {
+    duration: 2.0,
     envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
     shapes: [],
     decorations: [],
@@ -184,6 +185,16 @@ export class SigilState {
   updateEnvelopeWithUndo(updates) {
     this._pushUndo();
     this.updateEnvelope(updates);
+  }
+
+  updateDuration(dur) {
+    this.data.duration = dur;
+    this._notify();
+  }
+
+  updateDurationWithUndo(dur) {
+    this._pushUndo();
+    this.updateDuration(dur);
   }
 
   addDecoration(type, points, color) {

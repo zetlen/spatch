@@ -67,6 +67,12 @@ state.onChange(() => {
   if (audio.isPlaying) {
     audio.updateVoices(state.data);
   }
+  const durationSlider = document.getElementById('duration-slider');
+  const durationVal = document.getElementById('duration-val');
+  if (durationSlider && parseFloat(durationSlider.value) !== state.data.duration) {
+    durationSlider.value = state.data.duration;
+    durationVal.textContent = state.data.duration.toFixed(1) + 's';
+  }
 });
 
 function renderLoop() {
@@ -434,6 +440,7 @@ const modeBtns = document.querySelectorAll('.mode-btn');
 let playMode = 'normal'; // 'normal' | 'latch' | 'loop'
 let loopTimeoutId = null;
 let releaseGlowTimeoutId = null;
+let playbackTimeoutId = null;
 
 function setPlayMode(mode) {
   if (audio.isPlaying) stopPlayback();
@@ -447,17 +454,34 @@ async function startPlayback() {
     clearTimeout(releaseGlowTimeoutId);
     releaseGlowTimeoutId = null;
   }
+  if (playbackTimeoutId != null) {
+    clearTimeout(playbackTimeoutId);
+    playbackTimeoutId = null;
+  }
   await audio.play(state.data, state.data.envelope);
   playBtn.classList.add('playing');
   canvasWrap.classList.add('playing');
   playBtn.textContent = '\u25A0 STOP';
   needsRender = true;
+
+  if (playMode === 'normal') {
+    const totalMs = state.data.duration * 1000;
+    const releaseMs = state.data.envelope.release * 1000;
+    const holdMs = Math.max(10, totalMs - releaseMs);
+    playbackTimeoutId = setTimeout(() => {
+      stopPlayback();
+    }, holdMs);
+  }
 }
 
 function stopPlayback() {
   if (loopTimeoutId != null) {
     clearTimeout(loopTimeoutId);
     loopTimeoutId = null;
+  }
+  if (playbackTimeoutId != null) {
+    clearTimeout(playbackTimeoutId);
+    playbackTimeoutId = null;
   }
   audio.release(state.data.envelope);
   playBtn.classList.remove('playing');
@@ -473,9 +497,9 @@ function stopPlayback() {
 
 function scheduleLoopRestart() {
   const env = state.data.envelope;
-  const sustainHoldMs = (0.3 + env.sustain * 0.5) * 1000;
-  const attackDecayMs = (env.attack + env.decay) * 1000;
+  const totalMs = state.data.duration * 1000;
   const releaseMs = env.release * 1000;
+  const holdMs = Math.max(10, totalMs - releaseMs);
 
   loopTimeoutId = setTimeout(() => {
     // Trigger release phase
@@ -487,7 +511,7 @@ function scheduleLoopRestart() {
         scheduleLoopRestart();
       }
     }, releaseMs + 50);
-  }, attackDecayMs + sustainHoldMs);
+  }, holdMs);
 }
 
 modeBtns.forEach((btn) => {
@@ -530,6 +554,20 @@ latchSlider.addEventListener('input', () => {
 });
 
 // ---- Auto-save to URL (debounced) ----
+
+const durationSlider = document.getElementById('duration-slider');
+const durationVal = document.getElementById('duration-val');
+
+if (durationSlider) {
+  durationSlider.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    durationVal.textContent = val.toFixed(1) + 's';
+    state.updateDuration(val);
+  });
+  durationSlider.addEventListener('change', (e) => {
+    state.updateDurationWithUndo(parseFloat(e.target.value));
+  });
+}
 
 let saveTimeout = null;
 function debouncedSave() {
