@@ -1,18 +1,13 @@
 // toolbar.js — Toolbar UI, tool selection, color picker, pattern selector
 
-import {
-  getSwatchColor,
-  drawHueRing,
-  drawSLSquare,
-  drawLabPlane,
-  drawAngleDial,
-} from './colors.js';
+import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.js';
 
 export class Toolbar {
   constructor(state) {
     this.state = state;
     this.currentTool = 'select';
     this.onToolChange = null;
+    this._activeStop = { radial: 1, linear: 1 }; // which gradient stop each tab edits
 
     this._bindToolButtons();
     this._bindPatternButtons();
@@ -104,6 +99,14 @@ export class Toolbar {
     });
   }
 
+  // Returns the h/s/l or h2/s2/l2 fields for the active stop of a given tab
+  _getStopFields(tab) {
+    const stop = this._activeStop[tab] || 1;
+    return stop === 2
+      ? { hKey: 'h2', sKey: 's2', lKey: 'l2' }
+      : { hKey: 'h', sKey: 's', lKey: 'l' };
+  }
+
   _bindColorPicker() {
     const panel = document.getElementById('color-picker-panel');
     const swatch = document.getElementById('fill-swatch');
@@ -145,101 +148,19 @@ export class Toolbar {
       });
     });
 
-    // HSL inputs
-    ['h', 's', 'l'].forEach((prop) => {
-      const input = document.getElementById('inp-' + prop);
-      input.addEventListener('input', () => {
-        const sel = this.state.getSelected();
-        if (sel) {
-          this.state.updateFill(sel.id, { [prop]: parseInt(input.value) || 0 });
-          this.updateSwatchFromSelected();
-          this._renderColorPicker();
-        }
-      });
-    });
+    // --- Solid tab: SL square + hue slider ---
+    this._bindSLSquare('sl-square', 'solid');
+    this._bindHueSlider('hue-slider', 'solid');
 
-    // Linear gradient inputs
-    ['h1', 's1', 'l1', 'h2', 's2', 'l2'].forEach((prop) => {
-      const input = document.getElementById('inp-' + prop);
-      if (!input) return;
-      input.addEventListener('input', () => {
-        const sel = this.state.getSelected();
-        if (sel) {
-          this.state.updateFill(sel.id, { [prop]: parseInt(input.value) || 0 });
-          this.updateSwatchFromSelected();
-        }
-      });
-    });
+    // --- Radial tab: SL square + hue slider + stop toggle ---
+    this._bindSLSquare('sl-square-rad', 'radial');
+    this._bindHueSlider('hue-slider-rad', 'radial');
+    this._bindStopToggle('radial');
 
-    // Lab L* slider
-    const labSlider = document.getElementById('lab-l-slider');
-    if (labSlider) {
-      labSlider.addEventListener('input', () => {
-        const sel = this.state.getSelected();
-        if (sel) {
-          this.state.updateFill(sel.id, { labL: parseInt(labSlider.value) });
-          this.updateSwatchFromSelected();
-          this._renderLabPlane();
-        }
-      });
-    }
-
-    // Hue ring click
-    const hueRing = document.getElementById('hue-ring');
-    hueRing.addEventListener('click', (e) => {
-      const rect = hueRing.getBoundingClientRect();
-      const x = e.clientX - rect.left - 100;
-      const y = e.clientY - rect.top - 100;
-      const angle = (Math.atan2(y, x) * 180) / Math.PI;
-      const hue = ((angle + 360) % 360) | 0;
-      const dist = Math.hypot(x, y);
-      if (dist >= 70 && dist <= 95) {
-        const sel = this.state.getSelected();
-        if (sel) {
-          this.state.updateFill(sel.id, { h: hue });
-          document.getElementById('inp-h').value = hue;
-          this.updateSwatchFromSelected();
-          this._renderSLSquare();
-        }
-      }
-    });
-
-    // SL square click
-    const slSquare = document.getElementById('sl-square');
-    slSquare.addEventListener('click', (e) => {
-      const rect = slSquare.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const s = Math.round((x / 150) * 100);
-      const l = Math.round((1 - y / 150) * 100);
-      const sel = this.state.getSelected();
-      if (sel) {
-        this.state.updateFill(sel.id, {
-          s: Math.max(0, Math.min(100, s)),
-          l: Math.max(0, Math.min(100, l)),
-        });
-        document.getElementById('inp-s').value = sel.fill.s;
-        document.getElementById('inp-l').value = sel.fill.l;
-        this.updateSwatchFromSelected();
-      }
-    });
-
-    // Lab plane click
-    const labPlane = document.getElementById('lab-plane');
-    if (labPlane) {
-      labPlane.addEventListener('click', (e) => {
-        const rect = labPlane.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const a = Math.round((x / 160) * 256 - 128);
-        const b = Math.round(128 - (y / 160) * 256);
-        const sel = this.state.getSelected();
-        if (sel) {
-          this.state.updateFill(sel.id, { labA: a, labB: b });
-          this.updateSwatchFromSelected();
-        }
-      });
-    }
+    // --- Linear tab: SL square + hue slider + stop toggle + angle dial ---
+    this._bindSLSquare('sl-square-lin', 'linear');
+    this._bindHueSlider('hue-slider-lin', 'linear');
+    this._bindStopToggle('linear');
 
     // Angle dial click
     const angleDial = document.getElementById('angle-dial');
@@ -259,64 +180,87 @@ export class Toolbar {
     }
   }
 
+  _bindSLSquare(canvasId, tab) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const s = Math.round((x / 160) * 100);
+      const l = Math.round((1 - y / 160) * 100);
+      const sel = this.state.getSelected();
+      if (sel) {
+        const { sKey, lKey } = this._getStopFields(tab);
+        this.state.updateFill(sel.id, {
+          [sKey]: Math.max(0, Math.min(100, s)),
+          [lKey]: Math.max(0, Math.min(100, l)),
+        });
+        this.updateSwatchFromSelected();
+        this._renderColorPicker();
+      }
+    });
+  }
+
+  _bindHueSlider(sliderId, tab) {
+    const slider = document.getElementById(sliderId);
+    if (!slider) return;
+    slider.addEventListener('input', () => {
+      const sel = this.state.getSelected();
+      if (sel) {
+        const { hKey } = this._getStopFields(tab);
+        this.state.updateFill(sel.id, { [hKey]: parseInt(slider.value) });
+        this.updateSwatchFromSelected();
+        this._renderColorPicker();
+      }
+    });
+  }
+
+  _bindStopToggle(tab) {
+    document.querySelectorAll(`.stop-btn[data-tab="${tab}"]`).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this._activeStop[tab] = parseInt(btn.dataset.stop);
+        document
+          .querySelectorAll(`.stop-btn[data-tab="${tab}"]`)
+          .forEach((b) => b.classList.toggle('active', b.dataset.stop === btn.dataset.stop));
+        // Sync hue slider to the newly active stop
+        const sel = this.state.getSelected();
+        if (sel) {
+          const { hKey } = this._getStopFields(tab);
+          const sliderId = tab === 'radial' ? 'hue-slider-rad' : 'hue-slider-lin';
+          document.getElementById(sliderId).value = sel.fill[hKey];
+          this._renderColorPicker();
+        }
+      });
+    });
+  }
+
   _renderColorPicker() {
-    this._renderHueRing();
-    this._renderSLSquare();
-    this._renderLabPlane();
+    this._renderSLSquareForTab('sl-square', 'solid');
+    this._renderSLSquareForTab('sl-square-rad', 'radial');
+    this._renderSLSquareForTab('sl-square-lin', 'linear');
     this._renderAngleDial();
   }
 
-  _renderHueRing() {
-    const canvas = document.getElementById('hue-ring');
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, 200, 200);
-    drawHueRing(ctx, 100, 100, 95, 70);
-
-    // Indicator
-    const sel = this.state.getSelected();
-    if (sel && sel.fill.mode === 'solid') {
-      const rad = (sel.fill.h * Math.PI) / 180;
-      const indicatorR = 82;
-      ctx.beginPath();
-      ctx.arc(
-        100 + Math.cos(rad) * indicatorR,
-        100 + Math.sin(rad) * indicatorR,
-        5,
-        0,
-        Math.PI * 2,
-      );
-      ctx.strokeStyle = 'white';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-  }
-
-  _renderSLSquare() {
-    const canvas = document.getElementById('sl-square');
+  _renderSLSquareForTab(canvasId, tab) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const sel = this.state.getSelected();
-    const hue = sel ? sel.fill.h : 200;
-    drawSLSquare(ctx, 0, 0, 150, 150, hue);
+    const { hKey, sKey, lKey } = this._getStopFields(tab);
+    const hue = sel ? sel.fill[hKey] : 200;
+    drawSLSquare(ctx, 0, 0, 160, 160, hue);
 
-    // Indicator
+    // Indicator dot
     if (sel) {
-      const ix = (sel.fill.s / 100) * 150;
-      const iy = (1 - sel.fill.l / 100) * 150;
+      const ix = (sel.fill[sKey] / 100) * 160;
+      const iy = (1 - sel.fill[lKey] / 100) * 160;
       ctx.beginPath();
       ctx.arc(ix, iy, 5, 0, Math.PI * 2);
       ctx.strokeStyle = 'white';
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-  }
-
-  _renderLabPlane() {
-    const canvas = document.getElementById('lab-plane');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const sel = this.state.getSelected();
-    const L = sel ? sel.fill.labL : 60;
-    drawLabPlane(ctx, 0, 0, 160, 160, L);
   }
 
   _renderAngleDial() {
@@ -332,12 +276,7 @@ export class Toolbar {
     const swatch = document.getElementById('fill-swatch');
     const sel = this.state.getSelected();
     if (sel) {
-      const color = getSwatchColor(sel.fill);
-      if (color.startsWith('linear-gradient')) {
-        swatch.style.background = color;
-      } else {
-        swatch.style.background = color;
-      }
+      swatch.style.background = getSwatchColor(sel.fill);
     }
   }
 
@@ -348,25 +287,22 @@ export class Toolbar {
     // Sync fill mode
     document.getElementById('fill-mode').value = sel.fill.mode;
 
-    // Sync HSL inputs
-    document.getElementById('inp-h').value = sel.fill.h;
-    document.getElementById('inp-s').value = sel.fill.s;
-    document.getElementById('inp-l').value = sel.fill.l;
+    // Sync hue sliders
+    document.getElementById('hue-slider').value = sel.fill.h;
+    document.getElementById('hue-slider-rad').value =
+      this._activeStop.radial === 2 ? sel.fill.h2 : sel.fill.h;
+    document.getElementById('hue-slider-lin').value =
+      this._activeStop.linear === 2 ? sel.fill.h2 : sel.fill.h;
 
-    // Sync linear inputs
-    const h1 = document.getElementById('inp-h1');
-    if (h1) {
-      h1.value = sel.fill.h1;
-      document.getElementById('inp-s1').value = sel.fill.s1;
-      document.getElementById('inp-l1').value = sel.fill.l1;
-      document.getElementById('inp-h2').value = sel.fill.h2;
-      document.getElementById('inp-s2').value = sel.fill.s2;
-      document.getElementById('inp-l2').value = sel.fill.l2;
-    }
+    // Reset stop toggles to stop 1
+    this._activeStop = { radial: 1, linear: 1 };
+    document
+      .querySelectorAll('.stop-btn')
+      .forEach((b) => b.classList.toggle('active', b.dataset.stop === '1'));
 
-    // Sync Lab slider
-    const labSlider = document.getElementById('lab-l-slider');
-    if (labSlider) labSlider.value = sel.fill.labL;
+    // Re-sync hue sliders after resetting stops
+    document.getElementById('hue-slider-rad').value = sel.fill.h;
+    document.getElementById('hue-slider-lin').value = sel.fill.h;
 
     // Sync panel tab
     const panel = document.getElementById('color-picker-panel');

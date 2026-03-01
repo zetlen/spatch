@@ -89,44 +89,85 @@
         <div class="panel-body">
           <!-- Solid HSL -->
           <div id="tab-solid" class="tab-content active">
-            <canvas id="hue-ring" width="200" height="200"></canvas>
-            <canvas id="sl-square" width="150" height="150"></canvas>
-            <div class="hsl-inputs">
-              <label>H <input type="number" id="inp-h" min="0" max="360" value="200" /></label>
-              <label>S <input type="number" id="inp-s" min="0" max="100" value="80" /></label>
-              <label>L <input type="number" id="inp-l" min="0" max="100" value="50" /></label>
-            </div>
-          </div>
-          <!-- Radial (Lab) -->
-          <div id="tab-radial" class="tab-content">
-            <div class="lab-picker">
-              <canvas id="lab-plane" width="160" height="160"></canvas>
+            <div class="sl-picker">
+              <canvas id="sl-square" width="160" height="160"></canvas>
               <input
                 type="range"
-                id="lab-l-slider"
+                id="hue-slider"
+                class="hue-slider"
                 min="0"
-                max="100"
-                value="60"
+                max="360"
+                value="200"
                 orient="vertical"
               />
             </div>
-            <div class="lab-stop-label">Stop 1 / Stop 2</div>
           </div>
-          <!-- Linear (HSL + angle) -->
-          <div id="tab-linear" class="tab-content">
-            <canvas id="angle-dial" width="100" height="100"></canvas>
-            <div class="linear-stops">
-              <div class="linear-stop">
-                <label>H1 <input type="number" id="inp-h1" min="0" max="360" value="320" /></label>
-                <label>S1 <input type="number" id="inp-s1" min="0" max="100" value="90" /></label>
-                <label>L1 <input type="number" id="inp-l1" min="0" max="100" value="55" /></label>
-              </div>
-              <div class="linear-stop">
-                <label>H2 <input type="number" id="inp-h2" min="0" max="360" value="180" /></label>
-                <label>S2 <input type="number" id="inp-s2" min="0" max="100" value="80" /></label>
-                <label>L2 <input type="number" id="inp-l2" min="0" max="100" value="45" /></label>
-              </div>
+          <!-- Radial -->
+          <div id="tab-radial" class="tab-content">
+            <div class="sl-picker">
+              <canvas id="sl-square-rad" width="160" height="160"></canvas>
+              <input
+                type="range"
+                id="hue-slider-rad"
+                class="hue-slider"
+                min="0"
+                max="360"
+                value="200"
+                orient="vertical"
+              />
             </div>
+            <div class="stop-toggle">
+              <button
+                class="stop-btn active"
+                data-tab="radial"
+                data-stop="1"
+                title="Center color (drives audio)"
+              >
+                Stop 1
+              </button>
+              <button
+                class="stop-btn"
+                data-tab="radial"
+                data-stop="2"
+                title="Outer color (visual only)"
+              >
+                Stop 2
+              </button>
+            </div>
+          </div>
+          <!-- Linear -->
+          <div id="tab-linear" class="tab-content">
+            <div class="sl-picker">
+              <canvas id="sl-square-lin" width="160" height="160"></canvas>
+              <input
+                type="range"
+                id="hue-slider-lin"
+                class="hue-slider"
+                min="0"
+                max="360"
+                value="200"
+                orient="vertical"
+              />
+            </div>
+            <div class="stop-toggle">
+              <button
+                class="stop-btn active"
+                data-tab="linear"
+                data-stop="1"
+                title="Stop 1 color (drives audio)"
+              >
+                Stop 1
+              </button>
+              <button
+                class="stop-btn"
+                data-tab="linear"
+                data-stop="2"
+                title="Stop 2 color (visual only)"
+              >
+                Stop 2
+              </button>
+            </div>
+            <canvas id="angle-dial" width="100" height="100"></canvas>
           </div>
         </div>
       </div>

@@ -125,27 +125,12 @@ function hueToFilterType(h) {
 }
 
 function applyColorFilter(filterNode, fill) {
-  switch (fill.mode) {
-    case 'solid':
-      filterNode.type = hueToFilterType(fill.h);
-      filterNode.Q.value = 0.5 + (fill.s / 100) * 15;
-      filterNode.frequency.value = 200 * Math.pow(40, fill.l / 100);
-      break;
-
-    case 'radial':
-      filterNode.frequency.value = 200 * Math.pow(40, fill.labL / 100);
-      filterNode.Q.value = 0.5 + ((fill.labA + 128) / 256) * 20;
-      if (fill.labB < -40) filterNode.type = 'lowpass';
-      else if (fill.labB < 40) filterNode.type = 'bandpass';
-      else filterNode.type = 'highpass';
-      break;
-
-    case 'linear':
-      filterNode.type = 'lowpass';
-      filterNode.frequency.value = 200 * Math.pow(50, fill.h1 / 360);
-      filterNode.Q.value = 0.5 + (fill.s1 / 100) * 15;
-      break;
-  }
+  // Audio always maps from fill.h/s/l regardless of fill mode.
+  // Different color pickers (Lab, linear HSL) are navigation interfaces
+  // that update h/s/l via conversion, so the same color always sounds the same.
+  filterNode.type = hueToFilterType(fill.h);
+  filterNode.Q.value = 0.5 + (fill.s / 100) * 15;
+  filterNode.frequency.value = 200 * Math.pow(40, fill.l / 100);
 }
 
 // ---- Overdrive for linear gradient fill ----
@@ -676,7 +661,7 @@ export class AudioEngine {
     }
 
     if (shape.fill.mode === 'linear') {
-      const overdrive = createOverdrive(ctx, shape.fill.l1);
+      const overdrive = createOverdrive(ctx, shape.fill.l);
       lastNode.connect(overdrive);
       lastNode = overdrive;
     }

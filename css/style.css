@@ -368,61 +368,41 @@ select {
   gap: 8px;
 }
 
-.hsl-inputs,
-.linear-stops {
-  display: flex;
-  gap: 8px;
-}
-
-.hsl-inputs label,
-.linear-stops label {
-  font-size: 11px;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.hsl-inputs input,
-.linear-stops input {
-  width: 50px;
-  background: var(--bg-dark);
-  color: var(--text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-  padding: 2px 4px;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
-  text-align: center;
-}
-
-.lab-picker {
+.sl-picker {
   display: flex;
   gap: 8px;
   align-items: center;
 }
 
-.lab-picker input[type='range'] {
+.hue-slider {
   writing-mode: vertical-lr;
   direction: rtl;
   height: 160px;
   accent-color: var(--neon-cyan);
 }
 
-.lab-stop-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.linear-stops {
-  flex-direction: column;
-  gap: 6px;
-}
-
-.linear-stop {
+.stop-toggle {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+}
+
+.stop-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
+  padding: 2px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stop-btn.active {
+  color: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.1);
 }
 
 #angle-dial {
