@@ -8,6 +8,7 @@ import {
   hitTestADSRCorner,
   calcResize,
   calcRotation,
+  clampSize,
 } from './shapes.js';
 import { Toolbar } from './toolbar.js';
 import { AudioEngine } from './audio.js';
@@ -416,7 +417,7 @@ canvas.addEventListener(
       const angle = touchAngle(a, b);
 
       const scale = dist / pinchRotateState.initDist;
-      const newSize = Math.max(0.03, Math.min(0.5, pinchRotateState.initSize * scale));
+      const newSize = clampSize(pinchRotateState.initSize * scale);
 
       const angleDelta = angle - pinchRotateState.initAngle;
       const newRotation = (((pinchRotateState.initRotation + angleDelta) % 360) + 360) % 360;

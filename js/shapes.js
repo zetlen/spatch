@@ -3,6 +3,13 @@
 const HANDLE_SIZE = 8;
 const ROT_HANDLE_OFFSET = 25;
 
+const MIN_SIZE = 0.025;
+const MAX_SIZE = 0.9;
+
+export function clampSize(size) {
+  return Math.max(MIN_SIZE, Math.min(MAX_SIZE, size));
+}
+
 // Hit test against all shapes (back-to-front, return topmost)
 export function hitTestShapes(state, mx, my, canvasSize) {
   // Iterate in reverse (front shapes first)
@@ -146,9 +153,7 @@ export function calcResize(shape, handleType, localDx, localDy, canvasSize) {
       break;
   }
 
-  // Clamp
-  newR = Math.max(10, Math.min(canvasSize * 0.45, newR));
-  return (newR * 2) / canvasSize; // return normalized size
+  return clampSize((newR * 2) / canvasSize);
 }
 
 // Calculate rotation from mouse position relative to shape center
