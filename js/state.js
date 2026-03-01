@@ -1,7 +1,7 @@
 // state.js — Sigil data model, undo/redo, state management
 
 let _idCounter = 0;
-function genId(prefix = 's') {
+export function genId(prefix = 's') {
   return prefix + (++_idCounter).toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
