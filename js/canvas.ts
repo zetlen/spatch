@@ -8,6 +8,23 @@ import { waveformShape } from './types.ts';
 
 const CANVAS_BG = '#1a1a2e';
 
+// Offscreen canvas for blend-mode compositing. Shapes are drawn here using
+// their blend modes against a transparent background so they blend with each
+// other but not with the dark canvas background. The result is composited
+// onto the main canvas with source-over, preserving full shape brightness.
+let _blendCanvas: HTMLCanvasElement | null = null;
+let _blendCtx: CanvasRenderingContext2D | null = null;
+
+function getBlendCanvas(size: number): CanvasRenderingContext2D {
+  if (!_blendCanvas || _blendCanvas.width !== size || _blendCanvas.height !== size) {
+    _blendCanvas = document.createElement('canvas');
+    _blendCanvas.width = size;
+    _blendCanvas.height = size;
+    _blendCtx = _blendCanvas.getContext('2d')!;
+  }
+  return _blendCtx!;
+}
+
 // Track whether the last pointer interaction was touch.
 let lastInputWasTouch = false;
 window.addEventListener(
@@ -52,13 +69,18 @@ export function render(
 
   drawChromaticGuides(ctx, canvasSize);
 
+  // Draw voices onto offscreen canvas so blend modes apply between shapes
+  // (not against the dark background, which would make soft-light etc. too dim).
+  const bctx = getBlendCanvas(canvasSize);
+  bctx.clearRect(0, 0, canvasSize, canvasSize);
   for (let i = 0; i < state.voices.length; i++) {
     const voice = state.voices[i]!;
     const isPlaying = playingShapeIds != null && playingShapeIds.has(voice.id);
-    ctx.globalCompositeOperation = voice.blend;
-    drawVoice(ctx, voice, canvasSize, voice.id === selectedId, isPlaying);
+    bctx.globalCompositeOperation = voice.blend;
+    drawVoice(bctx, voice, canvasSize, voice.id === selectedId, isPlaying);
   }
-  ctx.globalCompositeOperation = 'source-over';
+  bctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(_blendCanvas!, 0, 0);
 
   for (const text of state.texts) {
     drawText(ctx, text, canvasSize);
