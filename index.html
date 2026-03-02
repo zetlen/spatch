@@ -224,6 +224,50 @@
         </div>
       </div>
 
+      <!-- Border Panel (hidden by default) -->
+      <div id="border-panel" class="panel hidden">
+        <div class="border-controls">
+          <div class="border-row">
+            <span class="border-label">Color</span>
+            <button
+              class="border-color-btn active"
+              data-border-color="white"
+              title="White (octave up)"
+            >
+              W
+            </button>
+            <button class="border-color-btn" data-border-color="black" title="Black (octave down)">
+              B
+            </button>
+          </div>
+          <div class="border-row">
+            <span class="border-label">Style</span>
+            <button
+              class="border-style-btn active"
+              data-border-double="0"
+              title="Single (1 octave)"
+            >
+              Single
+            </button>
+            <button class="border-style-btn" data-border-double="1" title="Double (2 octaves)">
+              Double
+            </button>
+          </div>
+          <div class="border-row">
+            <span class="border-label">Thickness</span>
+            <input
+              type="range"
+              id="border-thickness"
+              min="1"
+              max="100"
+              value="50"
+              class="border-slider"
+            />
+          </div>
+          <button id="btn-remove-border" class="border-remove-btn">Remove border</button>
+        </div>
+      </div>
+
       <footer id="toolbar-bottom">
         <div class="toolbar-group blend-group">
           <select id="blend-mode" title="Blend mode">
@@ -235,6 +279,9 @@
             <option value="difference">Difference</option>
             <option value="exclusion">Exclusion</option>
           </select>
+          <button id="btn-border" class="action-btn" title="Border (octave doubling)">
+            &#9632;
+          </button>
           <button id="btn-delete" class="action-btn danger" title="Delete (Del)">&#10005;</button>
         </div>
         <div class="toolbar-group play-group">

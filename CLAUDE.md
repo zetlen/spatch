@@ -132,6 +132,10 @@ design rationale and enumeration of past violations.
     overlay (harmonic exciter), color-burn (gating), difference (comb filter),
     exclusion (swept flanger). Intensity is derived geometrically from shape
     overlap — no stored wet/dry parameter.
+  - `border` → inset stroke(s) on the shape + octave-doubled sine oscillator.
+    White border = octave up, black = octave down. Single = 1 octave shift,
+    double = 2 octaves. `thickness` scales both the visual stroke width and
+    the doubled oscillator's gain. Null = no border, no doubling.
 
 - **Text decorations** use vocoder synthesis. Fields: text (vocoder content),
   x (pan), y (pitch), size (carrier volume). All text renders black. Every
@@ -175,6 +179,10 @@ design rationale and enumeration of past violations.
   Each voice has a `blend` field (default `soft-light`). Canvas renders each voice
   with `globalCompositeOperation = voice.blend`. Audio routes each voice through
   a blend effect whose wet/dry is computed from geometric overlap with other voices.
+- **Border** is `{ color: BorderColor, double: boolean, thickness: NormalizedCoord } | null`.
+  Visual: inset stroke(s) drawn inside the clipped shape. Audio: adds a sine
+  oscillator at an octave-shifted frequency. Border changes trigger full voice
+  rebuild in audio engine. The border panel UI (bottom toolbar) controls all fields.
 - Audio pattern effects return `{ input, output, dispose }` objects. Blend effects
   return `{ input, output, wetGain, dispose }` (wetGain is externally controlled).
 - **Every new field must satisfy the bijection principle.** If you add a field
@@ -199,6 +207,11 @@ files anywhere else.**
   add a case in `createBlendEffect` in `effects.ts`, add pack/unpack entries
   in `serialize.ts`, and add an `<option>` in `index.html`. The mode must
   produce a visible difference when shapes overlap and map to an audio effect.
+- To modify border behavior: update `Border` type in `types.ts`, update
+  `canvas.ts:drawVoice` (visual rendering), `audio.ts:_buildVoice` (octave
+  oscillator), `serialize.ts` (pack/unpack), and `toolbar.ts` (border panel
+  bindings). Border changes trigger full voice rebuild via `currentBorder`
+  string comparison in `updateVoices`.
 - To add a new fill mode: add a variant to the `Fill` union in `types.ts`, update
   `fillToFillDraft`/`fillDraftToFill`, `colors.ts`, `toolbar.ts` picker, `audio.ts`
   formant mapping, and `serialize.ts`. Every fill field must affect the formant

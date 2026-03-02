@@ -428,6 +428,91 @@ select {
   cursor: crosshair;
 }
 
+/* ---- Border Panel ---- */
+
+#border-panel {
+  position: fixed;
+  bottom: 50px;
+  left: 12px;
+  top: auto;
+  transform: none;
+}
+
+.border-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+}
+
+.border-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.border-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.border-color-btn,
+.border-style-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
+  padding: 2px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.border-color-btn.active,
+.border-style-btn.active {
+  color: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.1);
+}
+
+.border-slider {
+  flex: 1;
+  accent-color: var(--neon-cyan);
+  height: 4px;
+}
+
+.border-remove-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 51, 85, 0.3);
+  color: var(--danger);
+  padding: 3px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+  align-self: flex-end;
+}
+
+.border-remove-btn:hover {
+  background: rgba(255, 51, 85, 0.15);
+  border-color: var(--danger);
+}
+
+#btn-border.has-border {
+  color: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.1);
+}
+
 /* ---- Scanline overlay on canvas (pure CSS) ---- */
 
 #canvas-wrap::after {
