@@ -2,7 +2,7 @@
 //
 // Wire format: positional arrays, no keys, no IDs.
 //
-//   [envelope, voices, texts]
+//   [envelope, voices, texts, reverb?]
 //
 //   envelope = [attack, decay, sustain, release]
 //
@@ -18,6 +18,8 @@
 //   effect = "s"|"c"|"n"|"g"|"r" | 0
 //
 //   text = [text, x, y, size]
+//
+//   reverb = 0 (none) | ["G"|"D", depth]
 
 import LZString from 'lz-string';
 import { genId } from './state.ts';
@@ -35,6 +37,8 @@ import {
   type BlendMode,
   type Border,
   type BorderColor,
+  type Reverb,
+  type ReverbStyle,
 } from './types.ts';
 
 export function serializeState(state: SigilData): string {
@@ -86,14 +90,17 @@ type PackedVoice =
 
 type PackedText = [string, number, number, number];
 
+type PackedReverb = 0 | [string, number];
+
 type PackedState = [
   [number, number, number, number], // envelope
   PackedVoice[], // voices
   PackedText[], // texts
+  PackedReverb?, // reverb (optional)
 ];
 
 function pack(state: SigilData): PackedState {
-  return [
+  const packed: PackedState = [
     [
       round2(state.envelope.attack),
       round2(state.envelope.decay),
@@ -113,6 +120,9 @@ function pack(state: SigilData): PackedState {
     }),
     state.texts.map((t): PackedText => [t.text, round3(t.x), round3(t.y), round3(t.size)]),
   ];
+  const rv = packReverb(state.reverb);
+  if (rv !== 0) packed.push(rv);
+  return packed;
 }
 
 // ---- Unpack ----
@@ -168,7 +178,7 @@ function unpack(packed: PackedState): SigilData {
         size: normalizedCoord(pt[3]),
       }),
     ),
-    reverb: null,
+    reverb: unpackReverb(packed[3] as PackedReverb | undefined),
   };
 }
 
@@ -213,6 +223,24 @@ function unpackBorder(packed: PackedBorder | undefined): Border | null {
     color: borderColorUnmap[packed[0]] ?? 'white',
     double: packed[1] === 1,
     thickness: normalizedCoord(packed[2]),
+  };
+}
+
+// ---- Reverb pack/unpack ----
+
+const reverbStyleMap: Record<string, string> = { glow: 'G', dim: 'D' };
+const reverbStyleUnmap: Record<string, ReverbStyle> = { G: 'glow', D: 'dim' };
+
+function packReverb(reverb: Reverb | null): PackedReverb {
+  if (!reverb) return 0;
+  return [reverbStyleMap[reverb.style]!, round3(reverb.depth)];
+}
+
+function unpackReverb(packed: PackedReverb | undefined): Reverb | null {
+  if (!packed || !Array.isArray(packed)) return null;
+  return {
+    style: reverbStyleUnmap[packed[0]] ?? 'glow',
+    depth: normalizedCoord(packed[1]),
   };
 }
 
