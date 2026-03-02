@@ -90,8 +90,8 @@ function updateFrameShadow(
   }
 
   if (audioLevel > 0.001) {
-    // Cool dark shadow scales with audio level — frame "lifts" when playing
-    const t = Math.min(1, audioLevel * 3);
+    // sqrt curve keeps shadow visible longer during fade-out
+    const t = Math.sqrt(Math.min(1, audioLevel * 3));
     const blur = 12 + t * 36;
     const spread = 2 + t * 14;
     const alpha = 0.3 + t * 0.6;
