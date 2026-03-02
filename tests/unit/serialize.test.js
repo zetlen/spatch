@@ -92,26 +92,19 @@ describe('serializeState / deserializeState round-trip', () => {
     const solidVoice = makeVoice({
       fill: { mode: 'solid', h: 120, s: 50, l: 60 },
     });
-    const radialVoice = makeVoice({
-      fill: { mode: 'radial', h: 200, s: 80, l: 50, h2: 100, s2: 60, l2: 40 },
-    });
     const linearVoice = makeVoice({
       fill: { mode: 'linear', gradAngle: 90, h: 100, s: 50, l: 40, h2: 200, s2: 70, l2: 60 },
     });
 
-    const state = makeState({ voices: [solidVoice, radialVoice, linearVoice] });
+    const state = makeState({ voices: [solidVoice, linearVoice] });
     const decoded = deserializeState(serializeState(state));
 
     expect(decoded.voices[0].fill.mode).toBe('solid');
     expect(decoded.voices[0].fill.h).toBe(120);
 
-    expect(decoded.voices[1].fill.mode).toBe('radial');
-    expect(decoded.voices[1].fill.h).toBe(200);
-    expect(decoded.voices[1].fill.h2).toBe(100);
-
-    expect(decoded.voices[2].fill.mode).toBe('linear');
-    expect(decoded.voices[2].fill.gradAngle).toBe(90);
-    expect(decoded.voices[2].fill.h).toBe(100);
+    expect(decoded.voices[1].fill.mode).toBe('linear');
+    expect(decoded.voices[1].fill.gradAngle).toBe(90);
+    expect(decoded.voices[1].fill.h).toBe(100);
   });
 
   test('all blend modes survive round-trip', () => {

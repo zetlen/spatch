@@ -21,11 +21,6 @@ describe('getSwatchColor', () => {
     expect(getSwatchColor(fill)).toBe('hsl(200, 80%, 50%)');
   });
 
-  test('radial fill returns hsl string', () => {
-    const fill = { mode: 'radial', h: 200, s: 80, l: 50 };
-    expect(getSwatchColor(fill)).toBe('hsl(200, 80%, 50%)');
-  });
-
   test('linear fill returns linear-gradient string', () => {
     const fill = {
       mode: 'linear',

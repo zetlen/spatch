@@ -48,7 +48,7 @@ export type BlendMode =
   | 'difference'
   | 'exclusion';
 
-export type FillMode = 'solid' | 'radial' | 'linear';
+export type FillMode = 'solid' | 'linear';
 
 interface FillBase {
   h: number;
@@ -60,13 +60,6 @@ export interface SolidFill extends FillBase {
   mode: 'solid';
 }
 
-export interface RadialFill extends FillBase {
-  mode: 'radial';
-  h2: number;
-  s2: number;
-  l2: number;
-}
-
 export interface LinearFill extends FillBase {
   mode: 'linear';
   h2: number;
@@ -75,7 +68,7 @@ export interface LinearFill extends FillBase {
   gradAngle: number;
 }
 
-export type Fill = SolidFill | RadialFill | LinearFill;
+export type Fill = SolidFill | LinearFill;
 
 /** Flat bag used internally by toolbar for mode-switching without data loss. */
 export interface FillDraft {
@@ -94,8 +87,6 @@ export function fillToFillDraft(fill: Fill): FillDraft {
   switch (fill.mode) {
     case 'solid':
       return { ...base, mode: 'solid' };
-    case 'radial':
-      return { ...base, mode: 'radial', h2: fill.h2, s2: fill.s2, l2: fill.l2 };
     case 'linear':
       return {
         ...base,
@@ -112,16 +103,6 @@ export function fillDraftToFill(draft: FillDraft): Fill {
   switch (draft.mode) {
     case 'solid':
       return { mode: 'solid', h: draft.h, s: draft.s, l: draft.l };
-    case 'radial':
-      return {
-        mode: 'radial',
-        h: draft.h,
-        s: draft.s,
-        l: draft.l,
-        h2: draft.h2,
-        s2: draft.s2,
-        l2: draft.l2,
-      };
     case 'linear':
       return {
         mode: 'linear',

@@ -313,8 +313,6 @@ export class Toolbar {
 
     // Bind all native color inputs
     this._bindNativeColorInput('color-solid', 'h', 's', 'l');
-    this._bindNativeColorInput('color-rad-1', 'h', 's', 'l');
-    this._bindNativeColorInput('color-rad-2', 'h2', 's2', 'l2');
     this._bindNativeColorInput('color-lin-1', 'h', 's', 'l');
     this._bindNativeColorInput('color-lin-2', 'h2', 's2', 'l2');
 
@@ -359,8 +357,6 @@ export class Toolbar {
   _syncColorInputs(): void {
     const d = this._fillDraft;
     this._setColorInput('color-solid', d.h, d.s, d.l);
-    this._setColorInput('color-rad-1', d.h, d.s, d.l);
-    this._setColorInput('color-rad-2', d.h2, d.s2, d.l2);
     this._setColorInput('color-lin-1', d.h, d.s, d.l);
     this._setColorInput('color-lin-2', d.h2, d.s2, d.l2);
     this._renderAngleDial();

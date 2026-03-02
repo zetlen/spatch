@@ -61,7 +61,6 @@
           <div id="fill-swatch" class="swatch" title="Pick color"></div>
           <select id="fill-mode" title="Fill type">
             <option value="solid">Solid</option>
-            <option value="radial">Radial</option>
             <option value="linear">Linear</option>
           </select>
         </div>
@@ -135,34 +134,11 @@
       <div id="color-picker-panel" class="panel hidden">
         <div class="panel-tabs">
           <button class="panel-tab active" data-tab="solid">Solid</button>
-          <button class="panel-tab" data-tab="radial">Radial</button>
           <button class="panel-tab" data-tab="linear">Linear</button>
         </div>
         <div class="panel-body">
           <div id="tab-solid" class="tab-content active">
             <input type="color" id="color-solid" class="native-color-input" title="Fill color" />
-          </div>
-          <div id="tab-radial" class="tab-content">
-            <div class="color-stops">
-              <label class="color-stop-label">
-                <span>Center</span>
-                <input
-                  type="color"
-                  id="color-rad-1"
-                  class="native-color-input"
-                  title="Center color (drives audio)"
-                />
-              </label>
-              <label class="color-stop-label">
-                <span>Edge</span>
-                <input
-                  type="color"
-                  id="color-rad-2"
-                  class="native-color-input"
-                  title="Edge color"
-                />
-              </label>
-            </div>
           </div>
           <div id="tab-linear" class="tab-content">
             <div class="color-stops">

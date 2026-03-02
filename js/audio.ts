@@ -223,10 +223,6 @@ function applyFormantFilter(
     h = h + (fill.h2 - h) * blend;
     s = s + (fill.s2 - s) * blend;
     l = l + (fill.l2 - l) * blend;
-  } else if (fill.mode === 'radial') {
-    h = (h + fill.h2) / 2;
-    s = (s + fill.s2) / 2;
-    l = (l + fill.l2) / 2;
   }
 
   const formants = hueToFormants(h);
