@@ -1,12 +1,18 @@
 // audio.ts — Web Audio engine: oscillators, filters, spatial mapping
 
-import { createEffect } from './effects.ts';
+import {
+  createEffect,
+  createBlendEffect,
+  computeTotalOverlap,
+  type BlendEffect,
+} from './effects.ts';
 import { createVocoderChain } from './vocoder.ts';
 import {
   normalizedCoord,
   type WaveformType,
   type Voice,
   type Fill,
+  type BlendMode,
   type SigilData,
   type Envelope,
   type NormalizedCoord,
@@ -233,23 +239,6 @@ function applyFormantFilter(
   brightnessNode.gain.value = (l / 100) * 14 - 7; // -7 to +7 dB
 }
 
-// ---- Layer EQ shelving ----
-
-function createLayerEQ(audioCtx: AudioContext, layerIndex: number, totalLayers: number) {
-  const normalized = totalLayers <= 1 ? 0.5 : layerIndex / (totalLayers - 1);
-  const shelf = audioCtx.createBiquadFilter();
-  if (normalized > 0.5) {
-    shelf.type = 'highshelf';
-    shelf.frequency.value = 3000;
-    shelf.gain.value = (normalized - 0.5) * 6;
-  } else {
-    shelf.type = 'lowshelf';
-    shelf.frequency.value = 300;
-    shelf.gain.value = (0.5 - normalized) * 6;
-  }
-  return shelf;
-}
-
 // ---- Internal audio voice types ----
 
 function safeStop(node: AudioScheduledSourceNode): void {
@@ -269,6 +258,8 @@ interface AudioVoiceBase {
   outputNode: StereoPannerNode;
   effectDispose: (() => void) | null;
   currentEffect: string | null;
+  currentBlend: BlendMode;
+  blendEffect: BlendEffect | null;
   shapeId: string;
   gain: GainNode;
   formantF1: BiquadFilterNode;
@@ -430,16 +421,17 @@ export class AudioEngine {
     this.envelopeGain.gain.linearRampToValueAtTime(sustain, now + attack + decay);
 
     // Build voices
-    const totalLayers = sigilState.voices.length;
     this.playingShapeIds.clear();
 
-    for (let i = 0; i < totalLayers; i++) {
-      const voice = sigilState.voices[i]!;
-      const audioVoice = this._buildVoice(ctx, voice, i, totalLayers);
+    for (const voice of sigilState.voices) {
+      const audioVoice = this._buildVoice(ctx, voice);
       audioVoice.start(now);
       this.activeVoices.push(audioVoice);
       this.playingShapeIds.add(voice.id);
     }
+
+    // Set initial blend overlap levels
+    this._updateBlendOverlaps(sigilState.voices);
 
     // Play text vocoders
     for (const textDeco of sigilState.texts) {
@@ -508,9 +500,6 @@ export class AudioEngine {
     const voice = sigilState.voices.find((v) => v.id === voiceId);
     if (!voice) return;
 
-    const idx = sigilState.voices.indexOf(voice);
-    const total = sigilState.voices.length;
-
     // Set up a dedicated arpeggio gain as the "masterGain" so _buildVoice
     // connects to it instead of ctx.destination (avoids double-routing)
     if (!this._arpeggioGain) {
@@ -529,7 +518,7 @@ export class AudioEngine {
     // Temporarily set masterGain so _buildVoice routes to our arpeggio chain
     const prevMaster = this.masterGain;
     this.masterGain = this._arpeggioGain;
-    const audioVoice = this._buildVoice(ctx, voice, idx, total);
+    const audioVoice = this._buildVoice(ctx, voice);
     this.masterGain = prevMaster;
 
     // Mini envelope: quick attack, short sustain, quick release
@@ -603,12 +592,9 @@ export class AudioEngine {
     }
 
     // Add audio voices for new voices
-    const totalLayers = sigilState.voices.length;
-
-    for (let i = 0; i < totalLayers; i++) {
-      const voice = sigilState.voices[i]!;
+    for (const voice of sigilState.voices) {
       if (!this.playingShapeIds.has(voice.id)) {
-        const audioVoice = this._buildVoice(ctx, voice, i, totalLayers);
+        const audioVoice = this._buildVoice(ctx, voice);
         audioVoice.start(now);
         this.activeVoices.push(audioVoice);
         this.playingShapeIds.add(voice.id);
@@ -622,12 +608,11 @@ export class AudioEngine {
       const voice = voiceMap.get(audioVoice.shapeId);
       if (!voice) continue;
 
-      // Effect changed — tear down and rebuild the entire voice
-      if (voice.effect !== audioVoice.currentEffect) {
-        const layerIndex = sigilState.voices.indexOf(voice);
+      // Effect or blend changed — tear down and rebuild the entire voice
+      if (voice.effect !== audioVoice.currentEffect || voice.blend !== audioVoice.currentBlend) {
         this._stopVoice(audioVoice);
         this.activeVoices.splice(i, 1);
-        const rebuilt = this._buildVoice(ctx, voice, layerIndex, totalLayers);
+        const rebuilt = this._buildVoice(ctx, voice);
         rebuilt.start(now);
         this.activeVoices.push(rebuilt);
         continue;
@@ -669,6 +654,9 @@ export class AudioEngine {
 
     // Update auto EQ for changed positions/sizes
     this._applyAutoEQ(sigilState.voices);
+
+    // Update blend overlap levels
+    this._updateBlendOverlaps(sigilState.voices);
   }
 
   stop(): void {
@@ -696,6 +684,28 @@ export class AudioEngine {
       } else {
         // Unused band -- passthrough
         band.gain.setValueAtTime(0, now);
+      }
+    }
+  }
+
+  _updateBlendOverlaps(voices: ReadonlyArray<Voice>): void {
+    for (const audioVoice of this.activeVoices) {
+      if ('isTextVoice' in audioVoice) continue;
+      const blendFx = audioVoice.blendEffect;
+      if (!blendFx) continue;
+
+      const voiceIndex = voices.findIndex((v) => v.id === audioVoice.shapeId);
+      if (voiceIndex === -1) continue;
+
+      const overlap = computeTotalOverlap(voiceIndex, voices);
+
+      // For color-burn, overlap reduces dry signal instead of adding wet
+      const dryGain = (blendFx.wetGain as GainNode & { _dryGain?: GainNode })._dryGain;
+      if (dryGain) {
+        blendFx.wetGain.gain.value = 0;
+        dryGain.gain.value = 1 - overlap;
+      } else {
+        blendFx.wetGain.gain.value = overlap;
       }
     }
   }
@@ -752,14 +762,10 @@ export class AudioEngine {
     audioVoice.stop(0);
     safeDisconnect(audioVoice.outputNode);
     audioVoice.effectDispose?.();
+    audioVoice.blendEffect?.dispose();
   }
 
-  _buildVoice(
-    ctx: AudioContext,
-    voice: Voice,
-    layerIndex: number,
-    totalLayers: number,
-  ): AudioVoice {
+  _buildVoice(ctx: AudioContext, voice: Voice): AudioVoice {
     const timbre = 'timbre' in voice ? voice.timbre : 0;
     const gain = ctx.createGain();
     gain.gain.value = areaToGain(voice.waveform, voice.size) * waveformGain(voice.waveform);
@@ -782,9 +788,10 @@ export class AudioEngine {
     const panner = ctx.createStereoPanner();
     panner.pan.value = xToPan(voice.x);
 
-    const layerEQ = createLayerEQ(ctx, layerIndex, totalLayers);
+    // Blend effect: overlap-driven audio processing
+    const blendFx = createBlendEffect(ctx, voice.blend);
 
-    // Wire: gain -> F1 -> mixer -> brightness -> [effect] -> layerEQ -> panner -> master
+    // Wire: gain -> F1 -> mixer -> brightness -> [effect] -> blendFx -> panner -> master
     //       gain -> F2 -> mixer
     gain.connect(formantF1);
     gain.connect(formantF2);
@@ -804,14 +811,16 @@ export class AudioEngine {
       }
     }
 
-    lastNode.connect(layerEQ);
-    layerEQ.connect(panner);
+    lastNode.connect(blendFx.input);
+    blendFx.output.connect(panner);
     panner.connect(this.masterGain || ctx.destination);
 
     const shared = {
       outputNode: panner,
       effectDispose,
       currentEffect: voice.effect,
+      currentBlend: voice.blend,
+      blendEffect: blendFx,
       shapeId: voice.id,
       gain,
       formantF1,
