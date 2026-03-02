@@ -357,6 +357,8 @@ export class AudioEngine {
   _workletReady: boolean;
   _sessionId: number;
   _autoEQ: BiquadFilterNode[];
+  _analyser: AnalyserNode | null;
+  _analyserBuf: Float32Array<ArrayBuffer> | null;
   _reverbConvolver: ConvolverNode | null;
   _reverbWet: GainNode | null;
   _reverbStyle: ReverbStyle | null;
@@ -372,6 +374,8 @@ export class AudioEngine {
     this._workletReady = false;
     this._sessionId = 0;
     this._autoEQ = [];
+    this._analyser = null;
+    this._analyserBuf = null;
     this._reverbConvolver = null;
     this._reverbWet = null;
     this._reverbStyle = null;
@@ -425,7 +429,12 @@ export class AudioEngine {
       this._autoEQ.push(band);
     }
 
-    // Wire: masterGain -> [EQ bands] -> envelopeGain -> compressor -> dest
+    // Analyser for level metering (drives play glow)
+    this._analyser = ctx.createAnalyser();
+    this._analyser.fftSize = 256;
+    this._analyserBuf = new Float32Array(this._analyser.fftSize);
+
+    // Wire: masterGain -> [EQ bands] -> envelopeGain -> compressor -> analyser -> dest
     let prev: AudioNode = this.masterGain;
     for (const band of this._autoEQ) {
       prev.connect(band);
@@ -433,7 +442,8 @@ export class AudioEngine {
     }
     prev.connect(this.envelopeGain);
     this.envelopeGain.connect(this.compressor);
-    this.compressor.connect(ctx.destination);
+    this.compressor.connect(this._analyser);
+    this._analyser.connect(ctx.destination);
 
     // Master reverb (if active)
     if (sigilState.reverb) {
@@ -685,6 +695,18 @@ export class AudioEngine {
     this._cleanup();
   }
 
+  /** Current RMS output level as 0–1. */
+  getLevel(): number {
+    if (!this._analyser || !this._analyserBuf) return 0;
+    this._analyser.getFloatTimeDomainData(this._analyserBuf);
+    let sum = 0;
+    for (let i = 0; i < this._analyserBuf.length; i++) {
+      const s = this._analyserBuf[i]!;
+      sum += s * s;
+    }
+    return Math.sqrt(sum / this._analyserBuf.length);
+  }
+
   _applyAutoEQ(voices: Voice[]): void {
     if (!this.audioCtx || this._autoEQ.length === 0) return;
     const now = this.audioCtx.currentTime;
@@ -760,6 +782,11 @@ export class AudioEngine {
         this.compressor.disconnect();
       } catch {}
       this.compressor = null;
+    }
+    if (this._analyser) {
+      safeDisconnect(this._analyser);
+      this._analyser = null;
+      this._analyserBuf = null;
     }
     if (this._reverbConvolver) {
       safeDisconnect(this._reverbConvolver);

@@ -70,19 +70,37 @@ if (loaded) {
 
 // ---- Reverb shadow on canvas frame ----
 
-function updateReverbShadow(frameEl: HTMLElement, reverb: Reverb | null, canvasSize: number): void {
-  if (!reverb) {
-    frameEl.style.boxShadow = 'none';
-    return;
+function updateFrameShadow(
+  frameEl: HTMLElement,
+  reverb: Reverb | null,
+  canvasSize: number,
+  audioLevel: number,
+): void {
+  const shadows: string[] = [];
+
+  if (reverb) {
+    const maxBlur = canvasSize * 0.15;
+    const blur = reverb.depth * maxBlur;
+    const alpha = 0.3 + reverb.depth * 0.5;
+    const color =
+      reverb.style === 'glow'
+        ? `rgba(255,255,255,${alpha.toFixed(2)})`
+        : `rgba(0,0,0,${alpha.toFixed(2)})`;
+    shadows.push(`inset 0 0 ${blur.toFixed(1)}px ${color}`);
   }
-  const maxBlur = canvasSize * 0.15;
-  const blur = reverb.depth * maxBlur;
-  const alpha = 0.3 + reverb.depth * 0.5;
-  const color =
-    reverb.style === 'glow'
-      ? `rgba(255,255,255,${alpha.toFixed(2)})`
-      : `rgba(0,0,0,${alpha.toFixed(2)})`;
-  frameEl.style.boxShadow = `inset 0 0 ${blur.toFixed(1)}px ${color}`;
+
+  if (audioLevel > 0.001) {
+    // Scale glow intensity by audio level (RMS 0–1, typically 0–0.5)
+    const t = Math.min(1, audioLevel * 3);
+    const blur = 12 + t * 20;
+    const spread = 2 + t * 6;
+    const alpha = 0.15 + t * 0.45;
+    shadows.push(
+      `0 0 ${blur.toFixed(1)}px ${spread.toFixed(1)}px rgba(180, 140, 60, ${alpha.toFixed(2)})`,
+    );
+  }
+
+  frameEl.style.boxShadow = shadows.length > 0 ? shadows.join(', ') : 'none';
 }
 
 // ---- Responsive canvas sizing ----
@@ -104,7 +122,7 @@ function resizeCanvas(): void {
   canvas.height = CANVAS_SIZE;
 
   updateCanvasBorderRadius(canvasFrame, store.data.envelope, size);
-  updateReverbShadow(canvasFrame, store.data.reverb, size);
+  updateFrameShadow(canvasFrame, store.data.reverb, size, audio.getLevel());
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -132,7 +150,12 @@ function renderLoop(): void {
       store.data.envelope,
       parseInt(canvas.style.width) || CANVAS_SIZE,
     );
-    updateReverbShadow(canvasFrame, store.data.reverb, parseInt(canvas.style.width) || CANVAS_SIZE);
+    updateFrameShadow(
+      canvasFrame,
+      store.data.reverb,
+      parseInt(canvas.style.width) || CANVAS_SIZE,
+      audio.getLevel(),
+    );
 
     needsRender = false;
   }
@@ -633,7 +656,6 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 // ---- Play mode selector & Play button ----
 
 const playBtn = document.getElementById('btn-play')!;
-const canvasWrap = document.getElementById('canvas-wrap')!;
 const playFan = document.getElementById('play-fan')!;
 const fanLock = playFan.querySelector('.fan-lock')!;
 const fanLoop = playFan.querySelector('.fan-loop')! as HTMLElement;
@@ -661,7 +683,6 @@ async function startPlayback(): Promise<void> {
     return;
   }
   playBtn.classList.add('playing');
-  canvasWrap.classList.add('playing');
   playBtn.textContent = '\u25A0 STOP';
   needsRender = true;
 }
@@ -679,7 +700,6 @@ function stopPlayback(): void {
   const releaseMs = store.data.envelope.release * 1000 + 100;
   releaseGlowTimeoutId = setTimeout(() => {
     releaseGlowTimeoutId = null;
-    canvasWrap.classList.remove('playing');
     needsRender = true;
   }, releaseMs);
 }

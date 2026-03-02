@@ -228,12 +228,8 @@ select {
   border-style: solid;
   border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
   transition:
-    box-shadow 0.15s,
+    box-shadow 0.2s,
     border-radius 0.15s;
-}
-
-#canvas-wrap.playing #canvas-frame {
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.25));
 }
 
 #sigil-canvas {

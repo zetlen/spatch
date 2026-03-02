@@ -86,6 +86,12 @@ function createStubAudioContext() {
     createDelay() {
       return createStubNode({ delayTime: createStubAudioParam(0) });
     },
+    createAnalyser() {
+      return createStubNode({
+        fftSize: 256,
+        getFloatTimeDomainData() {},
+      });
+    },
     createConvolver() {
       return createStubNode({ buffer: null });
     },
