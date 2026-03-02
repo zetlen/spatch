@@ -25,6 +25,7 @@ import { normalizedCoord, type Voice, type TextDecoration, type WaveformType } f
 // ---- Init ----
 
 const canvas = document.getElementById('sigil-canvas') as HTMLCanvasElement;
+const canvasFrame = document.getElementById('canvas-frame')!;
 const ctx = canvas.getContext('2d')!;
 const CANVAS_SIZE = 800;
 
@@ -79,7 +80,7 @@ function resizeCanvas(): void {
   canvas.width = CANVAS_SIZE;
   canvas.height = CANVAS_SIZE;
 
-  updateCanvasBorderRadius(canvas, store.data.envelope, size);
+  updateCanvasBorderRadius(canvasFrame, store.data.envelope, size);
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -102,7 +103,7 @@ function renderLoop(): void {
     render(ctx, store.data, CANVAS_SIZE, selectedId, audio.playingShapeIds, selectedDecoId);
 
     updateCanvasBorderRadius(
-      canvas,
+      canvasFrame,
       store.data.envelope,
       parseInt(canvas.style.width) || CANVAS_SIZE,
     );

@@ -218,16 +218,21 @@ select {
 
 #canvas-wrap {
   position: relative;
-  /* dynamically sized by JS to maintain square aspect ratio */
 }
 
-#sigil-canvas {
-  display: block;
+#canvas-frame {
+  position: absolute;
+  inset: 0;
   background: #2a2a2a;
-  /* ADSR corners will be set via JS */
   border-width: 2px;
   border-style: solid;
   border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+}
+
+#sigil-canvas {
+  position: relative;
+  display: block;
+  background: transparent;
   image-rendering: auto;
 }
 

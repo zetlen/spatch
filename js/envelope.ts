@@ -25,12 +25,12 @@ export function envelopeToCornerRadii(envelope: Envelope, canvasSize: number): C
 }
 
 export function updateCanvasBorderRadius(
-  canvasEl: HTMLCanvasElement,
+  frameEl: HTMLElement,
   envelope: Envelope,
   canvasSize: number,
 ): void {
   const radii = envelopeToCornerRadii(envelope, canvasSize);
-  canvasEl.style.borderRadius = `${radii.topLeft}px ${radii.topRight}px ${radii.bottomRight}px ${radii.bottomLeft}px`;
+  frameEl.style.borderRadius = `${radii.topLeft}px ${radii.topRight}px ${radii.bottomRight}px ${radii.bottomLeft}px`;
 }
 
 // Convert a drag distance on a corner to an envelope parameter change
