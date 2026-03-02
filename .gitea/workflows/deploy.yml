@@ -1,0 +1,23 @@
+name: Deploy
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    container:
+      image: oven/bun:latest
+      volumes:
+        - /home/zetlen/sites/spatch:/site
+    steps:
+      - run: |
+          git config --global --add safe.directory /site
+          cd /site
+          git remote set-url origin https://$DEPLOY_TOKEN@got.colonpipe.org/zetlen/spatch.git
+          git fetch --tags
+          git checkout ${{ github.event.release.tag_name }}
+          bun install --frozen-lockfile
+          bun run build
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
