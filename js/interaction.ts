@@ -9,7 +9,6 @@ import type { HandleType, ADSRCorner, Envelope, DecoBounds } from './types.ts';
 export type InteractionState =
   | { mode: 'idle' }
   | { mode: 'placing' }
-  | { mode: 'drawing' }
   | { mode: 'dragging'; origin: { x: number; y: number }; startNx: number; startNy: number }
   | {
       mode: 'resizing';
@@ -23,14 +22,14 @@ export type InteractionState =
   | { mode: 'arpeggio'; triggered: Set<string> }
   | {
       mode: 'deco-dragging';
-      origin: { points: number[][] } | { x: number; y: number };
+      origin: { x: number; y: number };
       startNx: number;
       startNy: number;
     }
   | {
       mode: 'deco-resizing';
       handle: HandleType;
-      origin: { scale: number; bounds: DecoBounds; points: number[][] | null };
+      origin: { size: number; bounds: DecoBounds };
     }
   | {
       mode: 'pinch-rotate';

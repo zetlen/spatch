@@ -14,7 +14,7 @@ import {
   getDecoBounds,
 } from './shapes.ts';
 import { Toolbar } from './toolbar.ts';
-import { AudioEngine, snapYToNote } from './audio.ts';
+import { AudioEngine, snapYToNote, rotationToTimbre } from './audio.ts';
 import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.ts';
 import { DecorationTool } from './decorations.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
@@ -23,10 +23,10 @@ import { IDLE, type InteractionState } from './interaction.ts';
 import {
   normalizedCoord,
   degrees,
-  type Shape,
-  type Decoration,
+  type Voice,
+  type TextDecoration,
   type NormalizedCoord,
-  type SquiggleDecoration,
+  type WaveformType,
 } from './types.ts';
 
 // ---- Init ----
@@ -39,7 +39,7 @@ const store = new SigilStore();
 const undo = new UndoManager(store);
 const toolbar = new Toolbar(store, undo);
 const audio = new AudioEngine();
-const decoTool = new DecorationTool(store, undo, canvas, CANVAS_SIZE);
+const decoTool = new DecorationTool(store, undo);
 
 // ---- Selection state (app-level, not in store) ----
 
@@ -53,12 +53,12 @@ function setSelection(shapeId: string | null, decoId: string | null = null): voi
   toolbar.selectedDecoId = decoId;
 }
 
-function getSelected(): Shape | null {
-  return selectedId ? (store.getShape(selectedId) ?? null) : null;
+function getSelected(): Voice | null {
+  return selectedId ? (store.getVoice(selectedId) ?? null) : null;
 }
 
-function getSelectedDeco(): Decoration | null {
-  return selectedDecoId ? (store.getDecoration(selectedDecoId) ?? null) : null;
+function getSelectedDeco(): TextDecoration | null {
+  return selectedDecoId ? (store.getText(selectedDecoId) ?? null) : null;
 }
 
 // ---- Check for saved state in URL ----
@@ -108,26 +108,6 @@ function renderLoop(): void {
   if (needsRender || audio.isPlaying) {
     render(ctx, store.data, CANVAS_SIZE, selectedId, audio.playingShapeIds, selectedDecoId);
 
-    // Draw live squiggle preview
-    const drawingPts = decoTool.getDrawingPoints();
-    if (drawingPts && drawingPts.length >= 2) {
-      ctx.save();
-      ctx.strokeStyle = 'hsl(320, 100%, 60%)';
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.shadowColor = 'hsl(320, 100%, 60%)';
-      ctx.shadowBlur = 6;
-      ctx.beginPath();
-      ctx.moveTo(drawingPts[0]![0] * CANVAS_SIZE, drawingPts[0]![1] * CANVAS_SIZE);
-      for (let i = 1; i < drawingPts.length; i++) {
-        ctx.lineTo(drawingPts[i]![0] * CANVAS_SIZE, drawingPts[i]![1] * CANVAS_SIZE);
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.restore();
-    }
-
     updateCanvasBorderRadius(
       canvas,
       store.data.envelope,
@@ -140,7 +120,7 @@ function renderLoop(): void {
 }
 renderLoop();
 
-// ---- Mouse → canvas coordinate transform ----
+// ---- Mouse -> canvas coordinate transform ----
 
 interface CanvasCoords {
   px: number;
@@ -161,6 +141,14 @@ function canvasCoords(e: MouseEvent): CanvasCoords {
   };
 }
 
+// ---- Map tool names to waveform types ----
+
+const toolToWaveform: Record<string, WaveformType> = {
+  circle: 'sine',
+  square: 'pulse',
+  triangle: 'blend',
+};
+
 // ---- Interaction state ----
 
 let interaction: InteractionState = IDLE;
@@ -168,7 +156,7 @@ let interaction: InteractionState = IDLE;
 // ---- Tool change callback ----
 
 toolbar.onToolChange = (tool: string) => {
-  if (tool === 'squiggle' || tool === 'curlicue' || tool === 'text') {
+  if (tool === 'text') {
     decoTool.setTool(tool);
     setSelection(null);
     needsRender = true;
@@ -177,13 +165,23 @@ toolbar.onToolChange = (tool: string) => {
   }
 };
 
+// ---- Helper: get visual rotation for a voice (for resize local coords) ----
+
+function voiceRotation(voice: Voice): number {
+  if ('timbre' in voice) {
+    const period = voice.waveform === 'pulse' ? 90 : 120;
+    return (Math.asin(Math.min(1, Math.max(0, voice.timbre))) * period) / Math.PI;
+  }
+  return 0;
+}
+
 // ---- Mouse events ----
 
 canvas.addEventListener('mousedown', (e: MouseEvent) => {
   const { px, py, nx, ny } = canvasCoords(e);
 
   // Arpeggio: shift+drag across canvas
-  if (e.shiftKey && store.data.shapes.length > 0 && toolbar.currentTool === 'select') {
+  if (e.shiftKey && store.data.voices.length > 0 && toolbar.currentTool === 'select') {
     interaction = { mode: 'arpeggio', triggered: new Set() };
     audio._init().then(() => {
       audio._arpeggioReady = true;
@@ -194,30 +192,28 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
 
   const tool = toolbar.currentTool;
 
-  // Decoration tools
-  if (tool === 'squiggle' || tool === 'curlicue' || tool === 'text') {
+  // Text decoration tool
+  if (tool === 'text') {
     const result = decoTool.handleMouseDown(normalizedCoord(nx), normalizedCoord(ny));
     if (result) {
       if ('placed' in result) {
-        // Curlicue / text: placed instantly — switch to select mode like shapes
+        // Text: placed instantly -- switch to select mode
         setSelection(null, result.placed);
         toolbar.currentTool = 'select';
         toolbar._updateToolActive();
         decoTool.setTool(null);
-      } else {
-        // Squiggle: drawing in progress
-        interaction = { mode: 'drawing' };
       }
       needsRender = true;
       return;
     }
   }
 
-  // Shape placement tools
-  if (tool === 'triangle' || tool === 'square' || tool === 'circle') {
+  // Shape (voice) placement tools
+  const waveform = toolToWaveform[tool];
+  if (waveform) {
     undo.snapshot();
-    const shape = store.addShape(tool, normalizedCoord(nx), snapYToNote(normalizedCoord(ny)));
-    setSelection(shape.id);
+    const voice = store.addVoice(waveform, normalizedCoord(nx), snapYToNote(normalizedCoord(ny)));
+    setSelection(voice.id);
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
     decoTool.setTool(null);
@@ -235,10 +231,10 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
     return;
   }
 
-  // 2. Check handles on selected shape
-  const selShape = getSelected();
-  if (selShape) {
-    const handle = hitTestHandles(selShape, px, py, CANVAS_SIZE);
+  // 2. Check handles on selected voice
+  const selVoice = getSelected();
+  if (selVoice) {
+    const handle = hitTestHandles(selVoice, px, py, CANVAS_SIZE);
     if (handle === 'rotate') {
       undo.snapshot();
       interaction = { mode: 'rotating' };
@@ -249,7 +245,7 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
       interaction = {
         mode: 'resizing',
         handle,
-        origin: { size: selShape.size },
+        origin: { size: selVoice.size },
         startPx: px,
         startPy: py,
       };
@@ -257,16 +253,16 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
     }
   }
 
-  // 3. Hit test shapes
+  // 3. Hit test voices
   const hitId = hitTestShapes(store.data, px, py, CANVAS_SIZE);
   if (hitId) {
     setSelection(hitId);
     toolbar.syncToSelectedShape();
     undo.snapshot();
-    const shape = store.getShape(hitId)!;
+    const voice = store.getVoice(hitId)!;
     interaction = {
       mode: 'dragging',
-      origin: { x: shape.x, y: shape.y },
+      origin: { x: voice.x, y: voice.y },
       startNx: nx,
       startNy: ny,
     };
@@ -274,7 +270,7 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
     return;
   }
 
-  // 4. Check resize handles on selected decoration
+  // 4. Check resize handles on selected text decoration
   const selDeco = getSelectedDeco();
   if (selDeco) {
     const decoHandle = hitTestDecoHandles(selDeco, px, py, CANVAS_SIZE);
@@ -284,26 +280,21 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
         mode: 'deco-resizing',
         handle: decoHandle,
         origin: {
-          scale: selDeco.type !== 'squiggle' ? selDeco.scale : 1,
+          size: selDeco.size,
           bounds: getDecoBounds(selDeco, CANVAS_SIZE)!,
-          points: selDeco.type === 'squiggle' ? selDeco.points.map((p) => [...p]) : null,
         },
       };
       return;
     }
   }
 
-  // 5. Hit test decorations
+  // 5. Hit test text decorations
   const hitDecoId = hitTestDecorations(store.data, px, py, CANVAS_SIZE);
   if (hitDecoId) {
     setSelection(null, hitDecoId);
     undo.snapshot();
-    const deco = store.getDecoration(hitDecoId)!;
-    const origin =
-      deco.type === 'squiggle'
-        ? { points: deco.points.map((p) => [...p]) }
-        : { x: deco.x, y: deco.y };
-    interaction = { mode: 'deco-dragging', origin, startNx: nx, startNy: ny };
+    const deco = store.getText(hitDecoId)!;
+    interaction = { mode: 'deco-dragging', origin: { x: deco.x, y: deco.y }, startNx: nx, startNy: ny };
     needsRender = true;
     return;
   }
@@ -316,18 +307,12 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
 canvas.addEventListener('mousemove', (e: MouseEvent) => {
   const { px, py, nx, ny } = canvasCoords(e);
 
-  if (interaction.mode === 'drawing') {
-    decoTool.handleMouseMove(nx, ny);
-    needsRender = true;
-    return;
-  }
-
   if (interaction.mode === 'dragging') {
-    const shape = getSelected();
-    if (!shape) return;
+    const voice = getSelected();
+    if (!voice) return;
     const dx = nx - interaction.startNx;
     const dy = ny - interaction.startNy;
-    store.updateShape(shape.id, {
+    store.updateVoice(voice.id, {
       x: normalizedCoord(interaction.origin.x + dx),
       y: snapYToNote(normalizedCoord(interaction.origin.y + dy)),
     });
@@ -335,10 +320,11 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
   }
 
   if (interaction.mode === 'resizing') {
-    const shape = getSelected();
-    if (!shape) return;
-    // Transform delta to shape-local coordinates
-    const rotRad = (shape.rotation * Math.PI) / 180;
+    const voice = getSelected();
+    if (!voice) return;
+    // Transform delta to voice-local coordinates
+    const rotDeg = voiceRotation(voice);
+    const rotRad = (rotDeg * Math.PI) / 180;
     const dpx = px - interaction.startPx;
     const dpy = py - interaction.startPy;
     const cos = Math.cos(-rotRad);
@@ -346,21 +332,25 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     const localDx = dpx * cos - dpy * sin;
     const localDy = dpx * sin + dpy * cos;
     const newSize = calcResize(
-      { ...shape, size: normalizedCoord(interaction.origin.size) },
+      { ...voice, size: normalizedCoord(interaction.origin.size) },
       interaction.handle,
       localDx,
       localDy,
       CANVAS_SIZE,
     );
-    store.updateShape(shape.id, { size: newSize });
+    store.updateVoice(voice.id, { size: newSize });
     return;
   }
 
   if (interaction.mode === 'rotating') {
-    const shape = getSelected();
-    if (!shape) return;
-    const rotation = calcRotation(shape, px, py, CANVAS_SIZE);
-    store.updateShape(shape.id, { rotation });
+    const voice = getSelected();
+    if (!voice) return;
+    // Only pulse/blend voices can be rotated (sine has no timbre)
+    if (voice.waveform === 'sine') return;
+    const rotation = calcRotation(voice, px, py, CANVAS_SIZE);
+    // Convert rotation angle to timbre via the periodic mapping
+    const timbre = rotationToTimbre(rotation, voice.waveform);
+    store.updateVoice(voice.id, { timbre: normalizedCoord(timbre) });
     return;
   }
 
@@ -375,12 +365,12 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
 
   if (interaction.mode === 'arpeggio') {
     if (!audio._arpeggioReady) return;
-    // Trigger shapes as pointer crosses their X position
-    for (const shape of store.data.shapes) {
-      const shapePx = shape.x * CANVAS_SIZE;
-      if (!interaction.triggered.has(shape.id) && Math.abs(px - shapePx) < 20) {
-        interaction.triggered.add(shape.id);
-        audio.triggerArpeggio(store.data, store.data.envelope, shape.id);
+    // Trigger voices as pointer crosses their X position
+    for (const voice of store.data.voices) {
+      const voicePx = voice.x * CANVAS_SIZE;
+      if (!interaction.triggered.has(voice.id) && Math.abs(px - voicePx) < 20) {
+        interaction.triggered.add(voice.id);
+        audio.triggerArpeggio(store.data, store.data.envelope, voice.id);
         needsRender = true;
       }
     }
@@ -392,81 +382,33 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     if (!deco) return;
     const dnx = nx - interaction.startNx;
     const dny = ny - interaction.startNy;
-    if ('points' in interaction.origin) {
-      const newPts = interaction.origin.points.map((p): [NormalizedCoord, NormalizedCoord] => [
-        normalizedCoord(p[0]! + dnx),
-        normalizedCoord(p[1]! + dny),
-      ]);
-      store.updateDecoration(deco.id, { points: newPts } as Partial<SquiggleDecoration>);
-    } else {
-      store.updateDecoration(deco.id, {
-        x: normalizedCoord(interaction.origin.x + dnx),
-        y: normalizedCoord(interaction.origin.y + dny),
-      } as Partial<Decoration>);
-    }
+    store.updateText(deco.id, {
+      x: normalizedCoord(interaction.origin.x + dnx),
+      y: normalizedCoord(interaction.origin.y + dny),
+    });
     return;
   }
 
   if (interaction.mode === 'deco-resizing') {
     const deco = getSelectedDeco();
     if (!deco) return;
-    const { bounds, scale, points } = interaction.origin;
+    const { bounds, size } = interaction.origin;
     const cx = bounds.x + bounds.w / 2;
     const cy = bounds.y + bounds.h / 2;
     const initDist = Math.hypot(bounds.w / 2, bounds.h / 2);
     const currDist = Math.hypot(px - cx, py - cy);
-    const newScale = Math.max(0.2, Math.min(5, scale * (currDist / initDist)));
-    if (deco.type === 'squiggle') {
-      // Scale points relative to their center
-      const origPts = points || deco.points;
-      let sumX = 0,
-        sumY = 0;
-      for (const p of origPts) {
-        sumX += p[0]!;
-        sumY += p[1]!;
-      }
-      const pcx = sumX / origPts.length;
-      const pcy = sumY / origPts.length;
-      const ratio = newScale / scale;
-      const newPts = origPts.map((p): [NormalizedCoord, NormalizedCoord] => [
-        normalizedCoord(pcx + (p[0]! - pcx) * ratio),
-        normalizedCoord(pcy + (p[1]! - pcy) * ratio),
-      ]);
-      store.updateDecoration(deco.id, { points: newPts } as Partial<SquiggleDecoration>);
-    } else {
-      store.updateDecoration(deco.id, { scale: newScale } as Partial<Decoration>);
-    }
+    const ratio = currDist / initDist;
+    const newSize = normalizedCoord(Math.max(0.02, Math.min(0.5, size * ratio)));
+    store.updateText(deco.id, { size: newSize });
     return;
   }
 });
 
 canvas.addEventListener('mouseup', () => {
-  if (interaction.mode === 'drawing') {
-    const decoId = decoTool.handleMouseUp();
-    if (decoId) {
-      // Squiggle finished — switch to select mode like shapes
-      setSelection(null, decoId);
-      toolbar.currentTool = 'select';
-      toolbar._updateToolActive();
-      decoTool.setTool(null);
-    }
-    needsRender = true;
-  }
-
   interaction = IDLE;
 });
 
 canvas.addEventListener('mouseleave', () => {
-  if (interaction.mode === 'drawing') {
-    const decoId = decoTool.handleMouseUp();
-    if (decoId) {
-      setSelection(null, decoId);
-      toolbar.currentTool = 'select';
-      toolbar._updateToolActive();
-      decoTool.setTool(null);
-    }
-    needsRender = true;
-  }
   if (interaction.mode === 'arpeggio') {
     interaction.triggered.clear();
   }
@@ -501,21 +443,23 @@ canvas.addEventListener(
       const px = ((midX - rect.left) * CANVAS_SIZE) / rect.width;
       const py = ((midY - rect.top) * CANVAS_SIZE) / rect.height;
 
-      // Select shape under midpoint, or use already-selected shape
+      // Select voice under midpoint, or use already-selected voice
       const shapeId = hitTestShapes(store.data, px, py, CANVAS_SIZE) || selectedId;
       if (!shapeId) return;
 
-      const shape = store.getShape(shapeId);
-      if (!shape) return;
+      const voice = store.getVoice(shapeId);
+      if (!voice) return;
 
       setSelection(shapeId);
       undo.snapshot();
+
+      const initRotation = voiceRotation(voice);
       interaction = {
         mode: 'pinch-rotate',
         initDist: touchDist(a, b),
         initAngle: touchAngle(a, b),
-        initSize: shape.size,
-        initRotation: shape.rotation,
+        initSize: voice.size,
+        initRotation,
         shapeId,
       };
       needsRender = true;
@@ -548,13 +492,21 @@ canvas.addEventListener(
       const scale = dist / interaction.initDist;
       const newSize = clampSize(interaction.initSize * scale);
 
-      const angleDelta = angle - interaction.initAngle;
-      const newRotation = (((interaction.initRotation + angleDelta) % 360) + 360) % 360;
+      const voice = store.getVoice(interaction.shapeId);
+      if (!voice) return;
 
-      store.updateShape(interaction.shapeId, {
-        size: newSize,
-        rotation: degrees(Math.round(newRotation)),
-      });
+      if (voice.waveform === 'sine') {
+        // Sine voices have no timbre, only resize
+        store.updateVoice(interaction.shapeId, { size: newSize });
+      } else {
+        const angleDelta = angle - interaction.initAngle;
+        const newRotation = (((interaction.initRotation + angleDelta) % 360) + 360) % 360;
+        const timbre = rotationToTimbre(newRotation, voice.waveform);
+        store.updateVoice(interaction.shapeId, {
+          size: newSize,
+          timbre: normalizedCoord(timbre),
+        });
+      }
       return;
     }
 
@@ -592,7 +544,7 @@ canvas.addEventListener(
 
 // ---- Clipboard for copy/paste ----
 
-let clipboard: Shape | null = null;
+let clipboard: Voice | null = null;
 
 // ---- Keyboard shortcuts ----
 
@@ -609,25 +561,25 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (selectedId) {
       undo.snapshot();
-      store.removeShape(selectedId);
+      store.removeVoice(selectedId);
       setSelection(null);
     } else if (selectedDecoId) {
       undo.snapshot();
-      store.removeDecoration(selectedDecoId);
+      store.removeText(selectedDecoId);
       setSelection(null);
     }
   }
   if (e.key === 'c' && mod) {
     if (selectedId) {
-      const shape = store.getShape(selectedId);
-      if (shape) clipboard = JSON.parse(JSON.stringify(shape));
+      const voice = store.getVoice(selectedId);
+      if (voice) clipboard = JSON.parse(JSON.stringify(voice));
     }
   }
   if (e.key === 'v' && mod) {
     e.preventDefault();
     if (clipboard) {
       undo.snapshot();
-      const pasted = store.pasteShape(clipboard, 0.03, 0.03);
+      const pasted = store.pasteVoice(clipboard, 0.03, 0.03);
       setSelection(pasted.id);
       toolbar.syncToSelectedShape();
       needsRender = true;
@@ -638,7 +590,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     e.preventDefault();
     if (selectedId) {
       undo.snapshot();
-      const dup = store.duplicateShape(selectedId, 0, 0);
+      const dup = store.duplicateVoice(selectedId, 0, 0);
       if (dup) {
         setSelection(dup.id);
         toolbar.syncToSelectedShape();
@@ -674,7 +626,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     e.preventDefault();
     if (playState !== 'idle') {
       stopPlayback();
-    } else if (store.data.shapes.length > 0) {
+    } else if (store.data.voices.length > 0) {
       startPlayback().then(() => {
         playState = 'latched';
       });
@@ -790,13 +742,13 @@ playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
     return;
   }
 
-  if (store.data.shapes.length === 0) return;
+  if (store.data.voices.length === 0) return;
 
   gesturePointerId = e.pointerId;
   lastFanInfo = null;
   playBtn.setPointerCapture(e.pointerId);
 
-  // Set up gesture tracking synchronously — before audio init
+  // Set up gesture tracking synchronously -- before audio init
   gestureTimerId = setTimeout(() => {
     gestureTimerId = null;
     if (gesturePointerId != null) openFan();
@@ -825,7 +777,7 @@ playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
   playBtn.addEventListener('pointerup', cleanup, { once: true });
   playBtn.addEventListener('lostpointercapture', cleanup, { once: true });
 
-  // Start audio (non-blocking — gesture is already wired)
+  // Start audio (non-blocking -- gesture is already wired)
   startPlayback();
 });
 
@@ -855,14 +807,14 @@ playBtn.addEventListener('pointerup', (e: PointerEvent) => {
   }
 
   if (!gestureActive) {
-    // Quick click — normal release
+    // Quick click -- normal release
     stopPlayback();
     closeFan();
     gesturePointerId = null;
     return;
   }
 
-  // Use the last tracked zone from pointermove — avoids drift during finger lift.
+  // Use the last tracked zone from pointermove -- avoids drift during finger lift.
   // Fall back to computing from the pointerup position if no move was recorded.
   const info = lastFanInfo || fanZone(e.clientY);
 
@@ -904,7 +856,7 @@ let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 function debouncedSave(): void {
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
-    if (store.data.shapes.length > 0 || store.data.decorations.length > 0) {
+    if (store.data.voices.length > 0 || store.data.texts.length > 0) {
       saveToURL(store.data);
     }
   }, 1000);

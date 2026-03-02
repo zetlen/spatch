@@ -38,7 +38,7 @@ if (!hash) {
         btn.classList.remove('playing');
         btn.textContent = '\u25B6 PLAY';
       } else {
-        if (sigil.shapes.length === 0) return;
+        if (sigil.voices.length === 0) return;
         await audio.play(sigil, sigil.envelope);
         btn.classList.add('playing');
         btn.textContent = '\u25A0 STOP';

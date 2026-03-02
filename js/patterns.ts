@@ -1,6 +1,6 @@
 // patterns.ts — Visual pattern tile generators
 
-import type { Shape, PatternType } from './types.ts';
+import { waveformShape, type Voice, type PatternType } from './types.ts';
 
 const cache = new Map<PatternType, HTMLCanvasElement>();
 
@@ -65,11 +65,11 @@ function createNoiseTile(): HTMLCanvasElement {
 // Apply a pattern overlay to the current clipped region
 export function applyPattern(
   ctx: CanvasRenderingContext2D,
-  shape: Shape,
+  voice: Voice,
   canvasSize: number,
 ): void {
-  const r = (shape.size / 2) * canvasSize;
-  const pattern = shape.pattern;
+  const r = (voice.size / 2) * canvasSize;
+  const pattern = voice.effect;
 
   if (pattern === 'gradient') {
     ctx.save();
@@ -94,7 +94,7 @@ export function applyPattern(
     ctx.setLineDash([dashLen, dashLen * 0.8, dashLen * 1.5, dashLen * 0.5]);
     ctx.lineWidth = 4;
     ctx.strokeStyle = 'black';
-    buildShapePath(ctx, shape, canvasSize);
+    buildShapePath(ctx, voice, canvasSize);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
@@ -118,10 +118,11 @@ export function applyPattern(
   ctx.restore();
 }
 
-function buildShapePath(ctx: CanvasRenderingContext2D, shape: Shape, canvasSize: number): void {
-  const r = (shape.size / 2) * canvasSize;
+function buildShapePath(ctx: CanvasRenderingContext2D, voice: Voice, canvasSize: number): void {
+  const r = (voice.size / 2) * canvasSize;
+  const shape = waveformShape(voice.waveform);
   ctx.beginPath();
-  switch (shape.type) {
+  switch (shape) {
     case 'circle':
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       break;
