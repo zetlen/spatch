@@ -271,6 +271,27 @@ interface TextVoice {
 
 type AnyVoice = Voice | TextVoice;
 
+// ---- Auto EQ: spectral presence boost ----
+
+// How much EQ help each waveform needs to be audible in a mix.
+// Sine has no harmonics and gets easily masked; rich waveforms cut through.
+function spectralNeed(shapeType: ShapeType): number {
+  switch (shapeType) {
+    case 'circle':
+      return 1.0; // sine: single partial, easily masked
+    case 'triangle':
+      return 0.3; // sawtooth blend: moderate harmonics
+    case 'square':
+      return 0.2; // pulse: rich harmonics, strong presence
+    default:
+      return 0.5;
+  }
+}
+
+// Maximum number of EQ bands in the pool. Shapes beyond this count
+// don't get dedicated EQ presence bands (still audible via gain).
+const MAX_EQ_BANDS = 8;
+
 // ---- Audio Engine ----
 
 export class AudioEngine {
@@ -285,6 +306,7 @@ export class AudioEngine {
   _sessionId: number;
   _arpeggioGain: GainNode | null;
   _arpeggioReady: boolean;
+  _autoEQ: BiquadFilterNode[];
 
   constructor() {
     this.audioCtx = null;
@@ -298,6 +320,7 @@ export class AudioEngine {
     this._sessionId = 0;
     this._arpeggioGain = null;
     this._arpeggioReady = false;
+    this._autoEQ = [];
   }
 
   async _init(): Promise<void> {
@@ -324,21 +347,43 @@ export class AudioEngine {
 
     // Master chain
     this.compressor = ctx.createDynamicsCompressor();
-    this.compressor.threshold.value = -6;
-    this.compressor.knee.value = 12;
-    this.compressor.ratio.value = 4;
-    this.compressor.attack.value = 0.003;
+    this.compressor.threshold.value = -10;
+    this.compressor.knee.value = 18;
+    this.compressor.ratio.value = 3;
+    this.compressor.attack.value = 0.005;
     this.compressor.release.value = 0.25;
 
     this.envelopeGain = ctx.createGain();
     this.envelopeGain.gain.value = 0;
 
     this.masterGain = ctx.createGain();
-    this.masterGain.gain.value = 0.7;
+    this.masterGain.gain.value = 0.5;
 
-    this.masterGain.connect(this.envelopeGain);
+    // Auto EQ: pool of peaking filters between masterGain and envelopeGain.
+    // Each band boosts a voice's fundamental frequency proportional to its
+    // spectral need and visual area. Unused bands sit at 0 dB gain.
+    const poolSize = Math.max(MAX_EQ_BANDS, sigilState.shapes.length);
+    this._autoEQ = [];
+    for (let i = 0; i < poolSize; i++) {
+      const band = ctx.createBiquadFilter();
+      band.type = 'peaking';
+      band.Q.value = 2;
+      band.gain.value = 0;
+      band.frequency.value = 440;
+      this._autoEQ.push(band);
+    }
+
+    // Wire: masterGain -> [EQ bands] -> envelopeGain -> compressor -> dest
+    let prev: AudioNode = this.masterGain;
+    for (const band of this._autoEQ) {
+      prev.connect(band);
+      prev = band;
+    }
+    prev.connect(this.envelopeGain);
     this.envelopeGain.connect(this.compressor);
     this.compressor.connect(ctx.destination);
+
+    this._applyAutoEQ(sigilState.shapes);
 
     // Apply ADSR envelope
     const now = ctx.currentTime;
@@ -574,11 +619,38 @@ export class AudioEngine {
       voice.panner.pan.setValueAtTime(xToPan(shape.x), now);
       applyColorFilter(voice.filter, shape.fill);
     }
+
+    // Update auto EQ for changed positions/sizes
+    this._applyAutoEQ(sigilState.shapes);
   }
 
   stop(): void {
     if (!this.isPlaying) return;
     this._cleanup();
+  }
+
+  _applyAutoEQ(shapes: Shape[]): void {
+    if (!this.audioCtx || this._autoEQ.length === 0) return;
+    const now = this.audioCtx.currentTime;
+
+    for (let i = 0; i < this._autoEQ.length; i++) {
+      const band = this._autoEQ[i]!;
+      if (i < shapes.length) {
+        const shape = shapes[i]!;
+        const freq = yToFrequency(shape.y);
+        const area = shapeAreaFraction(shape.type, shape.size);
+        const need = spectralNeed(shape.type);
+
+        // Boost: 4–18 dB for sine, 1–5 dB for rich waveforms
+        const boostDb = need * (4 + area * 14);
+
+        band.frequency.setValueAtTime(freq, now);
+        band.gain.setValueAtTime(boostDb, now);
+      } else {
+        // Unused band — passthrough
+        band.gain.setValueAtTime(0, now);
+      }
+    }
   }
 
   _cleanup(): void {
@@ -601,6 +673,10 @@ export class AudioEngine {
       } catch {}
       this.envelopeGain = null;
     }
+    for (const band of this._autoEQ) {
+      safeDisconnect(band);
+    }
+    this._autoEQ = [];
     if (this.compressor) {
       try {
         this.compressor.disconnect();

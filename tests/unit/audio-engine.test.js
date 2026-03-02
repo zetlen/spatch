@@ -8,7 +8,9 @@ import { AudioEngine } from '../../js/audio.ts';
 function createStubAudioParam(initial = 0) {
   return {
     value: initial,
-    setValueAtTime() {},
+    setValueAtTime(v) {
+      this.value = v;
+    },
     linearRampToValueAtTime() {},
     cancelScheduledValues() {},
   };
@@ -209,5 +211,85 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine.updateVoices(makeSigilState([shapeA]));
 
     expect(engine.activeVoices.length).toBe(0);
+  });
+});
+
+describe('AudioEngine — auto EQ', () => {
+  let engine;
+
+  beforeEach(async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+  });
+
+  async function startWith(shapes) {
+    const state = makeSigilState(shapes);
+    await engine.play(state, state.envelope);
+    return state;
+  }
+
+  test('creates EQ band pool during play()', async () => {
+    await startWith([makeShape('a')]);
+    expect(engine._autoEQ.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('sine shapes get higher EQ boost than square or triangle', async () => {
+    const shapes = [
+      makeShape('circ', 'circle', { size: 0.3 }),
+      makeShape('sq', 'square', { size: 0.3 }),
+      makeShape('tri', 'triangle', { size: 0.3 }),
+    ];
+    await startWith(shapes);
+
+    // Band 0 = circle (sine), Band 1 = square, Band 2 = triangle
+    const sineBoost = engine._autoEQ[0].gain.value;
+    const squareBoost = engine._autoEQ[1].gain.value;
+    const triangleBoost = engine._autoEQ[2].gain.value;
+
+    expect(sineBoost).toBeGreaterThan(squareBoost);
+    expect(sineBoost).toBeGreaterThan(triangleBoost);
+  });
+
+  test('larger shapes get more EQ boost', async () => {
+    const small = makeShape('small', 'circle', { size: 0.1 });
+    const big = makeShape('big', 'circle', { size: 0.5 });
+    await startWith([small, big]);
+
+    const smallBoost = engine._autoEQ[0].gain.value;
+    const bigBoost = engine._autoEQ[1].gain.value;
+
+    expect(bigBoost).toBeGreaterThan(smallBoost);
+  });
+
+  test('unused EQ bands are at 0 dB', async () => {
+    await startWith([makeShape('a')]);
+
+    // Pool has MAX_EQ_BANDS entries, only first is used
+    for (let i = 1; i < engine._autoEQ.length; i++) {
+      expect(engine._autoEQ[i].gain.value).toBe(0);
+    }
+  });
+
+  test('EQ bands are cleaned up on stop', async () => {
+    await startWith([makeShape('a')]);
+    expect(engine._autoEQ.length).toBeGreaterThan(0);
+
+    engine.stop();
+    expect(engine._autoEQ.length).toBe(0);
+  });
+
+  test('EQ updates when voices change', async () => {
+    const shapeA = makeShape('a', 'circle', { y: 0.3 });
+    await startWith([shapeA]);
+
+    const initialFreq = engine._autoEQ[0].frequency.value;
+
+    // Move shape to different y position
+    const movedA = makeShape('a', 'circle', { y: 0.7 });
+    engine.updateVoices(makeSigilState([movedA]));
+
+    const updatedFreq = engine._autoEQ[0].frequency.value;
+    expect(updatedFreq).not.toBe(initialFreq);
   });
 });
