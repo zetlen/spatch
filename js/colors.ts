@@ -12,13 +12,14 @@ export function getFillStyle(
   ctx: CanvasRenderingContext2D,
   fill: Fill,
   radius: number,
+  shapeRotation = 0,
 ): string | CanvasGradient {
   switch (fill.mode) {
     case 'solid':
       return hslToString(fill.h, fill.s, fill.l);
 
     case 'linear': {
-      const angle = (fill.gradAngle * Math.PI) / 180;
+      const angle = ((fill.gradAngle - shapeRotation) * Math.PI) / 180;
       const dx = Math.cos(angle) * radius;
       const dy = Math.sin(angle) * radius;
       const grad = ctx.createLinearGradient(-dx, -dy, dx, dy);

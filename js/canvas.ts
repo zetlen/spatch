@@ -131,7 +131,7 @@ function drawVoice(
   ctx.save();
   ctx.clip();
 
-  const fillStyle = getFillStyle(ctx, voice.fill, r);
+  const fillStyle = getFillStyle(ctx, voice.fill, r, rotDeg);
   ctx.fillStyle = fillStyle;
   buildShapePath(ctx, voice, canvasSize);
   ctx.fill();
