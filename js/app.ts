@@ -14,7 +14,7 @@ import {
   getDecoBounds,
 } from './shapes.ts';
 import { Toolbar } from './toolbar.ts';
-import { AudioEngine } from './audio.ts';
+import { AudioEngine, snapYToNote } from './audio.ts';
 import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.ts';
 import { DecorationTool } from './decorations.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
@@ -216,7 +216,7 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
   // Shape placement tools
   if (tool === 'triangle' || tool === 'square' || tool === 'circle') {
     undo.snapshot();
-    const shape = store.addShape(tool, normalizedCoord(nx), normalizedCoord(ny));
+    const shape = store.addShape(tool, normalizedCoord(nx), snapYToNote(normalizedCoord(ny)));
     setSelection(shape.id);
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
@@ -329,7 +329,7 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     const dy = ny - interaction.startNy;
     store.updateShape(shape.id, {
       x: normalizedCoord(interaction.origin.x + dx),
-      y: normalizedCoord(interaction.origin.y + dy),
+      y: snapYToNote(normalizedCoord(interaction.origin.y + dy)),
     });
     return;
   }
