@@ -2,7 +2,7 @@
 
 import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.ts';
 import type { SigilStore, UndoManager } from './state.ts';
-import type { Voice, FillDraft, FillMode, PatternType } from './types.ts';
+import type { Voice, FillDraft, FillMode, PatternType, BlendMode } from './types.ts';
 import { fillToFillDraft, fillDraftToFill } from './types.ts';
 
 export class Toolbar {
@@ -39,7 +39,7 @@ export class Toolbar {
     this._bindActionButtons();
     this._bindColorPicker();
     this._bindFillMode();
-    this._bindLayerButtons();
+    this._bindBlendSelector();
     this._updateToolActive();
   }
 
@@ -111,19 +111,23 @@ export class Toolbar {
     });
   }
 
-  _bindLayerButtons(): void {
-    document.getElementById('btn-bring-front')!.addEventListener('click', () => {
-      if (this.selectedId) {
+  _bindBlendSelector(): void {
+    const select = document.getElementById('blend-mode') as HTMLSelectElement | null;
+    if (!select) return;
+    select.addEventListener('change', () => {
+      const sel = this.getSelected();
+      if (sel) {
         this.undo.snapshot();
-        this.store.bringToFront(this.selectedId);
+        this.store.updateVoice(sel.id, { blend: select.value as BlendMode });
       }
     });
-    document.getElementById('btn-send-back')!.addEventListener('click', () => {
-      if (this.selectedId) {
-        this.undo.snapshot();
-        this.store.sendToBack(this.selectedId);
-      }
-    });
+  }
+
+  _updateBlendSelector(): void {
+    const select = document.getElementById('blend-mode') as HTMLSelectElement | null;
+    if (!select) return;
+    const sel = this.getSelected();
+    select.value = sel ? sel.blend : 'soft-light';
   }
 
   _bindFillMode(): void {
@@ -355,5 +359,6 @@ export class Toolbar {
 
     this.updateSwatchFromSelected();
     this._updatePatternActive();
+    this._updateBlendSelector();
   }
 }

@@ -55,8 +55,10 @@ export function render(
   for (let i = 0; i < state.voices.length; i++) {
     const voice = state.voices[i]!;
     const isPlaying = playingShapeIds != null && playingShapeIds.has(voice.id);
+    ctx.globalCompositeOperation = voice.blend;
     drawVoice(ctx, voice, canvasSize, voice.id === selectedId, isPlaying);
   }
+  ctx.globalCompositeOperation = 'source-over';
 
   for (const text of state.texts) {
     drawText(ctx, text, canvasSize);

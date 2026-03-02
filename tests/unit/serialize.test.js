@@ -19,6 +19,7 @@ function makeVoice(overrides = {}) {
     size: 0.12,
     fill: { mode: 'solid', h: 200, s: 80, l: 50 },
     effect: null,
+    blend: 'soft-light',
     ...overrides,
   };
 }
@@ -111,6 +112,25 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decoded.voices[2].fill.h).toBe(100);
   });
 
+  test('all blend modes survive round-trip', () => {
+    const blends = [
+      'soft-light',
+      'multiply',
+      'screen',
+      'overlay',
+      'color-burn',
+      'difference',
+      'exclusion',
+    ];
+    const state = makeState({
+      voices: blends.map((b) => makeVoice({ blend: b })),
+    });
+
+    const decoded = deserializeState(serializeState(state));
+    const decodedBlends = decoded.voices.map((v) => v.blend);
+    expect(decodedBlends).toEqual(blends);
+  });
+
   test('all effects survive round-trip', () => {
     const effects = ['stripes', 'checker', 'noise', 'gradient', 'rough'];
     const state = makeState({
@@ -181,12 +201,13 @@ describe('serializeState output', () => {
     expect(packed).toHaveLength(3);
     // Envelope is [a, d, s, r]
     expect(packed[0]).toEqual([0.1, 0.2, 0.7, 0.4]);
-    // Voice is [waveform, x, y, size, fill, effect]
+    // Voice is [waveform, x, y, size, fill, effect, blend]
     expect(packed[1]).toHaveLength(1);
     expect(packed[1][0][0]).toBe('s'); // sine
+    expect(packed[1][0][6]).toBe('S'); // soft-light blend
     // No keys, no IDs anywhere
-    expect(json).not.toContain('"i"');
-    expect(json).not.toContain('"w"');
-    expect(json).not.toContain('"v"');
+    expect(json).not.toContain('"id"');
+    expect(json).not.toContain('"waveform"');
+    expect(json).not.toContain('"voices"');
   });
 });

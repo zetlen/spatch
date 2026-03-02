@@ -82,6 +82,9 @@ function createStubAudioContext() {
     createWaveShaper() {
       return createStubNode({ curve: null, oversample: 'none' });
     },
+    createDelay() {
+      return createStubNode({ delayTime: createStubAudioParam(0) });
+    },
   };
 }
 
@@ -94,6 +97,7 @@ function makeVoice(id, waveform = 'sine', overrides = {}) {
     size: 0.12,
     fill: { mode: 'solid', h: 200, s: 80, l: 50 },
     effect: null,
+    blend: 'soft-light',
     ...overrides,
   };
   if (waveform === 'pulse' || waveform === 'blend') {
@@ -291,5 +295,65 @@ describe('AudioEngine — auto EQ', () => {
 
     const updatedFreq = engine._autoEQ[0].frequency.value;
     expect(updatedFreq).not.toBe(initialFreq);
+  });
+});
+
+describe('AudioEngine — blend effects', () => {
+  let engine;
+
+  beforeEach(async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+  });
+
+  async function startWith(voices) {
+    const state = makeSigilState(voices);
+    await engine.play(state, state.envelope);
+    return state;
+  }
+
+  test('voices get blend effects during play', async () => {
+    const voiceA = makeVoice('a');
+    await startWith([voiceA]);
+
+    const audioVoice = engine.activeVoices[0];
+    expect(audioVoice.blendEffect).not.toBeNull();
+    expect(audioVoice.currentBlend).toBe('soft-light');
+  });
+
+  test('blend change triggers voice rebuild', async () => {
+    const voiceA = makeVoice('a', 'sine', { blend: 'soft-light' });
+    await startWith([voiceA]);
+
+    const originalVoice = engine.activeVoices[0];
+
+    // Change blend mode
+    const updated = makeVoice('a', 'sine', { blend: 'multiply' });
+    engine.updateVoices(makeSigilState([updated]));
+
+    // Voice should have been rebuilt (different object)
+    const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(newVoice).not.toBe(originalVoice);
+    expect(newVoice.currentBlend).toBe('multiply');
+  });
+
+  test('all blend modes can be built without error', async () => {
+    const blends = [
+      'soft-light',
+      'multiply',
+      'screen',
+      'overlay',
+      'color-burn',
+      'difference',
+      'exclusion',
+    ];
+    for (const blend of blends) {
+      const voiceA = makeVoice('a', 'sine', { blend });
+      await startWith([voiceA]);
+      expect(engine.activeVoices.length).toBe(1);
+      expect(engine.activeVoices[0].currentBlend).toBe(blend);
+      engine.stop();
+    }
   });
 });

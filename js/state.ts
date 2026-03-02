@@ -10,6 +10,7 @@ import {
   type Envelope,
   type Fill,
   type NormalizedCoord,
+  type BlendMode,
 } from './types.ts';
 
 let _idCounter = 0;
@@ -25,6 +26,8 @@ export function createDefaultState(): SigilData {
   };
 }
 
+const DEFAULT_BLEND: BlendMode = 'soft-light';
+
 function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCoord): Voice {
   const base = {
     id: genId('v'),
@@ -33,6 +36,7 @@ function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCo
     size: normalizedCoord(0.12),
     fill: createDefaultFill(),
     effect: null as Voice['effect'],
+    blend: DEFAULT_BLEND,
   };
   switch (waveform) {
     case 'sine':
@@ -123,32 +127,6 @@ export class SigilStore {
 
   getVoice(id: string): Voice | undefined {
     return this.data.voices.find((s) => s.id === id);
-  }
-
-  moveLayer(id: string, direction: number): void {
-    const idx = this.data.voices.findIndex((s) => s.id === id);
-    if (idx === -1) return;
-    const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= this.data.voices.length) return;
-    const voice = this.data.voices.splice(idx, 1)[0]!;
-    this.data.voices.splice(newIdx, 0, voice);
-    this._notify();
-  }
-
-  bringToFront(id: string): void {
-    const idx = this.data.voices.findIndex((s) => s.id === id);
-    if (idx === -1 || idx === this.data.voices.length - 1) return;
-    const voice = this.data.voices.splice(idx, 1)[0]!;
-    this.data.voices.push(voice);
-    this._notify();
-  }
-
-  sendToBack(id: string): void {
-    const idx = this.data.voices.findIndex((s) => s.id === id);
-    if (idx <= 0) return;
-    const voice = this.data.voices.splice(idx, 1)[0]!;
-    this.data.voices.unshift(voice);
-    this._notify();
   }
 
   updateEnvelope(updates: Partial<Envelope>): void {

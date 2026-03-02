@@ -225,53 +225,16 @@
       </div>
 
       <footer id="toolbar-bottom">
-        <div class="toolbar-group layer-group">
-          <button id="btn-bring-front" class="action-btn" title="Bring to Front">
-            <svg viewBox="0 0 24 24" width="16" height="16">
-              <rect
-                x="3"
-                y="3"
-                width="12"
-                height="12"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                opacity="0.4"
-              />
-              <rect
-                x="9"
-                y="9"
-                width="12"
-                height="12"
-                fill="currentColor"
-                stroke="currentColor"
-                stroke-width="2"
-              />
-            </svg>
-          </button>
-          <button id="btn-send-back" class="action-btn" title="Send to Back">
-            <svg viewBox="0 0 24 24" width="16" height="16">
-              <rect
-                x="9"
-                y="9"
-                width="12"
-                height="12"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                opacity="0.4"
-              />
-              <rect
-                x="3"
-                y="3"
-                width="12"
-                height="12"
-                fill="currentColor"
-                stroke="currentColor"
-                stroke-width="2"
-              />
-            </svg>
-          </button>
+        <div class="toolbar-group blend-group">
+          <select id="blend-mode" title="Blend mode">
+            <option value="soft-light">Soft Light</option>
+            <option value="multiply">Multiply</option>
+            <option value="screen">Screen</option>
+            <option value="overlay">Overlay</option>
+            <option value="color-burn">Burn</option>
+            <option value="difference">Difference</option>
+            <option value="exclusion">Exclusion</option>
+          </select>
           <button id="btn-delete" class="action-btn danger" title="Delete (Del)">&#10005;</button>
         </div>
         <div class="toolbar-group play-group">

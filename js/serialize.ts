@@ -6,8 +6,8 @@
 //
 //   envelope = [attack, decay, sustain, release]
 //
-//   voice (sine)        = ["s", x, y, size, fill, effect]
-//   voice (pulse/blend) = ["p"|"b", x, y, size, fill, effect, timbre]
+//   voice (sine)        = ["s", x, y, size, fill, effect, blend]
+//   voice (pulse/blend) = ["p"|"b", x, y, size, fill, effect, blend, timbre]
 //
 //   fill (solid)   = ["s", h, s, l]
 //   fill (radial)  = ["r", h, s, l, h2, s2, l2]
@@ -30,6 +30,7 @@ import {
   type LinearFill,
   type WaveformType,
   type PatternType,
+  type BlendMode,
 } from './types.ts';
 
 export function serializeState(state: SigilData): string {
@@ -72,9 +73,10 @@ type PackedFill =
   | ['r', number, number, number, number, number, number]
   | ['l', number, number, number, number, number, number, number];
 
+// Voice positions: [waveform, x, y, size, fill, effect, blend, timbre?]
 type PackedVoice =
-  | [string, number, number, number, PackedFill, string | 0]
-  | [string, number, number, number, PackedFill, string | 0, number];
+  | [string, number, number, number, PackedFill, string | 0, string]
+  | [string, number, number, number, PackedFill, string | 0, string, number];
 
 type PackedText = [string, number, number, number];
 
@@ -96,10 +98,11 @@ function pack(state: SigilData): PackedState {
       const w = v.waveform[0]!;
       const f = packFill(v.fill);
       const e: string | 0 = v.effect ? v.effect[0]! : 0;
+      const b = packBlend(v.blend);
       if ('timbre' in v) {
-        return [w, round3(v.x), round3(v.y), round3(v.size), f, e, round3(v.timbre)];
+        return [w, round3(v.x), round3(v.y), round3(v.size), f, e, b, round3(v.timbre)];
       }
-      return [w, round3(v.x), round3(v.y), round3(v.size), f, e];
+      return [w, round3(v.x), round3(v.y), round3(v.size), f, e, b];
     }),
     state.texts.map((t): PackedText => [t.text, round3(t.x), round3(t.y), round3(t.size)]),
   ];
@@ -128,6 +131,7 @@ function unpack(packed: PackedState): SigilData {
     voices: (voices || []).map((pv): Voice => {
       const waveform: WaveformType = waveformMap[pv[0]] || 'sine';
       const effect: PatternType | null = pv[5] ? (effectMap[pv[5] as string] ?? null) : null;
+      const blend: BlendMode = unpackBlend(pv[6] as string);
       const base = {
         id: genId('v'),
         x: normalizedCoord(pv[1]),
@@ -135,14 +139,15 @@ function unpack(packed: PackedState): SigilData {
         size: normalizedCoord(pv[3]),
         fill: unpackFill(pv[4]),
         effect,
+        blend,
       };
       switch (waveform) {
         case 'sine':
           return { ...base, waveform: 'sine' };
         case 'pulse':
-          return { ...base, waveform: 'pulse', timbre: normalizedCoord((pv[6] as number) ?? 0) };
+          return { ...base, waveform: 'pulse', timbre: normalizedCoord((pv[7] as number) ?? 0) };
         case 'blend':
-          return { ...base, waveform: 'blend', timbre: normalizedCoord((pv[6] as number) ?? 0) };
+          return { ...base, waveform: 'blend', timbre: normalizedCoord((pv[7] as number) ?? 0) };
       }
     }),
     texts: (texts || []).map(
@@ -155,6 +160,31 @@ function unpack(packed: PackedState): SigilData {
       }),
     ),
   };
+}
+
+// ---- Blend pack/unpack ----
+
+const blendPackMap: Record<BlendMode, string> = {
+  'soft-light': 'S',
+  multiply: 'M',
+  screen: 'R',
+  overlay: 'O',
+  'color-burn': 'B',
+  difference: 'D',
+  exclusion: 'X',
+};
+
+const blendUnpackMap: Record<string, BlendMode> = Object.fromEntries(
+  Object.entries(blendPackMap).map(([k, v]) => [v, k as BlendMode]),
+);
+
+function packBlend(blend: BlendMode): string {
+  return blendPackMap[blend];
+}
+
+function unpackBlend(packed: string | undefined): BlendMode {
+  if (packed && packed in blendUnpackMap) return blendUnpackMap[packed]!;
+  return 'soft-light';
 }
 
 // ---- Fill pack/unpack ----
