@@ -90,13 +90,13 @@ function updateFrameShadow(
   }
 
   if (audioLevel > 0.001) {
-    // Scale glow intensity by audio level (RMS 0–1, typically 0–0.5)
+    // Cool dark shadow scales with audio level — frame "lifts" when playing
     const t = Math.min(1, audioLevel * 3);
-    const blur = 12 + t * 20;
-    const spread = 2 + t * 6;
-    const alpha = 0.15 + t * 0.45;
+    const blur = 8 + t * 24;
+    const spread = 1 + t * 8;
+    const alpha = 0.2 + t * 0.5;
     shadows.push(
-      `0 0 ${blur.toFixed(1)}px ${spread.toFixed(1)}px rgba(180, 140, 60, ${alpha.toFixed(2)})`,
+      `0 0 ${blur.toFixed(1)}px ${spread.toFixed(1)}px rgba(10, 12, 18, ${alpha.toFixed(2)})`,
     );
   }
 
