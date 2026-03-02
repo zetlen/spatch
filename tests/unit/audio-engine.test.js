@@ -112,6 +112,7 @@ function makeSigilState(voices) {
     voices,
     texts: [],
     envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
+    reverb: null,
   };
 }
 

@@ -168,6 +168,7 @@ function unpack(packed: PackedState): SigilData {
         size: normalizedCoord(pt[3]),
       }),
     ),
+    reverb: null,
   };
 }
 

@@ -6,6 +6,7 @@ function makeState(overrides = {}) {
     envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
     voices: [],
     texts: [],
+    reverb: null,
     ...overrides,
   };
 }
