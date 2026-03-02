@@ -57,7 +57,6 @@ export function render(
   state: SigilData,
   canvasSize: number,
   selectedId: string | null,
-  playingShapeIds: Set<string> | null,
   selectedDecoId?: string | null,
 ): void {
   ctx.clearRect(0, 0, canvasSize, canvasSize);
@@ -70,9 +69,8 @@ export function render(
   bctx.clearRect(0, 0, canvasSize, canvasSize);
   for (let i = 0; i < state.voices.length; i++) {
     const voice = state.voices[i]!;
-    const isPlaying = playingShapeIds != null && playingShapeIds.has(voice.id);
     bctx.globalCompositeOperation = voice.blend;
-    drawVoice(bctx, voice, canvasSize, voice.id === selectedId, isPlaying);
+    drawVoice(bctx, voice, canvasSize, voice.id === selectedId);
   }
   bctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(_blendCanvas!, 0, 0);
@@ -81,14 +79,24 @@ export function render(
     drawText(ctx, text, canvasSize);
   }
 
-  if (!lastInputWasTouch) {
-    if (selectedId) {
-      const sel = state.voices.find((s) => s.id === selectedId);
-      if (sel) drawSelectionHandles(ctx, sel, canvasSize);
+  if (selectedId) {
+    const sel = state.voices.find((s) => s.id === selectedId);
+    if (sel) {
+      if (lastInputWasTouch) {
+        drawTouchSelectionIndicator(ctx, sel, canvasSize);
+      } else {
+        drawSelectionHandles(ctx, sel, canvasSize);
+      }
     }
-    if (selectedDecoId) {
-      const sel = state.texts.find((d) => d.id === selectedDecoId);
-      if (sel) drawDecoSelectionHandles(ctx, sel, canvasSize);
+  }
+  if (selectedDecoId) {
+    const sel = state.texts.find((d) => d.id === selectedDecoId);
+    if (sel) {
+      if (lastInputWasTouch) {
+        drawDecoTouchSelectionIndicator(ctx, sel, canvasSize);
+      } else {
+        drawDecoSelectionHandles(ctx, sel, canvasSize);
+      }
     }
   }
 }
@@ -115,7 +123,6 @@ function drawVoice(
   voice: Voice,
   canvasSize: number,
   isSelected: boolean,
-  isPlaying: boolean,
 ): void {
   const cx = voice.x * canvasSize;
   const cy = voice.y * canvasSize;
@@ -169,13 +176,8 @@ function drawVoice(
 
   // Shape outline
   ctx.save();
-  if (isPlaying) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-  } else {
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 1.5;
-  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1.5;
   buildShapePath(ctx, voice, canvasSize);
   ctx.stroke();
   ctx.restore();
@@ -311,6 +313,45 @@ function drawDecoSelectionHandles(
     ctx.strokeRect(hx - handleSize, hy - handleSize, handleSize * 2, handleSize * 2);
   }
 
+  ctx.restore();
+}
+
+function drawTouchSelectionIndicator(
+  ctx: CanvasRenderingContext2D,
+  voice: Voice,
+  canvasSize: number,
+): void {
+  const cx = voice.x * canvasSize;
+  const cy = voice.y * canvasSize;
+  const r = (voice.size / 2) * canvasSize;
+  const rotDeg = voiceRotation(voice);
+  const rotRad = (rotDeg * Math.PI) / 180;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotRad);
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-r, -r, r * 2, r * 2);
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawDecoTouchSelectionIndicator(
+  ctx: CanvasRenderingContext2D,
+  text: TextDecoration,
+  canvasSize: number,
+): void {
+  const bounds = getDecoBounds(text, canvasSize);
+  if (!bounds) return;
+
+  ctx.save();
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+  ctx.setLineDash([]);
   ctx.restore();
 }
 

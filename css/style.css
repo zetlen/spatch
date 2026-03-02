@@ -232,6 +232,10 @@ select {
     border-radius 0.15s;
 }
 
+#canvas-wrap.playing #canvas-frame {
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.25));
+}
+
 #sigil-canvas {
   position: relative;
   display: block;

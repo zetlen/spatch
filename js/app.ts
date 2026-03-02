@@ -125,7 +125,7 @@ store.onChange(() => {
 
 function renderLoop(): void {
   if (needsRender || audio.isPlaying) {
-    render(ctx, store.data, CANVAS_SIZE, selectedId, audio.playingShapeIds, selectedDecoId);
+    render(ctx, store.data, CANVAS_SIZE, selectedId, selectedDecoId);
 
     updateCanvasBorderRadius(
       canvasFrame,
@@ -199,16 +199,6 @@ function voiceRotation(voice: Voice): number {
 
 canvas.addEventListener('mousedown', (e: MouseEvent) => {
   const { px, py, nx, ny } = canvasCoords(e);
-
-  // Arpeggio: shift+drag across canvas
-  if (e.shiftKey && store.data.voices.length > 0 && toolbar.currentTool === 'select') {
-    interaction = { mode: 'arpeggio', triggered: new Set() };
-    audio._init().then(() => {
-      audio._arpeggioReady = true;
-    });
-    audio._arpeggioReady = false;
-    return;
-  }
 
   const tool = toolbar.currentTool;
 
@@ -386,20 +376,6 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     return;
   }
 
-  if (interaction.mode === 'arpeggio') {
-    if (!audio._arpeggioReady) return;
-    // Trigger voices as pointer crosses their X position
-    for (const voice of store.data.voices) {
-      const voicePx = voice.x * CANVAS_SIZE;
-      if (!interaction.triggered.has(voice.id) && Math.abs(px - voicePx) < 20) {
-        interaction.triggered.add(voice.id);
-        audio.triggerArpeggio(store.data, store.data.envelope, voice.id);
-        needsRender = true;
-      }
-    }
-    return;
-  }
-
   if (interaction.mode === 'deco-dragging') {
     const deco = getSelectedDeco();
     if (!deco) return;
@@ -432,9 +408,7 @@ canvas.addEventListener('mouseup', () => {
 });
 
 canvas.addEventListener('mouseleave', () => {
-  if (interaction.mode === 'arpeggio') {
-    interaction.triggered.clear();
-  }
+  interaction = IDLE;
 });
 
 // ---- Touch support ----
@@ -681,7 +655,11 @@ async function startPlayback(): Promise<void> {
   }
   const gen = playGeneration;
   await audio.play(store.data, store.data.envelope);
-  if (gen !== playGeneration) return; // cancelled during init
+  if (gen !== playGeneration) {
+    // Cancelled during async init — stop audio that just started
+    audio.stop();
+    return;
+  }
   playBtn.classList.add('playing');
   canvasWrap.classList.add('playing');
   playBtn.textContent = '\u25A0 STOP';

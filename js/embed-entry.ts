@@ -39,7 +39,7 @@ if (!hash) {
 
     // Render loop: continuously re-render so playback glow effects animate
     function renderLoop(): void {
-      render(ctx, sigil, 800, null, audio.playingShapeIds);
+      render(ctx, sigil, 800, null);
       requestAnimationFrame(renderLoop);
     }
     renderLoop();

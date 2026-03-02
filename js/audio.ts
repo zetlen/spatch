@@ -356,8 +356,6 @@ export class AudioEngine {
   playingShapeIds: Set<string>;
   _workletReady: boolean;
   _sessionId: number;
-  _arpeggioGain: GainNode | null;
-  _arpeggioReady: boolean;
   _autoEQ: BiquadFilterNode[];
   _reverbConvolver: ConvolverNode | null;
   _reverbWet: GainNode | null;
@@ -373,8 +371,6 @@ export class AudioEngine {
     this.playingShapeIds = new Set();
     this._workletReady = false;
     this._sessionId = 0;
-    this._arpeggioGain = null;
-    this._arpeggioReady = false;
     this._autoEQ = [];
     this._reverbConvolver = null;
     this._reverbWet = null;
@@ -532,69 +528,6 @@ export class AudioEngine {
       },
       releaseTime * 1000 + 100,
     );
-  }
-
-  triggerArpeggio(sigilState: SigilData, envelope: Envelope, voiceId: string): void {
-    // Trigger a single voice with a fast mini-envelope
-    if (!this.audioCtx) return;
-    const ctx = this.audioCtx;
-    if (ctx.state === 'suspended') ctx.resume();
-
-    const voice = sigilState.voices.find((v) => v.id === voiceId);
-    if (!voice) return;
-
-    // Set up a dedicated arpeggio gain as the "masterGain" so _buildVoice
-    // connects to it instead of ctx.destination (avoids double-routing)
-    if (!this._arpeggioGain) {
-      if (!this.compressor) {
-        this.compressor = ctx.createDynamicsCompressor();
-        this.compressor.threshold.value = -6;
-        this.compressor.knee.value = 12;
-        this.compressor.ratio.value = 4;
-        this.compressor.connect(ctx.destination);
-      }
-      this._arpeggioGain = ctx.createGain();
-      this._arpeggioGain.gain.value = 0.7;
-      this._arpeggioGain.connect(this.compressor);
-    }
-
-    // Temporarily set masterGain so _buildVoice routes to our arpeggio chain
-    const prevMaster = this.masterGain;
-    this.masterGain = this._arpeggioGain;
-    const audioVoice = this._buildVoice(ctx, voice);
-    this.masterGain = prevMaster;
-
-    // Mini envelope: quick attack, short sustain, quick release
-    const miniGain = ctx.createGain();
-    miniGain.gain.value = 0;
-    const now = ctx.currentTime;
-    miniGain.gain.setValueAtTime(0, now);
-    miniGain.gain.linearRampToValueAtTime(0.6, now + 0.02);
-    miniGain.gain.linearRampToValueAtTime(0.4, now + 0.1);
-    miniGain.gain.linearRampToValueAtTime(0, now + 0.5);
-
-    // Re-route voice output through the mini envelope
-    audioVoice.outputNode.disconnect();
-    audioVoice.outputNode.connect(miniGain);
-    miniGain.connect(this._arpeggioGain!);
-
-    audioVoice.start(now);
-    // Schedule stop after 0.6s
-    setTimeout(() => audioVoice.stop(0), 600);
-
-    // Track voice for cleanup
-    this.activeVoices.push(audioVoice);
-
-    this.playingShapeIds.add(voiceId);
-    setTimeout(() => {
-      this.playingShapeIds.delete(voiceId);
-      // Remove from activeVoices after it's done
-      const i = this.activeVoices.indexOf(audioVoice);
-      if (i !== -1) this.activeVoices.splice(i, 1);
-      try {
-        miniGain.disconnect();
-      } catch {}
-    }, 650);
   }
 
   setEnvelopePosition(t: number, envelope: Envelope): void {
@@ -827,12 +760,6 @@ export class AudioEngine {
         this.compressor.disconnect();
       } catch {}
       this.compressor = null;
-    }
-    if (this._arpeggioGain) {
-      try {
-        this._arpeggioGain.disconnect();
-      } catch {}
-      this._arpeggioGain = null;
     }
     if (this._reverbConvolver) {
       safeDisconnect(this._reverbConvolver);
