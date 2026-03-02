@@ -7,16 +7,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - run: curl -fsSL https://bun.sh/install | bash
-      - run: |
+      - name: Build and deploy
+        run: |
           export BUN_INSTALL="$HOME/.bun"
           export PATH="$BUN_INSTALL/bin:$PATH"
-          git config --global --add safe.directory /sites/spatch
-          cd /sites/spatch
-          git remote set-url origin https://$DEPLOY_TOKEN@got.colonpipe.org/zetlen/spatch.git
-          git fetch --tags
-          git checkout ${{ github.event.release.tag_name }}
           bun install --frozen-lockfile
           bun run build
-        env:
-          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          docker cp dist/. spatch:/usr/share/nginx/html/
