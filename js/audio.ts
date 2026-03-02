@@ -259,7 +259,9 @@ interface AudioVoiceBase {
   effectDispose: (() => void) | null;
   currentEffect: string | null;
   currentBlend: BlendMode;
+  currentBorder: string | null; // serialized border for change detection
   blendEffect: BlendEffect | null;
+  octaveOsc: OscillatorNode | null;
   shapeId: string;
   gain: GainNode;
   formantF1: BiquadFilterNode;
@@ -608,8 +610,15 @@ export class AudioEngine {
       const voice = voiceMap.get(audioVoice.shapeId);
       if (!voice) continue;
 
-      // Effect or blend changed — tear down and rebuild the entire voice
-      if (voice.effect !== audioVoice.currentEffect || voice.blend !== audioVoice.currentBlend) {
+      // Effect, blend, or border changed — tear down and rebuild the entire voice
+      const borderKey = voice.border
+        ? `${voice.border.color}:${voice.border.double ? 1 : 0}:${voice.border.thickness}`
+        : null;
+      if (
+        voice.effect !== audioVoice.currentEffect ||
+        voice.blend !== audioVoice.currentBlend ||
+        borderKey !== audioVoice.currentBorder
+      ) {
         this._stopVoice(audioVoice);
         this.activeVoices.splice(i, 1);
         const rebuilt = this._buildVoice(ctx, voice);
@@ -760,6 +769,7 @@ export class AudioEngine {
     }
 
     audioVoice.stop(0);
+    if (audioVoice.octaveOsc) safeStop(audioVoice.octaveOsc);
     safeDisconnect(audioVoice.outputNode);
     audioVoice.effectDispose?.();
     audioVoice.blendEffect?.dispose();
@@ -815,12 +825,40 @@ export class AudioEngine {
     blendFx.output.connect(panner);
     panner.connect(this.masterGain || ctx.destination);
 
+    // Octave doubling: border adds a sine oscillator at shifted frequency.
+    // White = up, black = down. Single = 1 octave, double = 2 octaves.
+    // Thickness scales the doubled voice gain.
+    let octaveOsc: OscillatorNode | null = null;
+    if (voice.border) {
+      const octaveShift = voice.border.double ? 2 : 1;
+      const direction = voice.border.color === 'white' ? 1 : -1;
+      const octaveFreq = freq * Math.pow(2, direction * octaveShift);
+
+      octaveOsc = ctx.createOscillator();
+      octaveOsc.type = 'sine';
+      octaveOsc.frequency.value = octaveFreq;
+
+      const octaveGain = ctx.createGain();
+      octaveGain.gain.value =
+        voice.border.thickness *
+        areaToGain(voice.waveform, voice.size) *
+        waveformGain(voice.waveform);
+      octaveOsc.connect(octaveGain);
+      octaveGain.connect(gain); // feeds into same signal chain
+    }
+
+    const borderKey = voice.border
+      ? `${voice.border.color}:${voice.border.double ? 1 : 0}:${voice.border.thickness}`
+      : null;
+
     const shared = {
       outputNode: panner,
       effectDispose,
       currentEffect: voice.effect,
       currentBlend: voice.blend,
+      currentBorder: borderKey,
       blendEffect: blendFx,
+      octaveOsc,
       shapeId: voice.id,
       gain,
       formantF1,
@@ -854,10 +892,15 @@ export class AudioEngine {
           try {
             osc.start(time);
           } catch {}
+          if (octaveOsc)
+            try {
+              octaveOsc.start(time);
+            } catch {}
         },
         stop(_time: number) {
           safeStop(osc);
           safeStop(pwmOffset);
+          if (octaveOsc) safeStop(octaveOsc);
         },
       };
     }
@@ -893,10 +936,15 @@ export class AudioEngine {
         start(time: number) {
           oscSaw.start(time);
           oscTri.start(time);
+          if (octaveOsc)
+            try {
+              octaveOsc.start(time);
+            } catch {}
         },
         stop(_time: number) {
           safeStop(oscSaw);
           safeStop(oscTri);
+          if (octaveOsc) safeStop(octaveOsc);
         },
       };
     }
@@ -913,9 +961,14 @@ export class AudioEngine {
       oscillator: osc,
       start(time: number) {
         osc.start(time);
+        if (octaveOsc)
+          try {
+            octaveOsc.start(time);
+          } catch {}
       },
       stop(_time: number) {
         safeStop(osc);
+        if (octaveOsc) safeStop(octaveOsc);
       },
     };
   }
