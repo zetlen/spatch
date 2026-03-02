@@ -353,12 +353,11 @@ export class AudioEngine {
   envelopeGain: GainNode | null;
   compressor: DynamicsCompressorNode | null;
   isPlaying: boolean;
-  playingShapeIds: Set<string>;
   _workletReady: boolean;
   _sessionId: number;
-  _arpeggioGain: GainNode | null;
-  _arpeggioReady: boolean;
   _autoEQ: BiquadFilterNode[];
+  _analyser: AnalyserNode | null;
+  _analyserBuf: Float32Array<ArrayBuffer> | null;
   _reverbConvolver: ConvolverNode | null;
   _reverbWet: GainNode | null;
   _reverbStyle: ReverbStyle | null;
@@ -370,12 +369,11 @@ export class AudioEngine {
     this.envelopeGain = null;
     this.compressor = null;
     this.isPlaying = false;
-    this.playingShapeIds = new Set();
     this._workletReady = false;
     this._sessionId = 0;
-    this._arpeggioGain = null;
-    this._arpeggioReady = false;
     this._autoEQ = [];
+    this._analyser = null;
+    this._analyserBuf = null;
     this._reverbConvolver = null;
     this._reverbWet = null;
     this._reverbStyle = null;
@@ -429,7 +427,12 @@ export class AudioEngine {
       this._autoEQ.push(band);
     }
 
-    // Wire: masterGain -> [EQ bands] -> envelopeGain -> compressor -> dest
+    // Analyser for level metering (drives play glow)
+    this._analyser = ctx.createAnalyser();
+    this._analyser.fftSize = 256;
+    this._analyserBuf = new Float32Array(this._analyser.fftSize);
+
+    // Wire: masterGain -> [EQ bands] -> envelopeGain -> compressor -> analyser -> dest
     let prev: AudioNode = this.masterGain;
     for (const band of this._autoEQ) {
       prev.connect(band);
@@ -437,7 +440,8 @@ export class AudioEngine {
     }
     prev.connect(this.envelopeGain);
     this.envelopeGain.connect(this.compressor);
-    this.compressor.connect(ctx.destination);
+    this.compressor.connect(this._analyser);
+    this._analyser.connect(ctx.destination);
 
     // Master reverb (if active)
     if (sigilState.reverb) {
@@ -464,13 +468,10 @@ export class AudioEngine {
     this.envelopeGain.gain.linearRampToValueAtTime(sustain, now + attack + decay);
 
     // Build voices
-    this.playingShapeIds.clear();
-
     for (const voice of sigilState.voices) {
       const audioVoice = this._buildVoice(ctx, voice);
       audioVoice.start(now);
       this.activeVoices.push(audioVoice);
-      this.playingShapeIds.add(voice.id);
     }
 
     // Set initial blend overlap levels
@@ -534,69 +535,6 @@ export class AudioEngine {
     );
   }
 
-  triggerArpeggio(sigilState: SigilData, envelope: Envelope, voiceId: string): void {
-    // Trigger a single voice with a fast mini-envelope
-    if (!this.audioCtx) return;
-    const ctx = this.audioCtx;
-    if (ctx.state === 'suspended') ctx.resume();
-
-    const voice = sigilState.voices.find((v) => v.id === voiceId);
-    if (!voice) return;
-
-    // Set up a dedicated arpeggio gain as the "masterGain" so _buildVoice
-    // connects to it instead of ctx.destination (avoids double-routing)
-    if (!this._arpeggioGain) {
-      if (!this.compressor) {
-        this.compressor = ctx.createDynamicsCompressor();
-        this.compressor.threshold.value = -6;
-        this.compressor.knee.value = 12;
-        this.compressor.ratio.value = 4;
-        this.compressor.connect(ctx.destination);
-      }
-      this._arpeggioGain = ctx.createGain();
-      this._arpeggioGain.gain.value = 0.7;
-      this._arpeggioGain.connect(this.compressor);
-    }
-
-    // Temporarily set masterGain so _buildVoice routes to our arpeggio chain
-    const prevMaster = this.masterGain;
-    this.masterGain = this._arpeggioGain;
-    const audioVoice = this._buildVoice(ctx, voice);
-    this.masterGain = prevMaster;
-
-    // Mini envelope: quick attack, short sustain, quick release
-    const miniGain = ctx.createGain();
-    miniGain.gain.value = 0;
-    const now = ctx.currentTime;
-    miniGain.gain.setValueAtTime(0, now);
-    miniGain.gain.linearRampToValueAtTime(0.6, now + 0.02);
-    miniGain.gain.linearRampToValueAtTime(0.4, now + 0.1);
-    miniGain.gain.linearRampToValueAtTime(0, now + 0.5);
-
-    // Re-route voice output through the mini envelope
-    audioVoice.outputNode.disconnect();
-    audioVoice.outputNode.connect(miniGain);
-    miniGain.connect(this._arpeggioGain!);
-
-    audioVoice.start(now);
-    // Schedule stop after 0.6s
-    setTimeout(() => audioVoice.stop(0), 600);
-
-    // Track voice for cleanup
-    this.activeVoices.push(audioVoice);
-
-    this.playingShapeIds.add(voiceId);
-    setTimeout(() => {
-      this.playingShapeIds.delete(voiceId);
-      // Remove from activeVoices after it's done
-      const i = this.activeVoices.indexOf(audioVoice);
-      if (i !== -1) this.activeVoices.splice(i, 1);
-      try {
-        miniGain.disconnect();
-      } catch {}
-    }, 650);
-  }
-
   setEnvelopePosition(t: number, envelope: Envelope): void {
     if (!this.isPlaying || !this.envelopeGain) return;
     const attack = Math.max(0.01, envelope.attack);
@@ -630,17 +568,18 @@ export class AudioEngine {
       if (!voiceMap.has(audioVoice.shapeId)) {
         this._stopVoice(audioVoice);
         this.activeVoices.splice(i, 1);
-        this.playingShapeIds.delete(audioVoice.shapeId);
       }
     }
 
     // Add audio voices for new voices
+    const activeIds = new Set(
+      this.activeVoices.filter((v): v is AudioVoice => !('isTextVoice' in v)).map((v) => v.shapeId),
+    );
     for (const voice of sigilState.voices) {
-      if (!this.playingShapeIds.has(voice.id)) {
+      if (!activeIds.has(voice.id)) {
         const audioVoice = this._buildVoice(ctx, voice);
         audioVoice.start(now);
         this.activeVoices.push(audioVoice);
-        this.playingShapeIds.add(voice.id);
       }
     }
 
@@ -752,6 +691,18 @@ export class AudioEngine {
     this._cleanup();
   }
 
+  /** Current RMS output level as 0–1. */
+  getLevel(): number {
+    if (!this._analyser || !this._analyserBuf) return 0;
+    this._analyser.getFloatTimeDomainData(this._analyserBuf);
+    let sum = 0;
+    for (let i = 0; i < this._analyserBuf.length; i++) {
+      const s = this._analyserBuf[i]!;
+      sum += s * s;
+    }
+    return Math.sqrt(sum / this._analyserBuf.length);
+  }
+
   _applyAutoEQ(voices: Voice[]): void {
     if (!this.audioCtx || this._autoEQ.length === 0) return;
     const now = this.audioCtx.currentTime;
@@ -828,11 +779,10 @@ export class AudioEngine {
       } catch {}
       this.compressor = null;
     }
-    if (this._arpeggioGain) {
-      try {
-        this._arpeggioGain.disconnect();
-      } catch {}
-      this._arpeggioGain = null;
+    if (this._analyser) {
+      safeDisconnect(this._analyser);
+      this._analyser = null;
+      this._analyserBuf = null;
     }
     if (this._reverbConvolver) {
       safeDisconnect(this._reverbConvolver);
@@ -844,7 +794,6 @@ export class AudioEngine {
     }
     this._reverbStyle = null;
 
-    this.playingShapeIds.clear();
     this.isPlaying = false;
   }
 

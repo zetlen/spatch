@@ -228,7 +228,7 @@ select {
   border-style: solid;
   border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
   transition:
-    box-shadow 0.15s,
+    box-shadow 0.08s ease-out,
     border-radius 0.15s;
 }
 

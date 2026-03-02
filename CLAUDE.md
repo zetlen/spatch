@@ -22,7 +22,7 @@ js/
   state.ts           SigilStore (data CRUD + change notification) and
                      UndoManager (undo/redo wrapping a store)
   interaction.ts     InteractionState discriminated union (idle, dragging,
-                     resizing, rotating, adsr, arpeggio, deco-*, pinch-rotate)
+                     resizing, rotating, adsr, deco-*, pinch-rotate)
   app.ts             Entry point: init, event wiring, render loop, selection
   embed-entry.ts     Entry point for embed.html viewer
   canvas.ts          Canvas 2D rendering (voices, text decorations, selection UI)
@@ -149,16 +149,19 @@ design rationale and enumeration of past violations.
 
 - **Canvas frame**: The canvas is split into `#canvas-frame` (div) and
   `#sigil-canvas` (canvas). The frame div owns the dark background,
-  border-radius (ADSR corners), bevel border, and inset shadow (reverb).
-  The canvas is transparent and draws shapes only, ensuring they appear
-  above the shadow.
+  border-radius (ADSR corners), bevel border, inset shadow (reverb), and
+  audio-reactive elevation shadow (play indicator). The canvas is transparent
+  and draws shapes and touch selection indicators only, ensuring they appear
+  above the shadow. During playback, `updateFrameShadow` in app.ts composes
+  both the reverb inset shadow and a cool dark outer shadow whose intensity
+  tracks real-time RMS audio level via an AnalyserNode in the audio engine.
 
 - **ADSR envelope** is encoded as the canvas frame corner radii. Drag
   corners to adjust. Bottom-left = attack, top-left = decay, top-right =
   sustain, bottom-right = release.
 
 - **Play modes**: normal (press-and-hold), latch (click to toggle), loop
-  (auto-repeating). Shift+drag = arpeggio mode.
+  (auto-repeating).
 
 - **State** lives in `SigilStore` (js/state.ts). It holds voices, text
   decorations, envelope, and reverb. All mutations go through this class. `UndoManager`
@@ -233,7 +236,7 @@ files anywhere else.**
   and an audio mapping. If either is missing, the field violates the bijection
   principle and must not be added.
 - To modify reverb behavior: update `Reverb` type in `types.ts`, update
-  `app.ts:updateReverbShadow` (visual rendering), `audio.ts:updateReverb`
+  `app.ts:updateFrameShadow` (visual rendering), `audio.ts:updateReverb`
   (ConvolverNode + IR generation), `serialize.ts` (pack/unpack), and
   `toolbar.ts` (reverb panel bindings). Reverb is global — not per-voice.
 - The `embed.html` page imports the same modules as the main app but only uses

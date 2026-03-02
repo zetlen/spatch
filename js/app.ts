@@ -70,19 +70,37 @@ if (loaded) {
 
 // ---- Reverb shadow on canvas frame ----
 
-function updateReverbShadow(frameEl: HTMLElement, reverb: Reverb | null, canvasSize: number): void {
-  if (!reverb) {
-    frameEl.style.boxShadow = 'none';
-    return;
+function updateFrameShadow(
+  frameEl: HTMLElement,
+  reverb: Reverb | null,
+  canvasSize: number,
+  audioLevel: number,
+): void {
+  const shadows: string[] = [];
+
+  if (reverb) {
+    const maxBlur = canvasSize * 0.15;
+    const blur = reverb.depth * maxBlur;
+    const alpha = 0.3 + reverb.depth * 0.5;
+    const color =
+      reverb.style === 'glow'
+        ? `rgba(255,255,255,${alpha.toFixed(2)})`
+        : `rgba(0,0,0,${alpha.toFixed(2)})`;
+    shadows.push(`inset 0 0 ${blur.toFixed(1)}px ${color}`);
   }
-  const maxBlur = canvasSize * 0.15;
-  const blur = reverb.depth * maxBlur;
-  const alpha = 0.3 + reverb.depth * 0.5;
-  const color =
-    reverb.style === 'glow'
-      ? `rgba(255,255,255,${alpha.toFixed(2)})`
-      : `rgba(0,0,0,${alpha.toFixed(2)})`;
-  frameEl.style.boxShadow = `inset 0 0 ${blur.toFixed(1)}px ${color}`;
+
+  if (audioLevel > 0.001) {
+    // sqrt curve keeps shadow visible longer during fade-out
+    const t = Math.sqrt(Math.min(1, audioLevel * 3));
+    const blur = 12 + t * 36;
+    const spread = 2 + t * 14;
+    const alpha = 0.3 + t * 0.6;
+    shadows.push(
+      `0 0 ${blur.toFixed(1)}px ${spread.toFixed(1)}px rgba(10, 12, 18, ${alpha.toFixed(2)})`,
+    );
+  }
+
+  frameEl.style.boxShadow = shadows.length > 0 ? shadows.join(', ') : 'none';
 }
 
 // ---- Responsive canvas sizing ----
@@ -104,7 +122,7 @@ function resizeCanvas(): void {
   canvas.height = CANVAS_SIZE;
 
   updateCanvasBorderRadius(canvasFrame, store.data.envelope, size);
-  updateReverbShadow(canvasFrame, store.data.reverb, size);
+  updateFrameShadow(canvasFrame, store.data.reverb, size, audio.getLevel());
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -125,14 +143,19 @@ store.onChange(() => {
 
 function renderLoop(): void {
   if (needsRender || audio.isPlaying) {
-    render(ctx, store.data, CANVAS_SIZE, selectedId, audio.playingShapeIds, selectedDecoId);
+    render(ctx, store.data, CANVAS_SIZE, selectedId, selectedDecoId);
 
     updateCanvasBorderRadius(
       canvasFrame,
       store.data.envelope,
       parseInt(canvas.style.width) || CANVAS_SIZE,
     );
-    updateReverbShadow(canvasFrame, store.data.reverb, parseInt(canvas.style.width) || CANVAS_SIZE);
+    updateFrameShadow(
+      canvasFrame,
+      store.data.reverb,
+      parseInt(canvas.style.width) || CANVAS_SIZE,
+      audio.getLevel(),
+    );
 
     needsRender = false;
   }
@@ -199,16 +222,6 @@ function voiceRotation(voice: Voice): number {
 
 canvas.addEventListener('mousedown', (e: MouseEvent) => {
   const { px, py, nx, ny } = canvasCoords(e);
-
-  // Arpeggio: shift+drag across canvas
-  if (e.shiftKey && store.data.voices.length > 0 && toolbar.currentTool === 'select') {
-    interaction = { mode: 'arpeggio', triggered: new Set() };
-    audio._init().then(() => {
-      audio._arpeggioReady = true;
-    });
-    audio._arpeggioReady = false;
-    return;
-  }
 
   const tool = toolbar.currentTool;
 
@@ -386,20 +399,6 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     return;
   }
 
-  if (interaction.mode === 'arpeggio') {
-    if (!audio._arpeggioReady) return;
-    // Trigger voices as pointer crosses their X position
-    for (const voice of store.data.voices) {
-      const voicePx = voice.x * CANVAS_SIZE;
-      if (!interaction.triggered.has(voice.id) && Math.abs(px - voicePx) < 20) {
-        interaction.triggered.add(voice.id);
-        audio.triggerArpeggio(store.data, store.data.envelope, voice.id);
-        needsRender = true;
-      }
-    }
-    return;
-  }
-
   if (interaction.mode === 'deco-dragging') {
     const deco = getSelectedDeco();
     if (!deco) return;
@@ -432,9 +431,7 @@ canvas.addEventListener('mouseup', () => {
 });
 
 canvas.addEventListener('mouseleave', () => {
-  if (interaction.mode === 'arpeggio') {
-    interaction.triggered.clear();
-  }
+  interaction = IDLE;
 });
 
 // ---- Touch support ----
@@ -659,7 +656,6 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 // ---- Play mode selector & Play button ----
 
 const playBtn = document.getElementById('btn-play')!;
-const canvasWrap = document.getElementById('canvas-wrap')!;
 const playFan = document.getElementById('play-fan')!;
 const fanLock = playFan.querySelector('.fan-lock')!;
 const fanLoop = playFan.querySelector('.fan-loop')! as HTMLElement;
@@ -681,9 +677,12 @@ async function startPlayback(): Promise<void> {
   }
   const gen = playGeneration;
   await audio.play(store.data, store.data.envelope);
-  if (gen !== playGeneration) return; // cancelled during init
+  if (gen !== playGeneration) {
+    // Cancelled during async init — stop audio that just started
+    audio.stop();
+    return;
+  }
   playBtn.classList.add('playing');
-  canvasWrap.classList.add('playing');
   playBtn.textContent = '\u25A0 STOP';
   needsRender = true;
 }
@@ -701,7 +700,6 @@ function stopPlayback(): void {
   const releaseMs = store.data.envelope.release * 1000 + 100;
   releaseGlowTimeoutId = setTimeout(() => {
     releaseGlowTimeoutId = null;
-    canvasWrap.classList.remove('playing');
     needsRender = true;
   }, releaseMs);
 }

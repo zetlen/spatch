@@ -18,7 +18,6 @@ export type InteractionState =
     }
   | { mode: 'rotating' }
   | { mode: 'adsr'; corner: ADSRCorner; origin: Envelope }
-  | { mode: 'arpeggio'; triggered: Set<string> }
   | {
       mode: 'deco-dragging';
       origin: { x: number; y: number };
