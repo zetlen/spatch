@@ -12,6 +12,7 @@ import {
   type LinearFill,
   type Decoration,
   type NormalizedCoord,
+  type PatternType,
 } from './types.ts';
 
 export function serializeState(state: SigilData): string {
@@ -134,18 +135,18 @@ function compactify(state: SigilData): CompactStateV1 {
     },
     sh: state.shapes.map((s) => ({
       i: s.id,
-      t: s.type[0],
+      t: s.type[0]!,
       x: round3(s.x),
       y: round3(s.y),
       z: round3(s.size),
       r: Math.round(s.rotation),
       f: compactFill(s.fill),
-      p: s.pattern ? s.pattern[0] : 0,
+      p: s.pattern ? s.pattern[0]! : 0,
     })),
     d: state.decorations.map((d) => {
       const base: CompactDecoration = {
         i: d.id,
-        t: d.type[0],
+        t: d.type[0]!,
         p: d.type === 'squiggle' ? d.points.map(([x, y]) => [round3(x), round3(y)]) : [],
         x: round3(d.type !== 'squiggle' ? d.x : 0),
         y: round3(d.type !== 'squiggle' ? d.y : 0),
@@ -188,7 +189,7 @@ function decompactify(c: CompactStateLegacy | CompactStateV1): SigilData {
       size: normalizedCoord(s.z),
       rotation: degrees(s.r),
       fill: decompactFill(s.f),
-      pattern: s.p ? (patMap[s.p as string] as any) || null : null,
+      pattern: (s.p ? (patMap[s.p as string] ?? null) : null) as PatternType | null,
     })),
     decorations: (c.d || []).map((d) => {
       const decoType = (decoMap[d.t] || 'squiggle') as 'squiggle' | 'curlicue' | 'text';
@@ -214,7 +215,7 @@ function decompactDecoration(
         ...base,
         type: 'squiggle',
         points: (d.p || []).map(
-          (pt: number[]) =>
+          (pt: [number, number]) =>
             [normalizedCoord(pt[0]), normalizedCoord(pt[1])] as [NormalizedCoord, NormalizedCoord],
         ),
       };

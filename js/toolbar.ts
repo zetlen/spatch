@@ -139,7 +139,7 @@ export class Toolbar {
   }
 
   _getStopFields(tab: string): { hKey: 'h' | 'h2'; sKey: 's' | 's2'; lKey: 'l' | 'l2' } {
-    const stop = (this._activeStop as any)[tab] || 1;
+    const stop = tab === 'radial' || tab === 'linear' ? this._activeStop[tab] : 1;
     return stop === 2
       ? { hKey: 'h2', sKey: 's2', lKey: 'l2' }
       : { hKey: 'h', sKey: 's', lKey: 'l' };
@@ -256,10 +256,10 @@ export class Toolbar {
     });
   }
 
-  _bindStopToggle(tab: string): void {
+  _bindStopToggle(tab: 'radial' | 'linear'): void {
     document.querySelectorAll<HTMLElement>(`.stop-btn[data-tab="${tab}"]`).forEach((btn) => {
       btn.addEventListener('click', () => {
-        (this._activeStop as any)[tab] = parseInt(btn.dataset.stop!);
+        this._activeStop[tab] = parseInt(btn.dataset.stop!);
         document
           .querySelectorAll<HTMLElement>(`.stop-btn[data-tab="${tab}"]`)
           .forEach((b) => b.classList.toggle('active', b.dataset.stop === btn.dataset.stop));

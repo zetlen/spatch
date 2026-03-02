@@ -147,11 +147,11 @@ function createPhaser(ctx: AudioContext): AudioEffect {
   lfo.start();
 
   // Chain allpass filters
-  input.connect(filters[0]);
+  input.connect(filters[0]!);
   for (let i = 0; i < filters.length - 1; i++) {
-    filters[i].connect(filters[i + 1]);
+    filters[i]!.connect(filters[i + 1]!);
   }
-  filters[filters.length - 1].connect(wet);
+  filters[filters.length - 1]!.connect(wet);
 
   input.connect(dry);
   dry.connect(output);

@@ -169,7 +169,7 @@ export class SigilStore {
     if (idx === -1) return;
     const newIdx = idx + direction;
     if (newIdx < 0 || newIdx >= this.data.shapes.length) return;
-    const [shape] = this.data.shapes.splice(idx, 1);
+    const shape = this.data.shapes.splice(idx, 1)[0]!;
     this.data.shapes.splice(newIdx, 0, shape);
     this._notify();
   }
@@ -177,7 +177,7 @@ export class SigilStore {
   bringToFront(id: string): void {
     const idx = this.data.shapes.findIndex((s) => s.id === id);
     if (idx === -1 || idx === this.data.shapes.length - 1) return;
-    const [shape] = this.data.shapes.splice(idx, 1);
+    const shape = this.data.shapes.splice(idx, 1)[0]!;
     this.data.shapes.push(shape);
     this._notify();
   }
@@ -185,7 +185,7 @@ export class SigilStore {
   sendToBack(id: string): void {
     const idx = this.data.shapes.findIndex((s) => s.id === id);
     if (idx <= 0) return;
-    const [shape] = this.data.shapes.splice(idx, 1);
+    const shape = this.data.shapes.splice(idx, 1)[0]!;
     this.data.shapes.unshift(shape);
     this._notify();
   }

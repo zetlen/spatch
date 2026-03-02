@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
     "allowJs": true,
     "checkJs": false,
     "noEmit": true,

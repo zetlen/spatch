@@ -37,7 +37,7 @@ export function yToFrequency(y: NormalizedCoord): number {
   const normalized = 1 - y;
   const index = Math.round(normalized * (PENTATONIC_SEMITONES.length - 1));
   const clamped = Math.max(0, Math.min(PENTATONIC_SEMITONES.length - 1, index));
-  return midiToFreq(BASE_MIDI + PENTATONIC_SEMITONES[clamped]);
+  return midiToFreq(BASE_MIDI + PENTATONIC_SEMITONES[clamped]!);
 }
 
 export function xToPan(x: NormalizedCoord): number {
@@ -323,7 +323,7 @@ export class AudioEngine {
       : 0;
 
     for (let i = 0; i < totalLayers; i++) {
-      const shape = sigilState.shapes[i];
+      const shape = sigilState.shapes[i]!;
       const voice = this._buildVoice(ctx, shape, i, totalLayers, curlicues);
       voice.start(now);
       this.activeVoices.push(voice);
@@ -479,7 +479,7 @@ export class AudioEngine {
 
     // Remove voices for deleted shapes
     for (let i = this.activeVoices.length - 1; i >= 0; i--) {
-      const voice = this.activeVoices[i];
+      const voice = this.activeVoices[i]!;
       if ('isTextVoice' in voice) continue;
       if (!shapeMap.has(voice.shapeId)) {
         this._stopVoice(voice);
@@ -495,7 +495,7 @@ export class AudioEngine {
       : 0;
 
     for (let i = 0; i < totalLayers; i++) {
-      const shape = sigilState.shapes[i];
+      const shape = sigilState.shapes[i]!;
       if (!this.playingShapeIds.has(shape.id)) {
         const voice = this._buildVoice(ctx, shape, i, totalLayers, curlicues);
         voice.start(now);
