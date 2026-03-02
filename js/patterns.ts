@@ -90,7 +90,11 @@ export function applyPattern(
     ctx.save();
     ctx.globalCompositeOperation = 'destination-out';
     ctx.globalAlpha = 0.5;
-    const dashLen = 3 + Math.random() * 5;
+    // Derive a stable pseudo-random value from voice ID to avoid per-frame flicker
+    let hash = 0;
+    for (let i = 0; i < voice.id.length; i++)
+      hash = ((hash << 5) - hash + voice.id.charCodeAt(i)) | 0;
+    const dashLen = 3 + ((hash & 0xffff) / 0xffff) * 5;
     ctx.setLineDash([dashLen, dashLen * 0.8, dashLen * 1.5, dashLen * 0.5]);
     ctx.lineWidth = 4;
     ctx.strokeStyle = 'black';

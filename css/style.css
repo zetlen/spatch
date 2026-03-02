@@ -237,6 +237,7 @@ select {
   display: block;
   background: transparent;
   image-rendering: auto;
+  touch-action: none;
 }
 
 /* ---- Play fan menu ---- */
