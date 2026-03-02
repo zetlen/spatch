@@ -8,24 +8,24 @@ sole source of color. No accent colors in the chrome.
 
 ### UI Chrome
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--bg-body` | `#e8e4e0` | Body, canvas area surround |
-| `--bg-toolbar` | `#d5d0cb` | Toolbars, button faces |
-| `--bg-panel` | `#ddd8d3` | Floating panels |
-| `--border` | `#b8b3ad` | Flat borders, dividers |
-| `--bevel-hi` | `#f0ece8` | Bevel highlight (top/left) |
-| `--bevel-lo` | `#a8a39d` | Bevel shadow (bottom/right) |
-| `--text-primary` | `#2a2a2a` | Primary text |
-| `--text-muted` | `#7a7570` | Secondary labels |
-| `--danger` | `#cc3344` | Delete button, destructive actions |
+| Token            | Value     | Usage                              |
+| ---------------- | --------- | ---------------------------------- |
+| `--bg-body`      | `#e8e4e0` | Body, canvas area surround         |
+| `--bg-toolbar`   | `#d5d0cb` | Toolbars, button faces             |
+| `--bg-panel`     | `#ddd8d3` | Floating panels                    |
+| `--border`       | `#b8b3ad` | Flat borders, dividers             |
+| `--bevel-hi`     | `#f0ece8` | Bevel highlight (top/left)         |
+| `--bevel-lo`     | `#a8a39d` | Bevel shadow (bottom/right)        |
+| `--text-primary` | `#2a2a2a` | Primary text                       |
+| `--text-muted`   | `#7a7570` | Secondary labels                   |
+| `--danger`       | `#cc3344` | Delete button, destructive actions |
 
 ### Canvas
 
-| Value | Usage |
-|-------|-------|
-| `#2a2a2a` | Canvas background (CANVAS_BG) |
-| 2px inset bevel | Canvas frame (sunken well) |
+| Value           | Usage                         |
+| --------------- | ----------------------------- |
+| `#2a2a2a`       | Canvas background (CANVAS_BG) |
+| 2px inset bevel | Canvas frame (sunken well)    |
 
 ### Interactive States (No Accent Color)
 
@@ -125,6 +125,7 @@ Unchanged. Keep Orbitron and Share Tech Mono.
 ## Scope
 
 Files affected:
+
 - `css/style.css` — complete palette replacement, bevel system, remove animations
 - `js/canvas.ts` — CANVAS_BG, glow layers, selection handle colors
 - `js/colors.ts` — angle dial accent colors

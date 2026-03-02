@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
+import path from 'path';
 
 test.describe('Serialization round-trip', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
+  });
+
   test('placing shapes updates URL hash', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');

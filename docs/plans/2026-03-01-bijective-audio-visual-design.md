@@ -100,6 +100,7 @@ param = sin(PI * (rotation % period) / period)
 Where period = 360 / vertex_count (90 for square, 120 for triangle).
 
 This curve:
+
 - Repeats at each vertex, so visually identical orientations produce identical
   audio (e.g., square at 0 and 90 degrees both give param = 0).
 - Is symmetric within each segment, so mirror-image orientations also produce

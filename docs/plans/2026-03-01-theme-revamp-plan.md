@@ -15,6 +15,7 @@
 ### Task 1: Replace CSS custom properties and body/toolbar/panel base styles
 
 **Files:**
+
 - Modify: `css/style.css:5-19` (custom properties)
 - Modify: `css/style.css:27-36` (body)
 - Modify: `css/style.css:52-68` (toolbars)
@@ -100,6 +101,7 @@ git commit -m "Replace CSS custom properties and base styles with neutral palett
 ### Task 2: Restyle buttons with hybrid bevel
 
 **Files:**
+
 - Modify: `css/style.css:96-136` (button styles)
 - Modify: `css/style.css:137-172` (play button, pulse-glow animation)
 
@@ -195,6 +197,7 @@ git commit -m "Restyle buttons with hybrid bevel, remove pulse-glow animation"
 ### Task 3: Update swatch, selects, text input, canvas area, and canvas element
 
 **Files:**
+
 - Modify: `css/style.css` (swatch, select, text input, canvas area, canvas element sections)
 
 **Step 1: Update swatch**
@@ -297,6 +300,7 @@ git commit -m "Update swatch, selects, inputs, and canvas area styles"
 ### Task 4: Update play fan, panels, and remove remaining animations
 
 **Files:**
+
 - Modify: `css/style.css` (play fan, canvas glow, color picker panel, scanline overlay sections)
 
 **Step 1: Update play fan**
@@ -425,6 +429,7 @@ git commit -m "Update panels, play fan, stop buttons, remove glow animations and
 ### Task 5: Update border panel and share menu CSS
 
 **Files:**
+
 - Modify: `css/style.css` (border panel, share menu sections)
 
 **Step 1: Update border panel position**
@@ -555,6 +560,7 @@ git commit -m "Update border panel, share menu, and responsive styles"
 ### Task 6: Update canvas.ts colors
 
 **Files:**
+
 - Modify: `js/canvas.ts:9` (CANVAS_BG)
 - Modify: `js/canvas.ts:107` (chromatic guides)
 - Modify: `js/canvas.ts:175-201` (shape glow layers → simple strokes)
@@ -576,18 +582,18 @@ Change octave line color from `rgba(255,255,255,0.1)` to `rgba(255,255,255,0.12)
 Replace the entire glow rendering block (the `glowColor`, `glowLayers` variables and the `for (const layer of glowLayers)` loop) with:
 
 ```ts
-  // Shape outline
-  ctx.save();
-  if (isPlaying) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-  } else {
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 1.5;
-  }
-  buildShapePath(ctx, voice, canvasSize);
-  ctx.stroke();
-  ctx.restore();
+// Shape outline
+ctx.save();
+if (isPlaying) {
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+} else {
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1.5;
+}
+buildShapePath(ctx, voice, canvasSize);
+ctx.stroke();
+ctx.restore();
 ```
 
 **Step 4: Update selection handles**
@@ -621,6 +627,7 @@ git commit -m "Update canvas colors: neutral background, simple strokes, white h
 ### Task 7: Update colors.ts and embed files
 
 **Files:**
+
 - Modify: `js/colors.ts:126,134,140` (angle dial colors)
 - Modify: `js/embed-entry.ts:11,17` (inline text color)
 - Modify: `embed.html:14,30-31,37,50,53` (inline styles)
@@ -671,6 +678,7 @@ git commit -m "Update angle dial, embed page, and embed-entry colors"
 ### Task 8: Update CLAUDE.md and verify
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 **Step 1: Update theme references in CLAUDE.md**
@@ -682,6 +690,7 @@ In the CSS description in the project structure, change `synthwave theme` to `fl
 Run: `bun run build`
 
 Serve dist and verify in browser that:
+
 - UI chrome is warm gray with beveled buttons
 - Canvas is dark warm gray, sunken
 - Shapes render with simple white outlines

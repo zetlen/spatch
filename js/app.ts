@@ -6,6 +6,7 @@ import {
   hitTestShapes,
   hitTestHandles,
   hitTestADSRCorner,
+  isInClippedCorner,
   calcResize,
   calcRotation,
   clampSize,
@@ -25,6 +26,7 @@ import {
   type Voice,
   type TextDecoration,
   type WaveformType,
+  type ADSRCorner,
   type Reverb,
 } from './types.ts';
 
@@ -66,6 +68,14 @@ function getSelectedDeco(): TextDecoration | null {
 const loaded = loadFromURL();
 if (loaded) {
   store.loadState(loaded);
+}
+
+// ---- First-load splash ----
+
+const splashKey = `spatch-seen:${location.pathname}${location.hash}`;
+let splashActive = !localStorage.getItem(splashKey);
+if (splashActive) {
+  document.body.classList.add('splash');
 }
 
 // ---- Reverb shadow on canvas frame ----
@@ -123,6 +133,7 @@ function resizeCanvas(): void {
 
   updateCanvasBorderRadius(canvasFrame, store.data.envelope, size);
   updateFrameShadow(canvasFrame, store.data.reverb, size, audio.getLevel());
+  needsRender = true;
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -172,16 +183,20 @@ interface CanvasCoords {
   ny: number;
 }
 
-function canvasCoords(e: MouseEvent): CanvasCoords {
+function canvasCoordsFromClient(clientX: number, clientY: number): CanvasCoords {
   const rect = canvas.getBoundingClientRect();
   const scaleX = CANVAS_SIZE / rect.width;
   const scaleY = CANVAS_SIZE / rect.height;
   return {
-    px: (e.clientX - rect.left) * scaleX,
-    py: (e.clientY - rect.top) * scaleY,
-    nx: ((e.clientX - rect.left) * scaleX) / CANVAS_SIZE,
-    ny: ((e.clientY - rect.top) * scaleY) / CANVAS_SIZE,
+    px: (clientX - rect.left) * scaleX,
+    py: (clientY - rect.top) * scaleY,
+    nx: ((clientX - rect.left) * scaleX) / CANVAS_SIZE,
+    ny: ((clientY - rect.top) * scaleY) / CANVAS_SIZE,
   };
+}
+
+function canvasCoords(e: PointerEvent): CanvasCoords {
+  return canvasCoordsFromClient(e.clientX, e.clientY);
 }
 
 // ---- Map tool names to waveform types ----
@@ -195,6 +210,55 @@ const toolToWaveform: Record<string, WaveformType> = {
 // ---- Interaction state ----
 
 let interaction: InteractionState = IDLE;
+
+// Active pointers for pinch-rotate detection
+const activePointers = new Map<number, { x: number; y: number }>();
+
+// ---- ADSR corner drag helpers ----
+// Diagonal direction pointing inward from each corner (for projection)
+const INV_SQRT2 = 1 / Math.sqrt(2);
+
+function cornerDiagonal(corner: ADSRCorner): { dx: number; dy: number } {
+  switch (corner) {
+    case 'attack':
+      return { dx: 1, dy: -1 };
+    case 'decay':
+      return { dx: 1, dy: 1 };
+    case 'sustain':
+      return { dx: -1, dy: 1 };
+    case 'release':
+      return { dx: -1, dy: -1 };
+  }
+}
+
+function envelopeValueToDist(corner: ADSRCorner, val: number, canvasSize: number): number {
+  const maxR = canvasSize * 0.15; // matches MAX_RADIUS_RATIO in envelope.ts
+  switch (corner) {
+    case 'attack':
+    case 'decay':
+      return (val / 2.0) * maxR;
+    case 'sustain':
+      return val * maxR;
+    case 'release':
+      return (val / 3.0) * maxR;
+  }
+}
+
+function handleADSRDrag(px: number, py: number): void {
+  if (interaction.mode !== 'adsr') return;
+  const diag = cornerDiagonal(interaction.corner);
+  const moveDx = px - interaction.startPx;
+  const moveDy = py - interaction.startPy;
+  const projectedDelta = (moveDx * diag.dx + moveDy * diag.dy) * INV_SQRT2;
+  const originDist = envelopeValueToDist(
+    interaction.corner,
+    interaction.origin[interaction.corner],
+    CANVAS_SIZE,
+  );
+  const newDist = Math.max(0, originDist + projectedDelta);
+  const val = dragToEnvelopeValue(interaction.corner, newDist, CANVAS_SIZE);
+  store.updateEnvelope({ [interaction.corner]: val });
+}
 
 // ---- Tool change callback ----
 
@@ -218,10 +282,66 @@ function voiceRotation(voice: Voice): number {
   return 0;
 }
 
-// ---- Mouse events ----
+// ---- Pinch helpers ----
 
-canvas.addEventListener('mousedown', (e: MouseEvent) => {
+function pointerDist(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function pointerAngle(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+}
+
+// ---- Pointer events (all on canvasWrap) ----
+
+const canvasWrap = document.getElementById('canvas-wrap')!;
+
+canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
+  if (splashActive) return;
+  e.preventDefault();
+
   const { px, py, nx, ny } = canvasCoords(e);
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  // Two touch pointers → pinch-rotate
+  if (e.pointerType === 'touch' && activePointers.size === 2) {
+    // Cancel any single-touch interaction in progress
+    if (interaction.mode !== 'idle') {
+      interaction = IDLE;
+    }
+
+    const [idA, posA] = [...activePointers.entries()][0]!;
+    const [idB, posB] = [...activePointers.entries()][1]!;
+    const midX = (posA.x + posB.x) / 2;
+    const midY = (posA.y + posB.y) / 2;
+    const { px: midPx, py: midPy } = canvasCoordsFromClient(midX, midY);
+
+    const shapeId = hitTestShapes(store.data, midPx, midPy, CANVAS_SIZE) || selectedId;
+    if (!shapeId) return;
+
+    const voice = store.getVoice(shapeId);
+    if (!voice) return;
+
+    setSelection(shapeId);
+    undo.snapshot();
+
+    const initRotation = voiceRotation(voice);
+    interaction = {
+      mode: 'pinch-rotate',
+      pointerA: idA,
+      pointerB: idB,
+      positions: new Map(activePointers),
+      initDist: pointerDist(posA, posB),
+      initAngle: pointerAngle(posA, posB),
+      initSize: voice.size,
+      initRotation,
+      shapeId,
+    };
+    canvasWrap.setPointerCapture(idA);
+    canvasWrap.setPointerCapture(idB);
+    needsRender = true;
+    return;
+  }
 
   const tool = toolbar.currentTool;
 
@@ -230,7 +350,6 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
     const result = decoTool.handleMouseDown(normalizedCoord(nx), normalizedCoord(ny));
     if (result) {
       if ('placed' in result) {
-        // Text: placed instantly -- switch to select mode
         setSelection(null, result.placed);
         toolbar.currentTool = 'select';
         toolbar._updateToolActive();
@@ -255,94 +374,156 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
     return;
   }
 
-  // Select mode
-  // 1. Check ADSR corners
+  // Select mode — skip shape hit testing in clipped corner regions
+  const inClippedCorner = isInClippedCorner(store.data.envelope, px, py, CANVAS_SIZE);
+
+  if (!inClippedCorner) {
+    // 1. Check handles on selected voice
+    const selVoice = getSelected();
+    if (selVoice) {
+      const handle = hitTestHandles(selVoice, px, py, CANVAS_SIZE);
+      if (handle === 'rotate') {
+        undo.snapshot();
+        interaction = { mode: 'rotating', pointerId: e.pointerId };
+        canvasWrap.setPointerCapture(e.pointerId);
+        return;
+      }
+      if (handle) {
+        undo.snapshot();
+        interaction = {
+          mode: 'resizing',
+          pointerId: e.pointerId,
+          handle,
+          origin: { size: selVoice.size },
+          startPx: px,
+          startPy: py,
+        };
+        canvasWrap.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+
+    // 2. Hit test voices
+    const hitId = hitTestShapes(store.data, px, py, CANVAS_SIZE);
+    if (hitId) {
+      setSelection(hitId);
+      toolbar.syncToSelectedShape();
+      undo.snapshot();
+      const voice = store.getVoice(hitId)!;
+      interaction = {
+        mode: 'dragging',
+        pointerId: e.pointerId,
+        origin: { x: voice.x, y: voice.y },
+        startNx: nx,
+        startNy: ny,
+      };
+      canvasWrap.setPointerCapture(e.pointerId);
+      needsRender = true;
+      return;
+    }
+
+    // 3. Check resize handles on selected text decoration
+    const selDeco = getSelectedDeco();
+    if (selDeco) {
+      const decoHandle = hitTestDecoHandles(selDeco, px, py, CANVAS_SIZE);
+      if (decoHandle) {
+        undo.snapshot();
+        interaction = {
+          mode: 'deco-resizing',
+          pointerId: e.pointerId,
+          handle: decoHandle,
+          origin: {
+            size: selDeco.size,
+            bounds: getDecoBounds(selDeco, CANVAS_SIZE)!,
+          },
+        };
+        canvasWrap.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+
+    // 4. Hit test text decorations
+    const hitDecoId = hitTestDecorations(store.data, px, py, CANVAS_SIZE);
+    if (hitDecoId) {
+      setSelection(null, hitDecoId);
+      undo.snapshot();
+      const deco = store.getText(hitDecoId)!;
+      interaction = {
+        mode: 'deco-dragging',
+        pointerId: e.pointerId,
+        origin: { x: deco.x, y: deco.y },
+        startNx: nx,
+        startNy: ny,
+      };
+      canvasWrap.setPointerCapture(e.pointerId);
+      needsRender = true;
+      return;
+    }
+  }
+
+  // 5. Check ADSR corners
   const adsrCorner = hitTestADSRCorner(store.data.envelope, px, py, CANVAS_SIZE);
   if (adsrCorner) {
     undo.snapshot();
-    interaction = { mode: 'adsr', corner: adsrCorner, origin: { ...store.data.envelope } };
-    return;
-  }
-
-  // 2. Check handles on selected voice
-  const selVoice = getSelected();
-  if (selVoice) {
-    const handle = hitTestHandles(selVoice, px, py, CANVAS_SIZE);
-    if (handle === 'rotate') {
-      undo.snapshot();
-      interaction = { mode: 'rotating' };
-      return;
-    }
-    if (handle) {
-      undo.snapshot();
-      interaction = {
-        mode: 'resizing',
-        handle,
-        origin: { size: selVoice.size },
-        startPx: px,
-        startPy: py,
-      };
-      return;
-    }
-  }
-
-  // 3. Hit test voices
-  const hitId = hitTestShapes(store.data, px, py, CANVAS_SIZE);
-  if (hitId) {
-    setSelection(hitId);
-    toolbar.syncToSelectedShape();
-    undo.snapshot();
-    const voice = store.getVoice(hitId)!;
     interaction = {
-      mode: 'dragging',
-      origin: { x: voice.x, y: voice.y },
-      startNx: nx,
-      startNy: ny,
+      mode: 'adsr',
+      pointerId: e.pointerId,
+      corner: adsrCorner,
+      origin: { ...store.data.envelope },
+      startPx: px,
+      startPy: py,
     };
-    needsRender = true;
-    return;
-  }
-
-  // 4. Check resize handles on selected text decoration
-  const selDeco = getSelectedDeco();
-  if (selDeco) {
-    const decoHandle = hitTestDecoHandles(selDeco, px, py, CANVAS_SIZE);
-    if (decoHandle) {
-      undo.snapshot();
-      interaction = {
-        mode: 'deco-resizing',
-        handle: decoHandle,
-        origin: {
-          size: selDeco.size,
-          bounds: getDecoBounds(selDeco, CANVAS_SIZE)!,
-        },
-      };
-      return;
-    }
-  }
-
-  // 5. Hit test text decorations
-  const hitDecoId = hitTestDecorations(store.data, px, py, CANVAS_SIZE);
-  if (hitDecoId) {
-    setSelection(null, hitDecoId);
-    undo.snapshot();
-    const deco = store.getText(hitDecoId)!;
-    interaction = {
-      mode: 'deco-dragging',
-      origin: { x: deco.x, y: deco.y },
-      startNx: nx,
-      startNy: ny,
-    };
-    needsRender = true;
+    canvasWrap.setPointerCapture(e.pointerId);
     return;
   }
 
   // 6. Deselect
-  setSelection(null);
-  needsRender = true;
+  if (!inClippedCorner) {
+    setSelection(null);
+    needsRender = true;
+  }
 });
 
-canvas.addEventListener('mousemove', (e: MouseEvent) => {
+canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  // Pinch-rotate: compute from two stored positions
+  if (interaction.mode === 'pinch-rotate') {
+    interaction.positions.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const posA = interaction.positions.get(interaction.pointerA);
+    const posB = interaction.positions.get(interaction.pointerB);
+    if (!posA || !posB) return;
+
+    const dist = pointerDist(posA, posB);
+    const angle = pointerAngle(posA, posB);
+    const scale = dist / interaction.initDist;
+    const newSize = clampSize(interaction.initSize * scale);
+
+    const voice = store.getVoice(interaction.shapeId);
+    if (!voice) return;
+
+    if (voice.waveform === 'sine') {
+      store.updateVoice(interaction.shapeId, { size: newSize });
+    } else {
+      const angleDelta = angle - interaction.initAngle;
+      const newRotation = (((interaction.initRotation + angleDelta) % 360) + 360) % 360;
+      const timbre = rotationToTimbre(newRotation, voice.waveform);
+      store.updateVoice(interaction.shapeId, {
+        size: newSize,
+        timbre: normalizedCoord(timbre),
+      });
+    }
+    return;
+  }
+
+  // Filter by pointerId for single-pointer interactions
+  if (
+    interaction.mode !== 'idle' &&
+    'pointerId' in interaction &&
+    interaction.pointerId !== e.pointerId
+  )
+    return;
+
   const { px, py, nx, ny } = canvasCoords(e);
 
   if (interaction.mode === 'dragging') {
@@ -360,7 +541,6 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
   if (interaction.mode === 'resizing') {
     const voice = getSelected();
     if (!voice) return;
-    // Transform delta to voice-local coordinates
     const rotDeg = voiceRotation(voice);
     const rotRad = (rotDeg * Math.PI) / 180;
     const dpx = px - interaction.startPx;
@@ -391,11 +571,7 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
   }
 
   if (interaction.mode === 'adsr') {
-    // Drag distance from corner determines value
-    const cornerPos = getCornerPosition(interaction.corner, CANVAS_SIZE);
-    const dist = Math.hypot(px - cornerPos.x, py - cornerPos.y);
-    const val = dragToEnvelopeValue(interaction.corner, dist, CANVAS_SIZE);
-    store.updateEnvelope({ [interaction.corner]: val });
+    handleADSRDrag(px, py);
     return;
   }
 
@@ -426,140 +602,31 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
   }
 });
 
-canvas.addEventListener('mouseup', () => {
-  interaction = IDLE;
-});
+function handlePointerEnd(e: PointerEvent): void {
+  activePointers.delete(e.pointerId);
 
-canvas.addEventListener('mouseleave', () => {
-  interaction = IDLE;
-});
-
-// ---- Touch support ----
-
-function touchDist(a: Touch, b: Touch): number {
-  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-}
-
-function touchAngle(a: Touch, b: Touch): number {
-  return (Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * 180) / Math.PI;
-}
-
-canvas.addEventListener(
-  'touchstart',
-  (e: TouchEvent) => {
-    e.preventDefault();
-
-    if (e.touches.length === 2) {
-      // Cancel any in-progress single-touch interaction
-      if (interaction.mode !== 'idle') {
-        canvas.dispatchEvent(new MouseEvent('mouseup', {}));
-      }
-
-      const a = e.touches[0]!;
-      const b = e.touches[1]!;
-      const midX = (a.clientX + b.clientX) / 2;
-      const midY = (a.clientY + b.clientY) / 2;
-      const rect = canvas.getBoundingClientRect();
-      const px = ((midX - rect.left) * CANVAS_SIZE) / rect.width;
-      const py = ((midY - rect.top) * CANVAS_SIZE) / rect.height;
-
-      // Select voice under midpoint, or use already-selected voice
-      const shapeId = hitTestShapes(store.data, px, py, CANVAS_SIZE) || selectedId;
-      if (!shapeId) return;
-
-      const voice = store.getVoice(shapeId);
-      if (!voice) return;
-
-      setSelection(shapeId);
-      undo.snapshot();
-
-      const initRotation = voiceRotation(voice);
-      interaction = {
-        mode: 'pinch-rotate',
-        initDist: touchDist(a, b),
-        initAngle: touchAngle(a, b),
-        initSize: voice.size,
-        initRotation,
-        shapeId,
-      };
+  if (interaction.mode === 'pinch-rotate') {
+    if (e.pointerId === interaction.pointerA || e.pointerId === interaction.pointerB) {
+      interaction = IDLE;
+      toolbar.syncToSelectedShape();
       needsRender = true;
-      return;
     }
+    return;
+  }
 
-    const touch = e.touches[0]!;
-    canvas.dispatchEvent(
-      new MouseEvent('mousedown', {
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        shiftKey: e.shiftKey,
-      }),
-    );
-  },
-  { passive: false },
-);
+  // Filter by pointerId
+  if (
+    interaction.mode !== 'idle' &&
+    'pointerId' in interaction &&
+    interaction.pointerId !== e.pointerId
+  )
+    return;
 
-canvas.addEventListener(
-  'touchmove',
-  (e: TouchEvent) => {
-    e.preventDefault();
+  interaction = IDLE;
+}
 
-    if (interaction.mode === 'pinch-rotate' && e.touches.length >= 2) {
-      const a = e.touches[0]!;
-      const b = e.touches[1]!;
-      const dist = touchDist(a, b);
-      const angle = touchAngle(a, b);
-
-      const scale = dist / interaction.initDist;
-      const newSize = clampSize(interaction.initSize * scale);
-
-      const voice = store.getVoice(interaction.shapeId);
-      if (!voice) return;
-
-      if (voice.waveform === 'sine') {
-        store.updateVoice(interaction.shapeId, { size: newSize });
-      } else {
-        const angleDelta = angle - interaction.initAngle;
-        const newRotation = (((interaction.initRotation + angleDelta) % 360) + 360) % 360;
-        const timbre = rotationToTimbre(newRotation, voice.waveform);
-        store.updateVoice(interaction.shapeId, {
-          size: newSize,
-          timbre: normalizedCoord(timbre),
-        });
-      }
-      return;
-    }
-
-    const touch = e.touches[0]!;
-    canvas.dispatchEvent(
-      new MouseEvent('mousemove', {
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        shiftKey: e.shiftKey,
-      }),
-    );
-  },
-  { passive: false },
-);
-
-canvas.addEventListener(
-  'touchend',
-  (e: TouchEvent) => {
-    e.preventDefault();
-
-    if (interaction.mode === 'pinch-rotate') {
-      if (e.touches.length < 2) {
-        // Undo snapshot was already captured at touchstart
-        interaction = IDLE;
-        toolbar.syncToSelectedShape();
-        needsRender = true;
-      }
-      return;
-    }
-
-    canvas.dispatchEvent(new MouseEvent('mouseup', {}));
-  },
-  { passive: false },
-);
+canvasWrap.addEventListener('pointerup', handlePointerEnd);
+canvasWrap.addEventListener('pointercancel', handlePointerEnd);
 
 // ---- Clipboard for copy/paste ----
 
@@ -643,6 +710,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   }
   if (e.key === ' ') {
     e.preventDefault();
+    if (splashActive) return;
     if (playState !== 'idle') {
       stopPlayback();
     } else if (store.data.voices.length > 0) {
@@ -870,6 +938,91 @@ playBtn.addEventListener('lostpointercapture', (e: PointerEvent) => {
   gesturePointerId = null;
 });
 
+// ---- Splash interaction ----
+
+if (splashActive) {
+  const canvasArea = document.getElementById('canvas-area')!;
+  const MIN_SUSTAIN_MS = 2000;
+  let splashDownTime = 0;
+  let splashPointerDown = false;
+
+  function splashReveal(delayAudioRelease: number): void {
+    const FADE_DURATION = 0.5;
+    const topBar = document.getElementById('toolbar-top')!;
+    const botBar = document.getElementById('toolbar-bottom')!;
+
+    // Fast fixed fade — starts immediately, eases out
+    topBar.style.transitionDuration = `${FADE_DURATION}s`;
+    botBar.style.transitionDuration = `${FADE_DURATION}s`;
+
+    // Remove splash class — triggers CSS opacity transition right away
+    document.body.classList.remove('splash');
+    splashActive = false;
+
+    // Mark URL as seen
+    localStorage.setItem(splashKey, '1');
+
+    // Release audio: immediately if held long enough, or after remaining sustain
+    const doRelease = () => {
+      audio.release(store.data.envelope);
+      playBtn.classList.remove('playing');
+      playBtn.textContent = '\u25B6 PLAY';
+      playState = 'idle';
+      const releaseMs = store.data.envelope.release * 1000 + 100;
+      releaseGlowTimeoutId = setTimeout(() => {
+        releaseGlowTimeoutId = null;
+        needsRender = true;
+      }, releaseMs);
+    };
+
+    if (delayAudioRelease > 0) {
+      setTimeout(doRelease, delayAudioRelease);
+    } else {
+      doRelease();
+    }
+
+    // Clean up inline transition-duration after transition ends
+    topBar.addEventListener(
+      'transitionend',
+      () => {
+        topBar.style.transitionDuration = '';
+        botBar.style.transitionDuration = '';
+      },
+      { once: true },
+    );
+
+    // Remove splash pointer listeners
+    canvasArea.removeEventListener('pointerdown', splashDown);
+    canvasArea.removeEventListener('pointerup', splashUp);
+    canvasArea.removeEventListener('pointercancel', splashUp);
+  }
+
+  function splashDown(e: PointerEvent): void {
+    e.preventDefault();
+    if (splashPointerDown) return; // Ignore multi-touch
+    splashPointerDown = true;
+    splashDownTime = Date.now();
+
+    // Start playback (works even with empty canvas — silence)
+    startPlayback();
+  }
+
+  function splashUp(_e: PointerEvent): void {
+    if (!splashPointerDown) return;
+    splashPointerDown = false;
+
+    const elapsed = Date.now() - splashDownTime;
+    const remaining = Math.max(0, MIN_SUSTAIN_MS - elapsed);
+
+    // Always reveal UI immediately; audio sustains for remainder if needed
+    splashReveal(remaining);
+  }
+
+  canvasArea.addEventListener('pointerdown', splashDown);
+  canvasArea.addEventListener('pointerup', splashUp);
+  canvasArea.addEventListener('pointercancel', splashUp);
+}
+
 // ---- Auto-save to URL (debounced) ----
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -918,20 +1071,3 @@ shareMenu.addEventListener('click', async (e: MouseEvent) => {
     label.textContent = originalText;
   }, 1500);
 });
-
-// ---- Corner position helper ----
-
-function getCornerPosition(cornerName: string, size: number): { x: number; y: number } {
-  switch (cornerName) {
-    case 'attack':
-      return { x: 0, y: size };
-    case 'decay':
-      return { x: 0, y: 0 };
-    case 'sustain':
-      return { x: size, y: 0 };
-    case 'release':
-      return { x: size, y: size };
-    default:
-      return { x: 0, y: 0 };
-  }
-}

@@ -154,6 +154,44 @@ export function hitTestHandles(
   return null;
 }
 
+// Check if a point falls in a clipped-out corner region (outside the border-radius arc).
+// Used to prevent shape hit testing in areas that are visually clipped.
+//
+// CSS border-radius: R creates a quarter-circle arc centered INWARD from the
+// corner by R pixels — at (corner ± R, corner ± R). We test whether the point
+// is inside the corner's bounding square but outside that arc.
+export function isInClippedCorner(
+  envelope: Envelope,
+  mx: number,
+  my: number,
+  canvasSize: number,
+): boolean {
+  const maxR = canvasSize * 0.15; // matches MAX_RADIUS_RATIO in envelope.ts
+  const corners = [
+    { r: (envelope.decay / 2.0) * maxR, cornerX: 0, cornerY: 0 }, // top-left
+    { r: envelope.sustain * maxR, cornerX: canvasSize, cornerY: 0 }, // top-right
+    { r: (envelope.release / 3.0) * maxR, cornerX: canvasSize, cornerY: canvasSize }, // bottom-right
+    { r: (envelope.attack / 2.0) * maxR, cornerX: 0, cornerY: canvasSize }, // bottom-left
+  ];
+
+  for (const { r, cornerX, cornerY } of corners) {
+    if (r < 1) continue; // no rounding, no clipped region
+    // Is the point in the corner's bounding square?
+    const dx = Math.abs(mx - cornerX);
+    const dy = Math.abs(my - cornerY);
+    if (dx < r && dy < r) {
+      // Inside the bounding square — check if outside the quarter-circle arc.
+      // Arc center is inward from the corner by r in both axes.
+      const arcCx = cornerX === 0 ? r : canvasSize - r;
+      const arcCy = cornerY === 0 ? r : canvasSize - r;
+      if ((mx - arcCx) ** 2 + (my - arcCy) ** 2 > r * r) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // Hit test ADSR corners. Returns corner name if mouse is near a canvas corner.
 export function hitTestADSRCorner(
   envelope: Envelope,

@@ -61,8 +61,6 @@ export function render(
 ): void {
   ctx.clearRect(0, 0, canvasSize, canvasSize);
 
-  drawChromaticGuides(ctx, canvasSize);
-
   // Draw voices onto offscreen canvas so blend modes apply between shapes
   // (not against the dark background, which would make soft-light etc. too dim).
   const bctx = getBlendCanvas(canvasSize);
@@ -99,23 +97,6 @@ export function render(
       }
     }
   }
-}
-
-function drawChromaticGuides(ctx: CanvasRenderingContext2D, size: number): void {
-  ctx.save();
-  ctx.lineWidth = 1;
-  for (let s = 0; s <= 36; s++) {
-    const y = (1 - s / 36) * size;
-    const isOctave = s % 12 === 0;
-    ctx.strokeStyle = isOctave ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)';
-    ctx.setLineDash(isOctave ? [6, 8] : [4, 8]);
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(size, y);
-    ctx.stroke();
-  }
-  ctx.setLineDash([]);
-  ctx.restore();
 }
 
 function drawVoice(ctx: CanvasRenderingContext2D, voice: Voice, canvasSize: number): void {
@@ -168,15 +149,6 @@ function drawVoice(ctx: CanvasRenderingContext2D, voice: Voice, canvasSize: numb
   }
 
   ctx.restore();
-
-  // Shape outline
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-  ctx.lineWidth = 1.5;
-  buildShapePath(ctx, voice, canvasSize);
-  ctx.stroke();
-  ctx.restore();
-
   ctx.restore();
 }
 

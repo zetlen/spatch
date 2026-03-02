@@ -30,7 +30,12 @@ export function updateCanvasBorderRadius(
   canvasSize: number,
 ): void {
   const radii = envelopeToCornerRadii(envelope, canvasSize);
-  frameEl.style.borderRadius = `${radii.topLeft}px ${radii.topRight}px ${radii.bottomRight}px ${radii.bottomLeft}px`;
+  const br = `${radii.topLeft}px ${radii.topRight}px ${radii.bottomRight}px ${radii.bottomLeft}px`;
+  frameEl.style.borderRadius = br;
+  // Also set on the wrap so overflow: hidden clips the canvas to the rounded corners
+  if (frameEl.parentElement) {
+    frameEl.parentElement.style.borderRadius = br;
+  }
 }
 
 // Convert a drag distance on a corner to an envelope parameter change

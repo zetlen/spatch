@@ -3,6 +3,7 @@ import path from 'path';
 
 test.describe('Play fan gesture', () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
     await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/audio-tap.js') });
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');

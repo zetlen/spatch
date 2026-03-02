@@ -8,29 +8,48 @@ import type { HandleType, ADSRCorner, Envelope, DecoBounds } from './types.ts';
 
 export type InteractionState =
   | { mode: 'idle' }
-  | { mode: 'dragging'; origin: { x: number; y: number }; startNx: number; startNy: number }
+  | {
+      mode: 'dragging';
+      pointerId: number;
+      origin: { x: number; y: number };
+      startNx: number;
+      startNy: number;
+    }
   | {
       mode: 'resizing';
+      pointerId: number;
       handle: HandleType;
       origin: { size: number };
       startPx: number;
       startPy: number;
     }
-  | { mode: 'rotating' }
-  | { mode: 'adsr'; corner: ADSRCorner; origin: Envelope }
+  | { mode: 'rotating'; pointerId: number }
+  | {
+      mode: 'adsr';
+      pointerId: number;
+      corner: ADSRCorner;
+      origin: Envelope;
+      startPx: number;
+      startPy: number;
+    }
   | {
       mode: 'deco-dragging';
+      pointerId: number;
       origin: { x: number; y: number };
       startNx: number;
       startNy: number;
     }
   | {
       mode: 'deco-resizing';
+      pointerId: number;
       handle: HandleType;
       origin: { size: number; bounds: DecoBounds };
     }
   | {
       mode: 'pinch-rotate';
+      pointerA: number;
+      pointerB: number;
+      positions: Map<number, { x: number; y: number }>;
       initDist: number;
       initAngle: number;
       initSize: number;

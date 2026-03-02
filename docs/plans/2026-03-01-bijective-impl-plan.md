@@ -21,6 +21,7 @@ mapping is fixed for radial and linear modes.
 ### Task 1: New Voice and TextDecoration types in types.ts
 
 **Files:**
+
 - Modify: `js/types.ts`
 - Test: `bun run check` (typecheck only — this task defines types)
 
@@ -30,6 +31,7 @@ Replace `ShapeType`, `Shape`, and `Decoration` types. Keep `Fill`, `Envelope`,
 `FillDraft`, and branding functions unchanged.
 
 Remove:
+
 - `type ShapeType = 'circle' | 'triangle' | 'square'`
 - `interface Shape`
 - `type DecorationType`
@@ -99,9 +101,12 @@ export interface SigilData {
 ```typescript
 export function waveformShape(waveform: WaveformType): 'circle' | 'square' | 'triangle' {
   switch (waveform) {
-    case 'sine': return 'circle';
-    case 'pulse': return 'square';
-    case 'blend': return 'triangle';
+    case 'sine':
+      return 'circle';
+    case 'pulse':
+      return 'square';
+    case 'blend':
+      return 'triangle';
   }
 }
 ```
@@ -132,6 +137,7 @@ git commit -m "feat: Voice discriminated union replaces Shape/Decoration types"
 ### Task 2: Audio mapping — periodic rotation and formant fixes
 
 **Files:**
+
 - Modify: `js/audio.ts`
 - Test: `tests/unit/audio-mapping.test.js`
 
@@ -236,15 +242,19 @@ inside `audio.ts`.
 In `applyFormantFilter`:
 
 Linear fill — replace:
+
 ```typescript
 const blend = Math.abs(Math.sin(((fill.gradAngle % 360) * Math.PI) / 360));
 ```
+
 with:
+
 ```typescript
-const blend = ((fill.gradAngle % 360) + 360) % 360 / 360;
+const blend = (((fill.gradAngle % 360) + 360) % 360) / 360;
 ```
 
 Radial fill — replace the saturation-only averaging with full interpolation:
+
 ```typescript
 } else if (fill.mode === 'radial') {
   h = (h + fill.h2) / 2;
@@ -260,10 +270,13 @@ Change from `ShapeType` parameter to `WaveformType`:
 ```typescript
 export function waveformGain(waveform: WaveformType): number {
   switch (waveform) {
-    case 'pulse': return 0.7;
-    case 'blend': return 0.85;
+    case 'pulse':
+      return 0.7;
+    case 'blend':
+      return 0.85;
     case 'sine':
-    default: return 1.4;
+    default:
+      return 1.4;
   }
 }
 ```
@@ -289,6 +302,7 @@ git commit -m "feat: periodic rotation-to-timbre mapping, fix formant bijection"
 ### Task 3: State — SigilStore uses voices and texts
 
 **Files:**
+
 - Modify: `js/state.ts`
 - Test: `tests/unit/state.test.js`
 
@@ -302,6 +316,7 @@ with `store.data.voices`. Replace `store.data.decorations` with
 strokeWidth, fontSize, scale — just text, x, y, size, color).
 
 Key test changes:
+
 - `store.addVoice('sine', 0.5, 0.5)` instead of `store.addShape('circle', ...)`
 - `store.addVoice('pulse', 0.3, 0.3)` instead of `store.addShape('square', ...)`
 - `store.addVoice('blend', 0.2, 0.8)` instead of `store.addShape('triangle', ...)`
@@ -319,6 +334,7 @@ Replace imports to use new types (`Voice`, `WaveformType`, `TextDecoration`
 instead of `Shape`, `ShapeType`, `Decoration`, etc.).
 
 Replace `createDefaultState`:
+
 ```typescript
 export function createDefaultState(): SigilData {
   return {
@@ -330,6 +346,7 @@ export function createDefaultState(): SigilData {
 ```
 
 Replace `createShape` with `createVoice`:
+
 ```typescript
 function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCoord): Voice {
   const base = {
@@ -352,12 +369,9 @@ function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCo
 ```
 
 Remove `createSquiggle`, `createCurlicue`. Update `createTextDeco`:
+
 ```typescript
-function createTextDeco(
-  text: string,
-  x: NormalizedCoord,
-  y: NormalizedCoord,
-): TextDecoration {
+function createTextDeco(text: string, x: NormalizedCoord, y: NormalizedCoord): TextDecoration {
   return {
     id: genId('t'),
     text,
@@ -370,6 +384,7 @@ function createTextDeco(
 ```
 
 Rename all `SigilStore` methods:
+
 - `addShape` → `addVoice` (takes `WaveformType` instead of `ShapeType`)
 - `removeShape` → `removeVoice`
 - `updateShape` → `updateVoice`
@@ -404,6 +419,7 @@ git commit -m "feat: SigilStore uses voices/texts, remove squiggle/curlicue"
 ### Task 4: Serialization — v2 compact format
 
 **Files:**
+
 - Modify: `js/serialize.ts`
 - Test: `tests/unit/serialize.test.js`
 
@@ -441,24 +457,24 @@ New compact format (v2):
 ```typescript
 interface CompactVoice {
   i: string;
-  w: string;         // waveform first char: s/p/b
+  w: string; // waveform first char: s/p/b
   x: number;
   y: number;
-  z: number;         // size
+  z: number; // size
   f: CompactFill;
-  e: string | 0;     // effect (pattern) first char or 0
-  b?: number;        // timbre (only for pulse/blend)
+  e: string | 0; // effect (pattern) first char or 0
+  b?: number; // timbre (only for pulse/blend)
 }
 
 interface CompactText {
   i: string;
-  t: string;         // text content
+  t: string; // text content
   x: number;
   y: number;
-  z: number;         // size
-  h: number;         // color hue
-  s: number;         // color saturation
-  l: number;         // color lightness
+  z: number; // size
+  h: number; // color hue
+  s: number; // color saturation
+  l: number; // color lightness
 }
 
 interface CompactStateV2 {
@@ -491,6 +507,7 @@ git commit -m "feat: v2 serialization format for voices/texts"
 ### Task 5: Canvas — render voices, remove squiggle/curlicue
 
 **Files:**
+
 - Modify: `js/canvas.ts`
 - Modify: `js/shapes.ts` (hit testing)
 - No unit test file — canvas is integration-tested via Playwright
@@ -558,6 +575,7 @@ git commit -m "feat: canvas renders voices, remove squiggle/curlicue drawing"
 ### Task 6: DecorationTool — text-only
 
 **Files:**
+
 - Modify: `js/decorations.ts`
 
 **Step 1: Strip DecorationTool to text-only**
@@ -584,10 +602,7 @@ export class DecorationTool {
     this.currentTool = tool;
   }
 
-  handleMouseDown(
-    nx: NormalizedCoord,
-    ny: NormalizedCoord,
-  ): { placed: string } | null {
+  handleMouseDown(nx: NormalizedCoord, ny: NormalizedCoord): { placed: string } | null {
     if (this.currentTool !== 'text') return null;
     const text = (document.getElementById('text-input') as HTMLInputElement).value.trim();
     if (!text) return null;
@@ -610,12 +625,14 @@ git commit -m "refactor: strip DecorationTool to text-only"
 ### Task 7: Toolbar and HTML — remove squiggle/curlicue UI
 
 **Files:**
+
 - Modify: `index.html`
 - Modify: `js/toolbar.ts`
 
 **Step 1: Remove squiggle/curlicue buttons from index.html**
 
 Delete these lines from `index.html`:
+
 ```html
 <button class="tool-btn" data-tool="squiggle" title="Draw Squiggle">&#8766;</button>
 <button class="tool-btn" data-tool="curlicue" title="Place Curlicue">&#10048;</button>
@@ -639,6 +656,7 @@ git commit -m "feat: remove squiggle/curlicue UI from toolbar and HTML"
 ### Task 8: App.ts and interaction.ts — wire everything up
 
 **Files:**
+
 - Modify: `js/app.ts`
 - Modify: `js/interaction.ts`
 
@@ -663,14 +681,16 @@ and `deco-resizing` point-manipulation code.
 
 Where the code currently does `store.updateShape(id, { rotation: degrees(angle) })`,
 change to:
+
 1. Compute timbre from angle using `rotationToTimbre(angle, voice.waveform)`
 2. Call `store.updateVoice(id, { timbre: normalizedCoord(timbre) })`
 3. Only do this for pulse/blend voices; sine voices don't rotate.
 
-**Step 5: Update audio.ts _buildVoice and updateVoices**
+**Step 5: Update audio.ts \_buildVoice and updateVoices**
 
 Change `_buildVoice` to accept `Voice` instead of `Shape`. Use
 `voice.waveform` instead of `shape.type`. For timbre:
+
 - Access `voice.timbre` directly for pulse/blend (it's already 0–1)
 - No detune from curlicues — remove `curlicuesToDetune` calls
 
@@ -704,6 +724,7 @@ git commit -m "feat: wire voices/texts through app, audio engine, and embed"
 ### Task 9: Update remaining tests
 
 **Files:**
+
 - Modify: `tests/unit/audio-engine.test.js`
 - Modify: `tests/unit/shapes.test.js`
 - Modify: `tests/unit/types.test.js`
@@ -776,6 +797,7 @@ Expected: ALL PASS.
 ### Task 11: Clean up removed code and final commit
 
 **Files:**
+
 - Modify: `js/vocoder.ts` (if text changes affect it)
 - Delete or empty: squiggle/curlicue CSS if any in `css/style.css`
 - Modify: `CLAUDE.md` project structure section (update file descriptions)
@@ -783,6 +805,7 @@ Expected: ALL PASS.
 **Step 1: Update CLAUDE.md project structure**
 
 Update the file tree to reflect:
+
 - `types.ts` now has Voice union, TextDecoration, no Shape/Decoration
 - `state.ts` now has voice/text CRUD
 - `decorations.ts` now text-only

@@ -218,18 +218,15 @@ select {
 
 #canvas-wrap {
   position: relative;
+  overflow: hidden;
+  touch-action: none;
 }
 
 #canvas-frame {
   position: absolute;
   inset: 0;
   background: #2a2a2a;
-  border-width: 2px;
-  border-style: solid;
-  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
-  transition:
-    box-shadow 0.08s ease-out,
-    border-radius 0.15s;
+  transition: box-shadow 0.08s ease-out;
 }
 
 #sigil-canvas {
@@ -237,7 +234,6 @@ select {
   display: block;
   background: transparent;
   image-rendering: auto;
-  touch-action: none;
 }
 
 /* ---- Play fan menu ---- */
@@ -652,4 +648,20 @@ select {
     padding: 6px 14px;
     font-size: 11px;
   }
+}
+
+/* ---- First-load splash ---- */
+
+body.splash #toolbar-top,
+body.splash #toolbar-bottom {
+  opacity: 0;
+  pointer-events: none;
+  transition-property: opacity;
+  transition-timing-function: ease-out;
+  /* transition-duration set dynamically by JS at reveal time */
+}
+
+body.splash .panel {
+  opacity: 0;
+  pointer-events: none;
 }

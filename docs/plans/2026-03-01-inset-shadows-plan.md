@@ -15,6 +15,7 @@
 ### Task 1: Add Reverb type to types.ts and SigilData
 
 **Files:**
+
 - Modify: `js/types.ts:143-207`
 
 **Step 1: Add ReverbStyle type and Reverb interface**
@@ -97,6 +98,7 @@ git commit -m "Add Reverb type and reverb field to SigilData"
 ### Task 2: Add reverb state tests
 
 **Files:**
+
 - Modify: `tests/unit/state.test.js`
 
 **Step 1: Add reverb tests to state.test.js**
@@ -128,7 +130,9 @@ describe('SigilStore reverb', () => {
   test('updateReverb notifies listeners', () => {
     const store = new SigilStore();
     let called = false;
-    store.onChange(() => { called = true; });
+    store.onChange(() => {
+      called = true;
+    });
     store.updateReverb({ depth: 0.3, style: 'glow' });
     expect(called).toBe(true);
   });
@@ -167,6 +171,7 @@ git commit -m "Add reverb state tests"
 ### Task 3: Add reverb serialization
 
 **Files:**
+
 - Modify: `js/serialize.ts`
 - Modify: `tests/unit/serialize.test.js`
 
@@ -211,9 +216,9 @@ Add `Reverb`, `ReverbStyle` to the imports from `types.ts`.
 ```ts
 type PackedState = [
   [number, number, number, number], // envelope
-  PackedVoice[],                    // voices
-  PackedText[],                     // texts
-  PackedReverb?,                    // reverb (optional for backwards compat)
+  PackedVoice[], // voices
+  PackedText[], // texts
+  PackedReverb?, // reverb (optional for backwards compat)
 ];
 ```
 
@@ -319,6 +324,7 @@ git commit -m "Add reverb serialization with backwards-compatible wire format"
 ### Task 4: Split canvas element into frame div + transparent canvas
 
 **Files:**
+
 - Modify: `index.html:128-131`
 - Modify: `css/style.css` (canvas section)
 - Modify: `js/canvas.ts:9,65-68`
@@ -430,6 +436,7 @@ git commit -m "Split canvas into frame div + transparent canvas for inset shadow
 ### Task 5: Add reverb shadow rendering on canvas frame
 
 **Files:**
+
 - Modify: `js/app.ts` (add shadow update logic)
 - Modify: `css/style.css` (add transition for shadow)
 
@@ -446,9 +453,10 @@ function updateReverbShadow(frameEl: HTMLElement, reverb: Reverb | null, canvasS
   const maxBlur = canvasSize * 0.15;
   const blur = reverb.depth * maxBlur;
   const alpha = 0.3 + reverb.depth * 0.5;
-  const color = reverb.style === 'glow'
-    ? `rgba(255,255,255,${alpha.toFixed(2)})`
-    : `rgba(0,0,0,${alpha.toFixed(2)})`;
+  const color =
+    reverb.style === 'glow'
+      ? `rgba(255,255,255,${alpha.toFixed(2)})`
+      : `rgba(0,0,0,${alpha.toFixed(2)})`;
   frameEl.style.boxShadow = `inset 0 0 ${blur.toFixed(1)}px ${color}`;
 }
 ```
@@ -476,7 +484,9 @@ updateReverbShadow(canvasFrame, store.data.reverb, size);
 In `css/style.css`, add to the `#canvas-frame` rule:
 
 ```css
-transition: box-shadow 0.15s, border-radius 0.15s;
+transition:
+  box-shadow 0.15s,
+  border-radius 0.15s;
 ```
 
 **Step 5: Verify types and tests**
@@ -497,6 +507,7 @@ git commit -m "Add reverb inset shadow rendering on canvas frame"
 ### Task 6: Add master reverb to audio engine
 
 **Files:**
+
 - Modify: `js/audio.ts`
 - Modify: `tests/unit/audio-engine.test.js`
 
@@ -505,10 +516,7 @@ git commit -m "Add reverb inset shadow rendering on canvas frame"
 Near the top of `audio.ts` (after the mapping functions), add:
 
 ```ts
-function generateImpulseResponse(
-  ctx: AudioContext,
-  style: ReverbStyle,
-): AudioBuffer {
+function generateImpulseResponse(ctx: AudioContext, style: ReverbStyle): AudioBuffer {
   const sampleRate = ctx.sampleRate;
   const duration = style === 'glow' ? 0.3 : 2.0;
   const length = Math.floor(sampleRate * duration);
@@ -519,7 +527,7 @@ function generateImpulseResponse(
     const data = buffer.getChannelData(ch);
     for (let i = 0; i < length; i++) {
       const t = i / length;
-      let sample = (Math.random() * 2 - 1) * Math.exp(-3 * t / duration);
+      let sample = (Math.random() * 2 - 1) * Math.exp((-3 * t) / duration);
       if (cutoff < 1.0) {
         sample *= Math.max(0, 1 - t * (1 - cutoff));
       }
@@ -613,7 +621,7 @@ if (sigilState.reverb) {
 }
 ```
 
-**Step 5: Clean up reverb in _cleanup()**
+**Step 5: Clean up reverb in \_cleanup()**
 
 In `_cleanup()`, before the `this.isPlaying = false` line, add:
 
@@ -739,6 +747,7 @@ git commit -m "Add master reverb with algorithmic IR generation"
 ### Task 7: Add reverb panel UI
 
 **Files:**
+
 - Modify: `index.html` (add reverb panel HTML, toolbar button)
 - Modify: `css/style.css` (reverb panel styles)
 - Modify: `js/toolbar.ts` (bind reverb panel)
@@ -749,9 +758,7 @@ git commit -m "Add master reverb with algorithmic IR generation"
 In `index.html`, add the reverb button after `#btn-border` (near line 284):
 
 ```html
-<button id="btn-reverb" class="action-btn" title="Reverb (inset shadow)">
-  &#9676;
-</button>
+<button id="btn-reverb" class="action-btn" title="Reverb (inset shadow)">&#9676;</button>
 ```
 
 **Step 2: Add reverb panel HTML**
@@ -983,6 +990,7 @@ git commit -m "Add reverb panel UI with depth slider and glow/dim toggle"
 ### Task 8: Update embed page
 
 **Files:**
+
 - Modify: `embed.html`
 - Modify: `js/embed-entry.ts`
 
@@ -1032,9 +1040,10 @@ if (sigil.reverb) {
   const maxBlur = 800 * 0.15;
   const blur = sigil.reverb.depth * maxBlur;
   const alpha = 0.3 + sigil.reverb.depth * 0.5;
-  const color = sigil.reverb.style === 'glow'
-    ? `rgba(255,255,255,${alpha.toFixed(2)})`
-    : `rgba(0,0,0,${alpha.toFixed(2)})`;
+  const color =
+    sigil.reverb.style === 'glow'
+      ? `rgba(255,255,255,${alpha.toFixed(2)})`
+      : `rgba(0,0,0,${alpha.toFixed(2)})`;
   frame.style.boxShadow = `inset 0 0 ${blur.toFixed(1)}px ${color}`;
 }
 ```
@@ -1059,6 +1068,7 @@ git commit -m "Update embed page with canvas frame and reverb shadow"
 ### Task 9: Update CLAUDE.md and run final verification
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 **Step 1: Update CLAUDE.md**
@@ -1103,6 +1113,7 @@ git commit -m "Update CLAUDE.md for reverb and canvas frame architecture"
 ### Task 10: Add ADSR corner drag integration tests
 
 **Files:**
+
 - Create: `tests/integration/adsr-corners.test.js`
 
 This task addresses the user's note that ADSR corner dragging is unreliable with touch events. We need integration tests that exercise the pointer event flow through the app, simulating both mouse and touch interactions.
@@ -1140,7 +1151,12 @@ describe('ADSR corner hit testing', () => {
   });
 
   test('release corner (bottom-right) is hit near (800, 800)', () => {
-    const result = hitTestADSRCorner(defaultEnvelope, CANVAS_SIZE - 10, CANVAS_SIZE - 10, CANVAS_SIZE);
+    const result = hitTestADSRCorner(
+      defaultEnvelope,
+      CANVAS_SIZE - 10,
+      CANVAS_SIZE - 10,
+      CANVAS_SIZE,
+    );
     expect(result).toBe('release');
   });
 
@@ -1246,7 +1262,7 @@ describe('ADSR drag simulation (pointer event flow)', () => {
     expect(corner).toBe('attack');
 
     // Simulate drag: distance from corner (0, 800) to (80, 720) = ~113px
-    const dist = Math.hypot(80 - 0, (CANVAS_SIZE - 720) - 0);
+    const dist = Math.hypot(80 - 0, CANVAS_SIZE - 720 - 0);
     const newAttack = dragToEnvelopeValue('attack', dist, CANVAS_SIZE);
     expect(newAttack).toBeGreaterThan(defaultEnvelope.attack);
   });
