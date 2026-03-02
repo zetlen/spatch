@@ -119,6 +119,7 @@ store.onChange(() => {
   debouncedSave();
   if (audio.isPlaying) {
     audio.updateVoices(store.data);
+    audio.updateReverb(store.data.reverb);
   }
 });
 
