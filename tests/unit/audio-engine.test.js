@@ -85,23 +85,27 @@ function createStubAudioContext() {
   };
 }
 
-function makeShape(id, type = 'circle', overrides = {}) {
-  return {
+function makeVoice(id, waveform = 'sine', overrides = {}) {
+  const base = {
     id,
-    type,
+    waveform,
     x: 0.5,
     y: 0.5,
     size: 0.12,
-    rotation: 0,
     fill: { mode: 'solid', h: 200, s: 80, l: 50 },
-    pattern: null,
+    effect: null,
     ...overrides,
   };
+  if (waveform === 'pulse' || waveform === 'blend') {
+    base.timbre = overrides.timbre ?? 0;
+  }
+  return base;
 }
 
-function makeSigilState(shapes) {
+function makeSigilState(voices) {
   return {
-    shapes,
+    voices,
+    texts: [],
     envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
   };
 }
@@ -116,36 +120,36 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine.masterGain = engine.audioCtx.createGain();
   });
 
-  async function startWith(shapes) {
-    const state = makeSigilState(shapes);
+  async function startWith(voices) {
+    const state = makeSigilState(voices);
     await engine.play(state, state.envelope);
     return state;
   }
 
   test('new shapes get voices during playback', async () => {
-    const shapeA = makeShape('a');
-    await startWith([shapeA]);
+    const voiceA = makeVoice('a');
+    await startWith([voiceA]);
 
     expect(engine.activeVoices.length).toBe(1);
     expect(engine.playingShapeIds.has('a')).toBe(true);
 
-    // Add a second shape
-    const shapeB = makeShape('b');
-    engine.updateVoices(makeSigilState([shapeA, shapeB]));
+    // Add a second voice
+    const voiceB = makeVoice('b');
+    engine.updateVoices(makeSigilState([voiceA, voiceB]));
 
     expect(engine.activeVoices.length).toBe(2);
     expect(engine.playingShapeIds.has('b')).toBe(true);
   });
 
   test('deleted shapes lose voices during playback', async () => {
-    const shapeA = makeShape('a');
-    const shapeB = makeShape('b');
-    await startWith([shapeA, shapeB]);
+    const voiceA = makeVoice('a');
+    const voiceB = makeVoice('b');
+    await startWith([voiceA, voiceB]);
 
     expect(engine.activeVoices.length).toBe(2);
 
-    // Remove shape B
-    engine.updateVoices(makeSigilState([shapeA]));
+    // Remove voice B
+    engine.updateVoices(makeSigilState([voiceA]));
 
     expect(engine.activeVoices.length).toBe(1);
     expect(engine.playingShapeIds.has('a')).toBe(true);
@@ -153,13 +157,13 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
   });
 
   test('simultaneous add and remove reconciles correctly', async () => {
-    const shapeA = makeShape('a');
-    const shapeB = makeShape('b');
-    await startWith([shapeA, shapeB]);
+    const voiceA = makeVoice('a');
+    const voiceB = makeVoice('b');
+    await startWith([voiceA, voiceB]);
 
     // Remove A, add C
-    const shapeC = makeShape('c');
-    engine.updateVoices(makeSigilState([shapeB, shapeC]));
+    const voiceC = makeVoice('c');
+    engine.updateVoices(makeSigilState([voiceB, voiceC]));
 
     expect(engine.activeVoices.length).toBe(2);
     const ids = engine.activeVoices.map((v) => v.shapeId).sort();
@@ -169,19 +173,19 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
   });
 
   test('no-op when shapes unchanged', async () => {
-    const shapeA = makeShape('a');
-    await startWith([shapeA]);
+    const voiceA = makeVoice('a');
+    await startWith([voiceA]);
 
     const voicesBefore = engine.activeVoices.length;
-    engine.updateVoices(makeSigilState([shapeA]));
+    engine.updateVoices(makeSigilState([voiceA]));
 
     expect(engine.activeVoices.length).toBe(voicesBefore);
   });
 
   test('all shapes removed clears all voices', async () => {
-    const shapeA = makeShape('a');
-    const shapeB = makeShape('b');
-    await startWith([shapeA, shapeB]);
+    const voiceA = makeVoice('a');
+    const voiceB = makeVoice('b');
+    await startWith([voiceA, voiceB]);
 
     engine.updateVoices(makeSigilState([]));
 
@@ -189,15 +193,11 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     expect(engine.playingShapeIds.size).toBe(0);
   });
 
-  test('works with all three shape types', async () => {
+  test('works with all three waveform types', async () => {
     await startWith([]);
 
-    const shapes = [
-      makeShape('circ', 'circle'),
-      makeShape('sq', 'square'),
-      makeShape('tri', 'triangle'),
-    ];
-    engine.updateVoices(makeSigilState(shapes));
+    const voices = [makeVoice('circ', 'sine'), makeVoice('sq', 'pulse'), makeVoice('tri', 'blend')];
+    engine.updateVoices(makeSigilState(voices));
 
     expect(engine.activeVoices.length).toBe(3);
     expect(engine.playingShapeIds.has('circ')).toBe(true);
@@ -207,8 +207,8 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
 
   test('does nothing when not playing', () => {
     engine.isPlaying = false;
-    const shapeA = makeShape('a');
-    engine.updateVoices(makeSigilState([shapeA]));
+    const voiceA = makeVoice('a');
+    engine.updateVoices(makeSigilState([voiceA]));
 
     expect(engine.activeVoices.length).toBe(0);
   });
@@ -223,37 +223,37 @@ describe('AudioEngine — auto EQ', () => {
     engine.masterGain = engine.audioCtx.createGain();
   });
 
-  async function startWith(shapes) {
-    const state = makeSigilState(shapes);
+  async function startWith(voices) {
+    const state = makeSigilState(voices);
     await engine.play(state, state.envelope);
     return state;
   }
 
   test('creates EQ band pool during play()', async () => {
-    await startWith([makeShape('a')]);
+    await startWith([makeVoice('a')]);
     expect(engine._autoEQ.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('sine shapes get higher EQ boost than square or triangle', async () => {
-    const shapes = [
-      makeShape('circ', 'circle', { size: 0.3 }),
-      makeShape('sq', 'square', { size: 0.3 }),
-      makeShape('tri', 'triangle', { size: 0.3 }),
+  test('sine voices get higher EQ boost than pulse or blend', async () => {
+    const voices = [
+      makeVoice('circ', 'sine', { size: 0.3 }),
+      makeVoice('sq', 'pulse', { size: 0.3 }),
+      makeVoice('tri', 'blend', { size: 0.3 }),
     ];
-    await startWith(shapes);
+    await startWith(voices);
 
-    // Band 0 = circle (sine), Band 1 = square, Band 2 = triangle
+    // Band 0 = sine, Band 1 = pulse, Band 2 = blend
     const sineBoost = engine._autoEQ[0].gain.value;
-    const squareBoost = engine._autoEQ[1].gain.value;
-    const triangleBoost = engine._autoEQ[2].gain.value;
+    const pulseBoost = engine._autoEQ[1].gain.value;
+    const blendBoost = engine._autoEQ[2].gain.value;
 
-    expect(sineBoost).toBeGreaterThan(squareBoost);
-    expect(sineBoost).toBeGreaterThan(triangleBoost);
+    expect(sineBoost).toBeGreaterThan(pulseBoost);
+    expect(sineBoost).toBeGreaterThan(blendBoost);
   });
 
   test('larger shapes get more EQ boost', async () => {
-    const small = makeShape('small', 'circle', { size: 0.1 });
-    const big = makeShape('big', 'circle', { size: 0.5 });
+    const small = makeVoice('small', 'sine', { size: 0.1 });
+    const big = makeVoice('big', 'sine', { size: 0.5 });
     await startWith([small, big]);
 
     const smallBoost = engine._autoEQ[0].gain.value;
@@ -263,7 +263,7 @@ describe('AudioEngine — auto EQ', () => {
   });
 
   test('unused EQ bands are at 0 dB', async () => {
-    await startWith([makeShape('a')]);
+    await startWith([makeVoice('a')]);
 
     // Pool has MAX_EQ_BANDS entries, only first is used
     for (let i = 1; i < engine._autoEQ.length; i++) {
@@ -272,7 +272,7 @@ describe('AudioEngine — auto EQ', () => {
   });
 
   test('EQ bands are cleaned up on stop', async () => {
-    await startWith([makeShape('a')]);
+    await startWith([makeVoice('a')]);
     expect(engine._autoEQ.length).toBeGreaterThan(0);
 
     engine.stop();
@@ -280,13 +280,13 @@ describe('AudioEngine — auto EQ', () => {
   });
 
   test('EQ updates when voices change', async () => {
-    const shapeA = makeShape('a', 'circle', { y: 0.3 });
-    await startWith([shapeA]);
+    const voiceA = makeVoice('a', 'sine', { y: 0.3 });
+    await startWith([voiceA]);
 
     const initialFreq = engine._autoEQ[0].frequency.value;
 
-    // Move shape to different y position
-    const movedA = makeShape('a', 'circle', { y: 0.7 });
+    // Move voice to different y position
+    const movedA = makeVoice('a', 'sine', { y: 0.7 });
     engine.updateVoices(makeSigilState([movedA]));
 
     const updatedFreq = engine._autoEQ[0].frequency.value;
