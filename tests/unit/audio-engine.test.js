@@ -39,6 +39,7 @@ function createStubOscillator() {
 function createStubAudioContext() {
   return {
     currentTime: 0,
+    sampleRate: 44100,
     state: 'running',
     destination: createStubNode(),
     resume() {
@@ -84,6 +85,23 @@ function createStubAudioContext() {
     },
     createDelay() {
       return createStubNode({ delayTime: createStubAudioParam(0) });
+    },
+    createConvolver() {
+      return createStubNode({ buffer: null });
+    },
+    createBuffer(channels, length, sampleRate) {
+      const channelData = [];
+      for (let i = 0; i < channels; i++) {
+        channelData.push(new Float32Array(length));
+      }
+      return {
+        numberOfChannels: channels,
+        length,
+        sampleRate,
+        getChannelData(ch) {
+          return channelData[ch];
+        },
+      };
     },
   };
 }
@@ -459,5 +477,90 @@ describe('AudioEngine — border / octave doubling', () => {
     for (const av of engine.activeVoices) {
       expect(av.octaveOsc).not.toBeNull();
     }
+  });
+});
+
+describe('AudioEngine — master reverb', () => {
+  let engine;
+
+  beforeEach(async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+  });
+
+  async function startWith(voices, reverb = null) {
+    const state = makeSigilState(voices);
+    state.reverb = reverb;
+    await engine.play(state, state.envelope);
+    return state;
+  }
+
+  test('play with null reverb creates no convolver', async () => {
+    await startWith([makeVoice('a')], null);
+
+    expect(engine._reverbConvolver).toBeNull();
+    expect(engine._reverbWet).toBeNull();
+    expect(engine._reverbStyle).toBeNull();
+  });
+
+  test('play with reverb creates convolver and wet gain', async () => {
+    await startWith([makeVoice('a')], { style: 'dim', depth: 0.5 });
+
+    expect(engine._reverbConvolver).not.toBeNull();
+    expect(engine._reverbWet).not.toBeNull();
+    expect(engine._reverbStyle).toBe('dim');
+  });
+
+  test('reverb wet gain matches depth', async () => {
+    await startWith([makeVoice('a')], { style: 'glow', depth: 0.75 });
+
+    expect(engine._reverbWet.gain.value).toBe(0.75);
+  });
+
+  test('cleanup nulls reverb nodes', async () => {
+    await startWith([makeVoice('a')], { style: 'dim', depth: 0.5 });
+
+    expect(engine._reverbConvolver).not.toBeNull();
+
+    engine.stop();
+
+    expect(engine._reverbConvolver).toBeNull();
+    expect(engine._reverbWet).toBeNull();
+    expect(engine._reverbStyle).toBeNull();
+  });
+
+  test('updateReverb changes wet gain during playback', async () => {
+    await startWith([makeVoice('a')], { style: 'dim', depth: 0.3 });
+
+    expect(engine._reverbWet.gain.value).toBe(0.3);
+
+    engine.updateReverb({ style: 'dim', depth: 0.8 });
+
+    expect(engine._reverbWet.gain.value).toBe(0.8);
+  });
+
+  test('updateReverb with null removes reverb nodes', async () => {
+    await startWith([makeVoice('a')], { style: 'glow', depth: 0.5 });
+
+    expect(engine._reverbConvolver).not.toBeNull();
+
+    engine.updateReverb(null);
+
+    expect(engine._reverbConvolver).toBeNull();
+    expect(engine._reverbWet).toBeNull();
+    expect(engine._reverbStyle).toBeNull();
+  });
+
+  test('updateReverb with different style rebuilds convolver', async () => {
+    await startWith([makeVoice('a')], { style: 'glow', depth: 0.5 });
+
+    const originalConvolver = engine._reverbConvolver;
+
+    engine.updateReverb({ style: 'dim', depth: 0.6 });
+
+    expect(engine._reverbConvolver).not.toBe(originalConvolver);
+    expect(engine._reverbStyle).toBe('dim');
+    expect(engine._reverbWet.gain.value).toBe(0.6);
   });
 });
