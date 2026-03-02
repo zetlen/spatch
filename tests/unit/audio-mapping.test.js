@@ -9,6 +9,7 @@ import {
   areaToGain,
   curlicuesToDetune,
   snapYToNote,
+  hueToFormants,
 } from '../../js/audio.ts';
 
 describe('yToFrequency', () => {
@@ -269,6 +270,63 @@ describe('snapYToNote', () => {
       const snapped = snapYToNote(y);
       expect(snapped).toBeGreaterThanOrEqual(prev - 0.0001); // small epsilon for float
       prev = snapped;
+    }
+  });
+});
+
+describe('hueToFormants', () => {
+  test('returns anchor values at exact anchor hues', () => {
+    // hue=0 → /a/: F1=730, F2=1090
+    const a = hueToFormants(0);
+    expect(a.f1).toBeCloseTo(730, 0);
+    expect(a.f2).toBeCloseTo(1090, 0);
+
+    // hue=120 → /i/: F1=270, F2=2290
+    const i = hueToFormants(120);
+    expect(i.f1).toBeCloseTo(270, 0);
+    expect(i.f2).toBeCloseTo(2290, 0);
+  });
+
+  test('interpolates smoothly between anchors', () => {
+    // hue=30 should be halfway between /a/ (F1=730) and /e/ (F1=530)
+    const mid = hueToFormants(30);
+    expect(mid.f1).toBeCloseTo(630, 0); // (730+530)/2
+    expect(mid.f2).toBeCloseTo(1465, 0); // (1090+1840)/2
+  });
+
+  test('wraps around at 360°', () => {
+    const h0 = hueToFormants(0);
+    const h360 = hueToFormants(360);
+    expect(h360.f1).toBeCloseTo(h0.f1, 0);
+    expect(h360.f2).toBeCloseTo(h0.f2, 0);
+  });
+
+  test('negative hues wrap correctly', () => {
+    const h350 = hueToFormants(350);
+    const hNeg10 = hueToFormants(-10);
+    expect(hNeg10.f1).toBeCloseTo(h350.f1, 0);
+    expect(hNeg10.f2).toBeCloseTo(h350.f2, 0);
+  });
+
+  test('all hues produce positive frequencies', () => {
+    for (let h = 0; h < 360; h += 5) {
+      const f = hueToFormants(h);
+      expect(f.f1).toBeGreaterThan(0);
+      expect(f.f2).toBeGreaterThan(0);
+    }
+  });
+
+  test('F1 and F2 vary continuously across the hue range', () => {
+    // No abrupt jumps — adjacent hues should produce similar frequencies
+    let prevF1 = hueToFormants(0).f1;
+    let prevF2 = hueToFormants(0).f2;
+    for (let h = 1; h < 360; h++) {
+      const f = hueToFormants(h);
+      // Max change between adjacent degrees should be modest
+      expect(Math.abs(f.f1 - prevF1)).toBeLessThan(20);
+      expect(Math.abs(f.f2 - prevF2)).toBeLessThan(30);
+      prevF1 = f.f1;
+      prevF2 = f.f2;
     }
   });
 });

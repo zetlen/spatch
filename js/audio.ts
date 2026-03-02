@@ -164,38 +164,88 @@ function createPWMWaveshaper(audioCtx: AudioContext) {
   return ws;
 }
 
-// ---- Color-to-filter mapping ----
+// ---- Formant filter mapping ----
+//
+// Hue drives a smooth path through vowel space (F1 = openness, F2 = frontness).
+// Saturation controls formant resonance (Q). Lightness controls a brightness
+// shelf.  Linear gradient crossfades formants between the two colors; gradient
+// angle controls the blend bias.
 
-function hueToFilterType(h: number): BiquadFilterType {
-  if (h < 90) return 'lowpass';
-  if (h < 180) return 'bandpass';
-  if (h < 270) return 'highpass';
-  return 'notch';
+interface FormantPoint {
+  hue: number;
+  f1: number;
+  f2: number;
 }
 
-function applyColorFilter(filterNode: BiquadFilterNode, fill: Fill) {
-  // Audio always maps from fill.h/s/l regardless of fill mode.
-  // Different color pickers (Lab, linear HSL) are navigation interfaces
-  // that update h/s/l via conversion, so the same color always sounds the same.
-  filterNode.type = hueToFilterType(fill.h);
-  filterNode.Q.value = 0.5 + (fill.s / 100) * 15;
-  filterNode.frequency.value = 200 * Math.pow(40, fill.l / 100);
-}
+const FORMANT_ANCHORS: FormantPoint[] = [
+  { hue: 0, f1: 730, f2: 1090 }, // /a/ — open central
+  { hue: 60, f1: 530, f2: 1840 }, // /e/ — mid front
+  { hue: 120, f1: 270, f2: 2290 }, // /i/ — close front
+  { hue: 180, f1: 300, f2: 870 }, // /u/ — close back
+  { hue: 240, f1: 570, f2: 840 }, // /o/ — mid back
+  { hue: 300, f1: 680, f2: 1100 }, // /ɑ/ — open back
+];
 
-// ---- Overdrive for linear gradient fill ----
+export function hueToFormants(hue: number): { f1: number; f2: number } {
+  const h = ((hue % 360) + 360) % 360;
+  const n = FORMANT_ANCHORS.length;
 
-function createOverdrive(audioCtx: AudioContext, amount: number) {
-  const ws = audioCtx.createWaveShaper();
-  const k = (amount / 100) * 400;
-  const samples = 8192;
-  const curve = new Float32Array(samples);
-  for (let i = 0; i < samples; i++) {
-    const x = (i * 2) / samples - 1;
-    curve[i] = ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
+  // Find the two anchors that bracket this hue
+  let lo = FORMANT_ANCHORS[n - 1]!;
+  let hi = FORMANT_ANCHORS[0]!;
+  for (let i = 0; i < n; i++) {
+    const a = FORMANT_ANCHORS[i]!;
+    const b = FORMANT_ANCHORS[(i + 1) % n]!;
+    const aHue = a.hue;
+    const bHue = i === n - 1 ? 360 : b.hue;
+    if (h >= aHue && h < bHue) {
+      lo = a;
+      hi = b;
+      const t = (h - aHue) / (bHue - aHue);
+      return {
+        f1: lo.f1 + (hi.f1 - lo.f1) * t,
+        f2: lo.f2 + (hi.f2 - lo.f2) * t,
+      };
+    }
   }
-  ws.curve = curve;
-  ws.oversample = '4x';
-  return ws;
+
+  // Fallback (shouldn't reach here)
+  return { f1: lo.f1, f2: hi.f2 };
+}
+
+function applyFormantFilter(
+  f1Node: BiquadFilterNode,
+  f2Node: BiquadFilterNode,
+  brightnessNode: BiquadFilterNode,
+  fill: Fill,
+) {
+  let h = fill.h;
+  let s = fill.s;
+  let l = fill.l;
+
+  if (fill.mode === 'linear') {
+    // Crossfade formants between primary and secondary colors.
+    // Gradient angle sets the blend: 0° = primary, 90° = 50/50, 180° = secondary.
+    const blend = Math.abs(Math.sin(((fill.gradAngle % 360) * Math.PI) / 360));
+    h = h + (fill.h2 - h) * blend;
+    s = s + (fill.s2 - s) * blend;
+    l = l + (fill.l2 - l) * blend;
+  } else if (fill.mode === 'radial') {
+    // Radial gradient: widen the formant Q to blend both colors' character
+    const avgS = (s + fill.s2) / 2;
+    s = avgS;
+  }
+
+  const formants = hueToFormants(h);
+  const q = 1 + (s / 100) * 12; // 1 to 13
+
+  f1Node.frequency.value = formants.f1;
+  f1Node.Q.value = q;
+  f2Node.frequency.value = formants.f2;
+  f2Node.Q.value = q * 0.7;
+
+  // Lightness → brightness shelf: dark = muffled, light = bright
+  brightnessNode.gain.value = (l / 100) * 14 - 7; // -7 to +7 dB
 }
 
 // ---- Layer EQ shelving ----
@@ -235,7 +285,9 @@ interface VoiceBase {
   effectDispose: (() => void) | null;
   shapeId: string;
   gain: GainNode;
-  filter: BiquadFilterNode;
+  formantF1: BiquadFilterNode;
+  formantF2: BiquadFilterNode;
+  brightness: BiquadFilterNode;
   panner: StereoPannerNode;
   start(time: number): void;
   stop(time: number): void;
@@ -617,7 +669,7 @@ export class AudioEngine {
         now,
       );
       voice.panner.pan.setValueAtTime(xToPan(shape.x), now);
-      applyColorFilter(voice.filter, shape.fill);
+      applyFormantFilter(voice.formantF1, voice.formantF2, voice.brightness, shape.fill);
     }
 
     // Update auto EQ for changed positions/sizes
@@ -721,18 +773,33 @@ export class AudioEngine {
     const param = rotationToParam(shape.rotation);
     const detuneCents = curlicuesToDetune(curlicues);
 
-    const filter = ctx.createBiquadFilter();
-    applyColorFilter(filter, shape.fill);
+    // Dual formant filter bank + brightness shelf
+    const formantF1 = ctx.createBiquadFilter();
+    formantF1.type = 'bandpass';
+    const formantF2 = ctx.createBiquadFilter();
+    formantF2.type = 'bandpass';
+    const formantMixer = ctx.createGain();
+    formantMixer.gain.value = 0.7; // compensate for two-path sum
+    const brightness = ctx.createBiquadFilter();
+    brightness.type = 'highshelf';
+    brightness.frequency.value = 2000;
+
+    applyFormantFilter(formantF1, formantF2, brightness, shape.fill);
 
     const panner = ctx.createStereoPanner();
     panner.pan.value = xToPan(shape.x);
 
     const layerEQ = createLayerEQ(ctx, layerIndex, totalLayers);
 
-    // Wire: gain -> filter -> [effect] -> [overdrive] -> layerEQ -> panner -> master
-    gain.connect(filter);
+    // Wire: gain -> F1 -> mixer -> brightness -> [effect] -> layerEQ -> panner -> master
+    //       gain -> F2 -> mixer
+    gain.connect(formantF1);
+    gain.connect(formantF2);
+    formantF1.connect(formantMixer);
+    formantF2.connect(formantMixer);
+    formantMixer.connect(brightness);
 
-    let lastNode: AudioNode = filter;
+    let lastNode: AudioNode = brightness;
     let effectDispose: (() => void) | null = null;
 
     if (shape.pattern) {
@@ -744,12 +811,6 @@ export class AudioEngine {
       }
     }
 
-    if (shape.fill.mode === 'linear') {
-      const overdrive = createOverdrive(ctx, shape.fill.l);
-      lastNode.connect(overdrive);
-      lastNode = overdrive;
-    }
-
     lastNode.connect(layerEQ);
     layerEQ.connect(panner);
     panner.connect(this.masterGain || ctx.destination);
@@ -759,7 +820,9 @@ export class AudioEngine {
       effectDispose,
       shapeId: shape.id,
       gain,
-      filter,
+      formantF1,
+      formantF2,
+      brightness,
       panner,
     };
 
