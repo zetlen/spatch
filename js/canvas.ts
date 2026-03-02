@@ -37,7 +37,7 @@ export function render(
   drawChromaticGuides(ctx, canvasSize);
 
   for (let i = 0; i < state.shapes.length; i++) {
-    const shape = state.shapes[i];
+    const shape = state.shapes[i]!;
     const isPlaying = playingShapeIds != null && playingShapeIds.has(shape.id);
     drawShape(ctx, shape, canvasSize, shape.id === selectedId, isPlaying);
   }
@@ -186,7 +186,7 @@ function drawSelectionHandles(
   ctx.setLineDash([]);
 
   const handleSize = 5;
-  const handles = [
+  const handles: [number, number][] = [
     [-r, -r],
     [r, -r],
     [r, r],
@@ -241,7 +241,7 @@ function drawDecoSelectionHandles(
   ctx.setLineDash([]);
 
   const handleSize = 5;
-  const corners = [
+  const corners: [number, number][] = [
     [bounds.x, bounds.y],
     [bounds.x + bounds.w, bounds.y],
     [bounds.x + bounds.w, bounds.y + bounds.h],
@@ -272,13 +272,13 @@ function drawDecoration(ctx: CanvasRenderingContext2D, deco: Decoration, canvasS
 
       ctx.beginPath();
       const pts = deco.points;
-      ctx.moveTo(pts[0][0] * canvasSize, pts[0][1] * canvasSize);
+      ctx.moveTo(pts[0]![0] * canvasSize, pts[0]![1] * canvasSize);
       for (let i = 1; i < pts.length - 1; i++) {
-        const midX = ((pts[i][0] + pts[i + 1][0]) / 2) * canvasSize;
-        const midY = ((pts[i][1] + pts[i + 1][1]) / 2) * canvasSize;
-        ctx.quadraticCurveTo(pts[i][0] * canvasSize, pts[i][1] * canvasSize, midX, midY);
+        const midX = ((pts[i]![0] + pts[i + 1]![0]) / 2) * canvasSize;
+        const midY = ((pts[i]![1] + pts[i + 1]![1]) / 2) * canvasSize;
+        ctx.quadraticCurveTo(pts[i]![0] * canvasSize, pts[i]![1] * canvasSize, midX, midY);
       }
-      const last = pts[pts.length - 1];
+      const last = pts[pts.length - 1]!;
       ctx.lineTo(last[0] * canvasSize, last[1] * canvasSize);
       ctx.stroke();
       ctx.shadowBlur = 0;

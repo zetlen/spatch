@@ -20,7 +20,14 @@ import { DecorationTool } from './decorations.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
 import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
 import { IDLE, type InteractionState } from './interaction.ts';
-import { normalizedCoord, degrees, type Shape, type Decoration } from './types.ts';
+import {
+  normalizedCoord,
+  degrees,
+  type Shape,
+  type Decoration,
+  type NormalizedCoord,
+  type SquiggleDecoration,
+} from './types.ts';
 
 // ---- Init ----
 
@@ -112,9 +119,9 @@ function renderLoop(): void {
       ctx.shadowColor = 'hsl(320, 100%, 60%)';
       ctx.shadowBlur = 6;
       ctx.beginPath();
-      ctx.moveTo(drawingPts[0][0] * CANVAS_SIZE, drawingPts[0][1] * CANVAS_SIZE);
+      ctx.moveTo(drawingPts[0]![0] * CANVAS_SIZE, drawingPts[0]![1] * CANVAS_SIZE);
       for (let i = 1; i < drawingPts.length; i++) {
-        ctx.lineTo(drawingPts[i][0] * CANVAS_SIZE, drawingPts[i][1] * CANVAS_SIZE);
+        ctx.lineTo(drawingPts[i]![0] * CANVAS_SIZE, drawingPts[i]![1] * CANVAS_SIZE);
       }
       ctx.stroke();
       ctx.shadowBlur = 0;
@@ -189,7 +196,7 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
 
   // Decoration tools
   if (tool === 'squiggle' || tool === 'curlicue' || tool === 'text') {
-    const result = decoTool.handleMouseDown(nx as any, ny as any);
+    const result = decoTool.handleMouseDown(normalizedCoord(nx), normalizedCoord(ny));
     if (result) {
       if ('placed' in result) {
         // Curlicue / text: placed instantly — switch to select mode like shapes
@@ -209,7 +216,7 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
   // Shape placement tools
   if (tool === 'triangle' || tool === 'square' || tool === 'circle') {
     undo.snapshot();
-    const shape = store.addShape(tool, nx as any, ny as any);
+    const shape = store.addShape(tool, normalizedCoord(nx), normalizedCoord(ny));
     setSelection(shape.id);
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
@@ -386,16 +393,16 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
     const dnx = nx - interaction.startNx;
     const dny = ny - interaction.startNy;
     if ('points' in interaction.origin) {
-      const newPts = interaction.origin.points.map((p: number[]) => [
-        Math.max(0, Math.min(1, p[0] + dnx)),
-        Math.max(0, Math.min(1, p[1] + dny)),
+      const newPts = interaction.origin.points.map((p): [NormalizedCoord, NormalizedCoord] => [
+        normalizedCoord(p[0]! + dnx),
+        normalizedCoord(p[1]! + dny),
       ]);
-      store.updateDecoration(deco.id, { points: newPts } as any);
+      store.updateDecoration(deco.id, { points: newPts } as Partial<SquiggleDecoration>);
     } else {
       store.updateDecoration(deco.id, {
-        x: Math.max(0, Math.min(1, interaction.origin.x + dnx)),
-        y: Math.max(0, Math.min(1, interaction.origin.y + dny)),
-      } as any);
+        x: normalizedCoord(interaction.origin.x + dnx),
+        y: normalizedCoord(interaction.origin.y + dny),
+      } as Partial<Decoration>);
     }
     return;
   }
@@ -415,19 +422,19 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
       let sumX = 0,
         sumY = 0;
       for (const p of origPts) {
-        sumX += p[0];
-        sumY += p[1];
+        sumX += p[0]!;
+        sumY += p[1]!;
       }
       const pcx = sumX / origPts.length;
       const pcy = sumY / origPts.length;
       const ratio = newScale / scale;
-      const newPts = origPts.map((p: number[]) => [
-        Math.max(0, Math.min(1, pcx + (p[0] - pcx) * ratio)),
-        Math.max(0, Math.min(1, pcy + (p[1] - pcy) * ratio)),
+      const newPts = origPts.map((p): [NormalizedCoord, NormalizedCoord] => [
+        normalizedCoord(pcx + (p[0]! - pcx) * ratio),
+        normalizedCoord(pcy + (p[1]! - pcy) * ratio),
       ]);
-      store.updateDecoration(deco.id, { points: newPts } as any);
+      store.updateDecoration(deco.id, { points: newPts } as Partial<SquiggleDecoration>);
     } else {
-      store.updateDecoration(deco.id, { scale: newScale } as any);
+      store.updateDecoration(deco.id, { scale: newScale } as Partial<Decoration>);
     }
     return;
   }
@@ -486,7 +493,8 @@ canvas.addEventListener(
         canvas.dispatchEvent(new MouseEvent('mouseup', {}));
       }
 
-      const [a, b] = e.touches;
+      const a = e.touches[0]!;
+      const b = e.touches[1]!;
       const midX = (a.clientX + b.clientX) / 2;
       const midY = (a.clientY + b.clientY) / 2;
       const rect = canvas.getBoundingClientRect();
@@ -514,7 +522,7 @@ canvas.addEventListener(
       return;
     }
 
-    const touch = e.touches[0];
+    const touch = e.touches[0]!;
     canvas.dispatchEvent(
       new MouseEvent('mousedown', {
         clientX: touch.clientX,
@@ -532,7 +540,8 @@ canvas.addEventListener(
     e.preventDefault();
 
     if (interaction.mode === 'pinch-rotate' && e.touches.length >= 2) {
-      const [a, b] = e.touches;
+      const a = e.touches[0]!;
+      const b = e.touches[1]!;
       const dist = touchDist(a, b);
       const angle = touchAngle(a, b);
 
@@ -549,7 +558,7 @@ canvas.addEventListener(
       return;
     }
 
-    const touch = e.touches[0];
+    const touch = e.touches[0]!;
     canvas.dispatchEvent(
       new MouseEvent('mousemove', {
         clientX: touch.clientX,

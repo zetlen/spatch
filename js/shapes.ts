@@ -33,7 +33,7 @@ export function hitTestShapes(
 ): string | null {
   // Iterate in reverse (front shapes first)
   for (let i = state.shapes.length - 1; i >= 0; i--) {
-    const shape = state.shapes[i];
+    const shape = state.shapes[i]!;
     if (isPointInShape(shape, mx, my, canvasSize)) {
       return shape.id;
     }
@@ -69,7 +69,7 @@ function isPointInShape(shape: Shape, mx: number, my: number, canvasSize: number
         const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
         verts.push([Math.cos(angle) * r, Math.sin(angle) * r]);
       }
-      return pointInTriangle(lx, ly, verts[0], verts[1], verts[2]);
+      return pointInTriangle(lx, ly, verts[0]!, verts[1]!, verts[2]!);
     }
 
     default:
@@ -260,7 +260,7 @@ export function hitTestDecorations(
   canvasSize: number,
 ): string | null {
   for (let i = state.decorations.length - 1; i >= 0; i--) {
-    const deco = state.decorations[i];
+    const deco = state.decorations[i]!;
     const bounds = getDecoBounds(deco, canvasSize);
     if (
       bounds &&

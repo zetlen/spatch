@@ -56,7 +56,7 @@ export function createVocoderChain(
   const chars = text.toLowerCase().split('');
 
   for (let ci = 0; ci < chars.length; ci++) {
-    const char = chars[ci];
+    const char = chars[ci]!;
     const time = now + ci * CHAR_DURATION;
     const formants = getFormants(char);
 

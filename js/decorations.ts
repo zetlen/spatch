@@ -57,7 +57,7 @@ export class DecorationTool {
 
   handleMouseMove(nx: number, ny: number): void {
     if (!this.isDrawing) return;
-    const last = this.currentPoints[this.currentPoints.length - 1];
+    const last = this.currentPoints[this.currentPoints.length - 1]!;
     const dx = (nx - last[0]) * this.canvasSize;
     const dy = (ny - last[1]) * this.canvasSize;
     if (dx * dx + dy * dy > 16) {
