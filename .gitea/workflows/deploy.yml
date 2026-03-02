@@ -8,8 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: oven/bun:latest
-      volumes:
-        - /home/zetlen/sites/spatch:/site
+      options: -v /home/zetlen/sites/spatch:/site
     steps:
       - run: apt-get update && apt-get install -y --no-install-recommends git
       - run: |
