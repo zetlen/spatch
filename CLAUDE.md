@@ -56,11 +56,42 @@ bun run dev          # build to dist/ (unminified, with source maps)
 
 Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 
+## The Bijection Principle
+
+**STRICT INVARIANT.** The canvas and the patch are bijective. Every field in the
+canonical state must affect both canvas rendering and audio synthesis. No
+visual-only state. No hidden audio parameters.
+
+- Two states that look identical MUST sound identical.
+- Two states that sound identical MUST look identical.
+- Visual equivalences (rotation symmetry) are collapsed by making audio mappings
+  periodic with the shape's geometric symmetry.
+
+Violations of this principle must be **unrepresentable in the type system**, not
+merely discouraged by convention. If you add a visual field, it must have an
+audio mapping. If you add an audio parameter, it must be visible on the canvas.
+No exceptions.
+
+See `docs/plans/2026-03-01-bijective-audio-visual-design.md` for the full
+design rationale and enumeration of past violations.
+
 ## Key Concepts
 
-- **Shapes** are the primary objects: triangle, square, circle. Each shape maps to
-  one oscillator voice. Position → pitch/pan, size → volume, rotation → timbre,
-  color → filter, pattern → effect.
+- **Voices** are the primary objects: circle (sine), square (pulse), triangle
+  (saw/tri blend). Each voice is a discriminated union on `waveform`. Every field
+  maps to both a visual property and an audio parameter:
+  - `x` → horizontal position + stereo pan
+  - `y` → vertical position + pitch (pentatonic with micro-detuning)
+  - `size` → shape area + gain
+  - `fill` → color/gradient + formant filter (hue→vowel, sat→Q, light→brightness)
+  - `effect` → pattern overlay + audio effect chain
+  - `timbre` (pulse/blend only) → rotation + waveform parameter. Rotation maps
+    via symmetric half-sine, periodic per vertex count (90° for square, 120° for
+    triangle). Circles have no timbre and no rotation.
+
+- **Text decorations** use vocoder synthesis. Fields: text (vocoder content),
+  x (pan), y (pitch), size (carrier volume), color (carrier formant filter,
+  same hue→formant mapping as voice fills).
 
 - **ADSR envelope** is encoded as the canvas corner radii. Drag corners to adjust.
   Bottom-left = attack, top-left = decay, top-right = sustain, bottom-right = release.
@@ -68,9 +99,10 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 - **Play modes**: normal (press-and-hold), latch (click to toggle), loop
   (auto-repeating). Shift+drag = arpeggio mode.
 
-- **State** lives in `SigilStore` (js/state.ts). It holds shapes, decorations, and
-  envelope. All mutations go through this class. `UndoManager` wraps the store and
-  provides undo/redo via JSON snapshots. Selection state is app-level, not in the store.
+- **State** lives in `SigilStore` (js/state.ts). It holds voices, text
+  decorations, and envelope. All mutations go through this class. `UndoManager`
+  wraps the store and provides undo/redo via JSON snapshots. Selection state is
+  app-level, not in the store.
 
 - **Serialization** uses compact single-character keys + LZ-string compression →
   URL hash fragment. No backend needed for sharing.
@@ -87,13 +119,16 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 - **Fill** is a discriminated union (`SolidFill | RadialFill | LinearFill`). The
   toolbar uses a flat `FillDraft` bag internally for mode-switching without data loss,
   converted via `fillToFillDraft()` / `fillDraftToFill()`.
-- **Decoration** is a discriminated union (`SquiggleDecoration | CurlicueDecoration |
-  TextDecoration`), discriminated on the `type` field.
-- **Voice** is a discriminated union (`SineVoice | SquareVoice | TriangleVoice`),
-  discriminated on the `waveform` field.
+- **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice`),
+  discriminated on the `waveform` field. Sine has no `timbre`; pulse and blend do.
+- **TextDecoration** has text, x, y, size, and color fields — all with both
+  visual and audio roles. No squiggles or curlicues.
 - **InteractionState** is a discriminated union for the canvas interaction state
   machine (idle, dragging, resizing, rotating, etc.), replacing scattered variables.
 - Audio effects return `{ input, output, dispose }` objects for uniform wiring.
+- **Every new field must satisfy the bijection principle.** If you add a field
+  to a voice or text decoration, you must add both a visual rendering path and
+  an audio mapping. If you cannot identify both, the field should not exist.
 
 **IMPORTANT: If you need a temporary directory for scratch files, build artifacts, or
 throwaway work, use `tmp/` at the project root. It is gitignored. Do NOT create temp
@@ -103,14 +138,18 @@ files anywhere else.**
 
 - The render loop is driven by `needsRender` flag + `requestAnimationFrame`. Set
   `needsRender = true` or call `store._notify()` to trigger a redraw.
-- To add a new shape type: update `types.ts:ShapeType`, `state.ts:createShape`,
-  `canvas.ts:buildShapePath`, `shapes.ts:isPointInShape`, and `audio.ts:oscillatorType`.
-- To add a new pattern: update `patterns.ts` (visual), `effects.ts` (audio), and
-  add a button in `index.html`.
+- To add a new waveform/shape: add a variant to the Voice union in `types.ts`,
+  update `state.ts:createVoice`, `canvas.ts:buildShapePath`,
+  `shapes.ts:isPointInShape`, `audio.ts` voice builder, and `serialize.ts`.
+  The new variant MUST map every field to both a visual and audio interpretation.
+- To add a new pattern/effect: update `patterns.ts` (visual), `effects.ts`
+  (audio), and add a button in `index.html`. Both sides are required.
 - To add a new fill mode: add a variant to the `Fill` union in `types.ts`, update
   `fillToFillDraft`/`fillDraftToFill`, `colors.ts`, `toolbar.ts` picker, `audio.ts`
-  filter mapping, and `serialize.ts` compact format.
-- To add a new decoration type: add a variant to the `Decoration` union in `types.ts`,
-  a factory in `state.ts`, and rendering in `canvas.ts`.
+  formant mapping, and `serialize.ts`. Every fill field must affect the formant
+  filter.
+- To add a new field to any type: you MUST provide both a visual rendering path
+  and an audio mapping. If either is missing, the field violates the bijection
+  principle and must not be added.
 - The `embed.html` page imports the same modules as the main app but only uses
   `canvas.ts`, `audio.ts`, `serialize.ts`, and `envelope.ts`.
