@@ -6,7 +6,7 @@ import { getDecoBounds } from './shapes.ts';
 import type { Voice, TextDecoration, SigilData, WaveformType } from './types.ts';
 import { waveformShape } from './types.ts';
 
-const CANVAS_BG = '#1a1a2e';
+const CANVAS_BG = '#2a2a2a';
 
 // Offscreen canvas for blend-mode compositing. Shapes are drawn here using
 // their blend modes against a transparent background so they blend with each
@@ -104,7 +104,7 @@ function drawChromaticGuides(ctx: CanvasRenderingContext2D, size: number): void 
   for (let s = 0; s <= 36; s++) {
     const y = (1 - s / 36) * size;
     const isOctave = s % 12 === 0;
-    ctx.strokeStyle = isOctave ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = isOctave ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)';
     ctx.setLineDash(isOctave ? [6, 8] : [4, 8]);
     ctx.beginPath();
     ctx.moveTo(0, y);
@@ -172,34 +172,18 @@ function drawVoice(
 
   ctx.restore();
 
-  const glowColor = isPlaying ? 'rgba(0, 240, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)';
-  const glowLayers = isPlaying
-    ? [
-        { width: 8, alpha: 0.15, color: '#00f0ff' },
-        { width: 4, alpha: 0.3, color: '#00f0ff' },
-        { width: 2, alpha: 0.7, color: '#00f0ff' },
-        { width: 1, alpha: 1.0, color: '#ffffff' },
-      ]
-    : [
-        { width: 6, alpha: 0.08, color: glowColor },
-        { width: 3, alpha: 0.15, color: glowColor },
-        { width: 1.5, alpha: 0.4, color: 'rgba(255,255,255,0.6)' },
-      ];
-
-  for (const layer of glowLayers) {
-    ctx.save();
-    ctx.globalAlpha = layer.alpha;
-    ctx.strokeStyle = layer.color;
-    ctx.lineWidth = layer.width;
-    if (isPlaying) {
-      ctx.shadowColor = '#00f0ff';
-      ctx.shadowBlur = 15;
-    }
-    buildShapePath(ctx, voice, canvasSize);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.restore();
+  // Shape outline
+  ctx.save();
+  if (isPlaying) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+  } else {
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.5;
   }
+  buildShapePath(ctx, voice, canvasSize);
+  ctx.stroke();
+  ctx.restore();
 
   ctx.restore();
 }
@@ -256,7 +240,7 @@ function drawSelectionHandles(
   ctx.rotate(rotRad);
 
   ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
   ctx.lineWidth = 1;
   ctx.strokeRect(-r, -r, r * 2, r * 2);
   ctx.setLineDash([]);
@@ -272,8 +256,8 @@ function drawSelectionHandles(
     [0, r],
     [-r, 0],
   ];
-  ctx.fillStyle = '#00f0ff';
-  ctx.strokeStyle = '#0a0a1a';
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#2a2a2a';
   ctx.lineWidth = 1;
   for (const [hx, hy] of handles) {
     ctx.fillRect(hx - handleSize, hy - handleSize, handleSize * 2, handleSize * 2);
@@ -286,15 +270,15 @@ function drawSelectionHandles(
     ctx.beginPath();
     ctx.moveTo(0, -r);
     ctx.lineTo(0, rotHandleY);
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
     ctx.beginPath();
     ctx.arc(0, rotHandleY, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#b44dff';
+    ctx.fillStyle = '#888888';
     ctx.fill();
-    ctx.strokeStyle = '#0a0a1a';
+    ctx.strokeStyle = '#2a2a2a';
     ctx.stroke();
   }
 
@@ -312,7 +296,7 @@ function drawDecoSelectionHandles(
   ctx.save();
 
   ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = 'rgba(255, 225, 86, 0.5)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
   ctx.lineWidth = 1;
   ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
   ctx.setLineDash([]);
@@ -324,8 +308,8 @@ function drawDecoSelectionHandles(
     [bounds.x + bounds.w, bounds.y + bounds.h],
     [bounds.x, bounds.y + bounds.h],
   ];
-  ctx.fillStyle = '#ffe156';
-  ctx.strokeStyle = '#0a0a1a';
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#2a2a2a';
   ctx.lineWidth = 1;
   for (const [hx, hy] of corners) {
     ctx.fillRect(hx - handleSize, hy - handleSize, handleSize * 2, handleSize * 2);

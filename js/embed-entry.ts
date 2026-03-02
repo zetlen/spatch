@@ -8,13 +8,13 @@ const hash = window.location.hash.slice(1);
 if (!hash) {
   // Static content only — no user input involved
   document.body.innerHTML =
-    '<p style="color:#e0e0ff;text-align:center;padding:2em;">No sigil data found.</p>';
+    '<p style="color:#2a2a2a;text-align:center;padding:2em;">No sigil data found.</p>';
 } else {
   const state = deserializeState(hash);
   if (!state) {
     // Static content only — no user input involved
     document.body.innerHTML =
-      '<p style="color:#e0e0ff;text-align:center;padding:2em;">Invalid sigil data.</p>';
+      '<p style="color:#2a2a2a;text-align:center;padding:2em;">Invalid sigil data.</p>';
   } else {
     const sigil = state; // narrow for closures
     const canvas = document.getElementById('c') as HTMLCanvasElement;

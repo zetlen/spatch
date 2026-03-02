@@ -1,21 +1,19 @@
-/* style.css — 80s synthwave aesthetic for spatch */
+/* style.css — flat hybrid-bevel theme for spatch */
 
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
 
 :root {
-  --bg-dark: #0a0a1a;
-  --bg-panel: #12122a;
-  --bg-toolbar: #161633;
-  --neon-pink: #ff2d95;
-  --neon-cyan: #00f0ff;
-  --neon-purple: #b44dff;
-  --neon-yellow: #ffe156;
-  --text-primary: #e0e0ff;
-  --text-muted: #7878a0;
-  --border-glow: rgba(0, 240, 255, 0.3);
-  --btn-hover: rgba(255, 45, 149, 0.15);
-  --btn-active: rgba(255, 45, 149, 0.3);
-  --danger: #ff3355;
+  --bg-body: #e8e4e0;
+  --bg-toolbar: #d5d0cb;
+  --bg-panel: #ddd8d3;
+  --border: #b8b3ad;
+  --bevel-hi: #f0ece8;
+  --bevel-lo: #a8a39d;
+  --text-primary: #2a2a2a;
+  --text-muted: #7a7570;
+  --hover-bg: #ccc7c1;
+  --active-bg: #c5c0ba;
+  --danger: #cc3344;
 }
 
 * {
@@ -25,7 +23,7 @@
 }
 
 body {
-  background: var(--bg-dark);
+  background: var(--bg-body);
   color: var(--text-primary);
   font-family: 'Share Tech Mono', monospace;
   overflow: hidden;
@@ -52,7 +50,7 @@ body {
 #toolbar-top,
 #toolbar-bottom {
   background: var(--bg-toolbar);
-  border-bottom: 1px solid var(--border-glow);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   padding: 6px 12px;
@@ -63,7 +61,7 @@ body {
 
 #toolbar-bottom {
   border-bottom: none;
-  border-top: 1px solid var(--border-glow);
+  border-top: 1px solid var(--border);
   padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -76,7 +74,7 @@ body {
 .separator {
   width: 1px;
   height: 24px;
-  background: var(--border-glow);
+  background: var(--border);
   margin: 0 6px;
 }
 
@@ -84,10 +82,7 @@ body {
   font-family: 'Orbitron', sans-serif;
   font-weight: 900;
   font-size: 16px;
-  background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan), var(--neon-purple));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text-primary);
   letter-spacing: 2px;
   white-space: nowrap;
 }
@@ -97,32 +92,32 @@ body {
 .tool-btn,
 .action-btn,
 .pattern-btn {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-toolbar);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
   color: var(--text-primary);
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
+  width: 36px;
+  height: 36px;
+  border-radius: 2px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  transition: all 0.15s;
+  transition: background 0.15s;
 }
 
 .tool-btn:hover,
 .action-btn:hover,
 .pattern-btn:hover {
-  background: var(--btn-hover);
-  border-color: var(--neon-pink);
+  background: var(--hover-bg);
 }
 
 .tool-btn.active,
 .pattern-btn.active {
-  background: var(--btn-active);
-  border-color: var(--neon-pink);
-  box-shadow: 0 0 8px rgba(255, 45, 149, 0.4);
+  background: var(--active-bg);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
 }
 
 .action-btn.danger {
@@ -130,45 +125,32 @@ body {
 }
 
 .action-btn.danger:hover {
-  background: rgba(255, 51, 85, 0.15);
-  border-color: var(--danger);
+  background: rgba(204, 51, 68, 0.12);
 }
 
 .play-btn {
-  background: linear-gradient(135deg, var(--neon-pink), var(--neon-purple));
-  border: none;
-  color: white;
+  background: var(--bg-toolbar);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
+  color: var(--text-primary);
   font-family: 'Orbitron', sans-serif;
   font-weight: 700;
   font-size: 13px;
   padding: 8px 20px;
-  border-radius: 4px;
+  border-radius: 2px;
   cursor: pointer;
   letter-spacing: 2px;
-  transition: all 0.2s;
+  transition: background 0.15s;
 }
 
 .play-btn:hover {
-  box-shadow:
-    0 0 20px rgba(255, 45, 149, 0.5),
-    0 0 40px rgba(180, 77, 255, 0.3);
-  transform: scale(1.02);
+  background: var(--hover-bg);
 }
 
 .play-btn.playing {
-  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
-  animation: pulse-glow 0.8s ease-in-out infinite alternate;
-}
-
-@keyframes pulse-glow {
-  from {
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
-  }
-  to {
-    box-shadow:
-      0 0 25px rgba(0, 240, 255, 0.6),
-      0 0 50px rgba(180, 77, 255, 0.3);
-  }
+  background: var(--active-bg);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
 }
 
 /* ---- Swatch ---- */
@@ -176,24 +158,28 @@ body {
 .swatch {
   width: 28px;
   height: 28px;
-  border-radius: 4px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
   cursor: pointer;
   background: hsl(200, 80%, 50%);
   transition: border-color 0.15s;
 }
 
 .swatch:hover {
-  border-color: var(--neon-cyan);
+  border-color: var(--text-muted);
 }
 
 /* ---- Select ---- */
 
 select {
-  background: var(--bg-panel);
+  background: var(--bg-toolbar);
   color: var(--text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
+  border-radius: 2px;
   padding: 4px 8px;
   font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
@@ -203,10 +189,10 @@ select {
 /* ---- Text input ---- */
 
 .text-input {
-  background: var(--bg-panel);
+  background: var(--bg-body);
   color: var(--text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
   padding: 4px 8px;
   font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
@@ -214,7 +200,7 @@ select {
 }
 
 .text-input:focus {
-  border-color: var(--neon-cyan);
+  border-color: var(--text-muted);
   outline: none;
 }
 
@@ -227,10 +213,7 @@ select {
   justify-content: center;
   padding: 12px;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 30% 20%, rgba(180, 77, 255, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse at 70% 80%, rgba(255, 45, 149, 0.04) 0%, transparent 50%),
-    var(--bg-dark);
+  background: var(--bg-body);
 }
 
 #canvas-wrap {
@@ -240,12 +223,11 @@ select {
 
 #sigil-canvas {
   display: block;
-  background: #1a1a2e;
+  background: #2a2a2a;
   /* ADSR corners will be set via JS */
-  box-shadow:
-    0 0 30px rgba(0, 240, 255, 0.08),
-    0 0 60px rgba(180, 77, 255, 0.05),
-    inset 0 0 60px rgba(0, 0, 0, 0.3);
+  border-width: 2px;
+  border-style: solid;
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
   image-rendering: auto;
 }
 
@@ -278,8 +260,10 @@ select {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--bg-panel);
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-toolbar);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -288,11 +272,9 @@ select {
 }
 
 .fan-option.hot {
-  border-color: var(--neon-cyan);
-  color: var(--neon-cyan);
-  background: rgba(0, 240, 255, 0.15);
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
-  transform: scale(1.15);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+  color: var(--text-primary);
+  background: var(--active-bg);
 }
 
 .fan-loop {
@@ -300,36 +282,14 @@ select {
     transform 0.1s ease-out,
     border-color 0.15s,
     color 0.15s,
-    background 0.15s,
-    box-shadow 0.15s;
+    background 0.15s;
 }
 
 .fan-loop.dragging {
   transition:
     border-color 0.15s,
     color 0.15s,
-    background 0.15s,
-    box-shadow 0.15s;
-}
-
-/* ---- Canvas playing glow ---- */
-
-#canvas-wrap.playing #sigil-canvas {
-  animation: canvas-glow 1.2s ease-in-out infinite alternate;
-}
-
-@keyframes canvas-glow {
-  from {
-    box-shadow:
-      0 0 20px rgba(0, 240, 255, 0.2),
-      0 0 40px rgba(180, 77, 255, 0.1);
-  }
-  to {
-    box-shadow:
-      0 0 40px rgba(0, 240, 255, 0.4),
-      0 0 80px rgba(180, 77, 255, 0.25),
-      0 0 120px rgba(0, 240, 255, 0.1);
-  }
+    background 0.15s;
 }
 
 /* ---- Color Picker Panel ---- */
@@ -340,11 +300,11 @@ select {
   left: 50%;
   transform: translateX(-50%);
   background: var(--bg-panel);
-  border: 1px solid var(--border-glow);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
   padding: 12px;
   z-index: 100;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .panel.hidden {
@@ -358,11 +318,13 @@ select {
 }
 
 .panel-tab {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-toolbar);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
   color: var(--text-muted);
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: 2px;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 11px;
@@ -371,9 +333,9 @@ select {
 }
 
 .panel-tab.active {
-  color: var(--neon-cyan);
-  border-color: var(--neon-cyan);
-  background: rgba(0, 240, 255, 0.1);
+  color: var(--text-primary);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+  background: var(--active-bg);
 }
 
 .tab-content {
@@ -397,7 +359,6 @@ select {
   writing-mode: vertical-lr;
   direction: rtl;
   height: 160px;
-  accent-color: var(--neon-cyan);
 }
 
 .stop-toggle {
@@ -406,11 +367,13 @@ select {
 }
 
 .stop-btn {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-toolbar);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
   color: var(--text-muted);
   padding: 2px 10px;
-  border-radius: 3px;
+  border-radius: 2px;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 10px;
@@ -419,9 +382,9 @@ select {
 }
 
 .stop-btn.active {
-  color: var(--neon-cyan);
-  border-color: var(--neon-cyan);
-  background: rgba(0, 240, 255, 0.1);
+  color: var(--text-primary);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+  background: var(--active-bg);
 }
 
 #angle-dial {
@@ -462,11 +425,13 @@ select {
 
 .border-color-btn,
 .border-style-btn {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-toolbar);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
   color: var(--text-muted);
   padding: 2px 10px;
-  border-radius: 3px;
+  border-radius: 2px;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 10px;
@@ -476,23 +441,22 @@ select {
 
 .border-color-btn.active,
 .border-style-btn.active {
-  color: var(--neon-cyan);
-  border-color: var(--neon-cyan);
-  background: rgba(0, 240, 255, 0.1);
+  color: var(--text-primary);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+  background: var(--active-bg);
 }
 
 .border-slider {
   flex: 1;
-  accent-color: var(--neon-cyan);
   height: 4px;
 }
 
 .border-remove-btn {
   background: transparent;
-  border: 1px solid rgba(255, 51, 85, 0.3);
+  border: 1px solid rgba(204, 51, 68, 0.3);
   color: var(--danger);
   padding: 3px 10px;
-  border-radius: 3px;
+  border-radius: 2px;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 10px;
@@ -503,31 +467,13 @@ select {
 }
 
 .border-remove-btn:hover {
-  background: rgba(255, 51, 85, 0.15);
+  background: rgba(204, 51, 68, 0.12);
   border-color: var(--danger);
 }
 
 #btn-border.has-border {
-  color: var(--neon-cyan);
-  border-color: var(--neon-cyan);
-  background: rgba(0, 240, 255, 0.1);
-}
-
-/* ---- Scanline overlay on canvas (pure CSS) ---- */
-
-#canvas-wrap::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent 0px,
-    transparent 3px,
-    rgba(0, 0, 0, 0.03) 3px,
-    rgba(0, 0, 0, 0.03) 4px
-  );
-  z-index: 1;
+  background: var(--active-bg);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
 }
 
 /* ---- Hidden utility ---- */
@@ -549,11 +495,11 @@ select {
   right: 0;
   margin-top: 6px;
   background: var(--bg-panel);
-  border: 1px solid var(--border-glow);
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
   padding: 4px;
   z-index: 100;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   min-width: 160px;
 }
 
@@ -566,7 +512,7 @@ select {
   border: none;
   color: var(--text-primary);
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 2px;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 12px;
@@ -576,7 +522,7 @@ select {
 }
 
 .share-menu-item:hover {
-  background: var(--btn-hover);
+  background: var(--hover-bg);
 }
 
 .share-menu-item svg {
@@ -598,8 +544,8 @@ select {
   .tool-btn,
   .action-btn,
   .pattern-btn {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     font-size: 13px;
   }
   .play-btn {

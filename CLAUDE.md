@@ -14,7 +14,7 @@ build.ts             Build script (Bun.build)
 tsconfig.json        TypeScript configuration
 index.html           Main app (source HTML entry point)
 embed.html           Standalone embed viewer (reads state from URL hash)
-css/style.css        All styles (CSS custom properties, synthwave theme)
+css/style.css        All styles (CSS custom properties, flat hybrid-bevel theme)
 js/
   types.ts           Shared type definitions: branded primitives, Voice
                      (discriminated union), Fill (discriminated union),
