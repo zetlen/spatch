@@ -20,13 +20,7 @@ import { DecorationTool } from './decorations.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
 import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
 import { IDLE, type InteractionState } from './interaction.ts';
-import {
-  normalizedCoord,
-  type Voice,
-  type TextDecoration,
-  type NormalizedCoord,
-  type WaveformType,
-} from './types.ts';
+import { normalizedCoord, type Voice, type TextDecoration, type WaveformType } from './types.ts';
 
 // ---- Init ----
 

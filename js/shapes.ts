@@ -13,7 +13,6 @@ import {
   type ADSRCorner,
   type Degrees,
   type DecoBounds,
-  type WaveformType,
 } from './types.ts';
 
 const HANDLE_SIZE = 8;
