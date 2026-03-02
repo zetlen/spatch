@@ -122,7 +122,7 @@ function drawVoice(
   ctx: CanvasRenderingContext2D,
   voice: Voice,
   canvasSize: number,
-  isSelected: boolean,
+  _isSelected: boolean,
 ): void {
   const cx = voice.x * canvasSize;
   const cy = voice.y * canvasSize;
