@@ -37,6 +37,7 @@ function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCo
     fill: createDefaultFill(),
     effect: null as Voice['effect'],
     blend: DEFAULT_BLEND,
+    border: null as Voice['border'],
   };
   switch (waveform) {
     case 'sine':

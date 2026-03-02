@@ -140,6 +140,14 @@ export function createDefaultFill(): SolidFill {
   return { mode: 'solid', h: 200, s: 80, l: 50 };
 }
 
+export type BorderColor = 'white' | 'black';
+
+export interface Border {
+  color: BorderColor;
+  double: boolean;
+  thickness: NormalizedCoord;
+}
+
 interface VoiceBase {
   id: string;
   x: NormalizedCoord;
@@ -148,6 +156,7 @@ interface VoiceBase {
   fill: Fill;
   effect: PatternType | null;
   blend: BlendMode;
+  border: Border | null;
 }
 
 export interface SineVoice extends VoiceBase {
