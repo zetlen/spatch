@@ -344,3 +344,49 @@ describe('SigilStore loadState', () => {
     expect(undo.redoStack).toHaveLength(0);
   });
 });
+
+describe('SigilStore reverb', () => {
+  test('default state has null reverb', () => {
+    const store = new SigilStore();
+    expect(store.data.reverb).toBeNull();
+  });
+
+  test('updateReverb sets reverb', () => {
+    const store = new SigilStore();
+    store.updateReverb({ depth: 0.5, style: 'glow' });
+    expect(store.data.reverb).not.toBeNull();
+    expect(store.data.reverb.depth).toBe(0.5);
+    expect(store.data.reverb.style).toBe('glow');
+  });
+
+  test('updateReverb to null removes reverb', () => {
+    const store = new SigilStore();
+    store.updateReverb({ depth: 0.5, style: 'dim' });
+    store.updateReverb(null);
+    expect(store.data.reverb).toBeNull();
+  });
+
+  test('updateReverb notifies listeners', () => {
+    const store = new SigilStore();
+    let called = false;
+    store.onChange(() => {
+      called = true;
+    });
+    store.updateReverb({ depth: 0.3, style: 'glow' });
+    expect(called).toBe(true);
+  });
+
+  test('reverb persists through undo/redo', () => {
+    const store = new SigilStore();
+    const undo = new UndoManager(store);
+    undo.snapshot();
+    store.updateReverb({ depth: 0.7, style: 'dim' });
+
+    expect(store.data.reverb).not.toBeNull();
+    undo.undo();
+    expect(store.data.reverb).toBeNull();
+    undo.redo();
+    expect(store.data.reverb.depth).toBe(0.7);
+    expect(store.data.reverb.style).toBe('dim');
+  });
+});
