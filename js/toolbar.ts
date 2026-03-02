@@ -2,8 +2,8 @@
 
 import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.ts';
 import type { SigilStore, UndoManager } from './state.ts';
-import type { Voice, FillDraft, FillMode, PatternType, BlendMode } from './types.ts';
-import { fillToFillDraft, fillDraftToFill } from './types.ts';
+import type { Voice, FillDraft, FillMode, PatternType, BlendMode, BorderColor } from './types.ts';
+import { normalizedCoord, fillToFillDraft, fillDraftToFill } from './types.ts';
 
 export class Toolbar {
   store: SigilStore;
@@ -40,6 +40,7 @@ export class Toolbar {
     this._bindColorPicker();
     this._bindFillMode();
     this._bindBlendSelector();
+    this._bindBorderPanel();
     this._updateToolActive();
   }
 
@@ -128,6 +129,121 @@ export class Toolbar {
     if (!select) return;
     const sel = this.getSelected();
     select.value = sel ? sel.blend : 'soft-light';
+  }
+
+  _bindBorderPanel(): void {
+    const btn = document.getElementById('btn-border');
+    const panel = document.getElementById('border-panel');
+    if (!btn || !panel) return;
+
+    // Toggle border on/off and open/close panel
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sel = this.getSelected();
+      if (!sel) return;
+
+      if (sel.border) {
+        // Has border — toggle panel open/close
+        panel.classList.toggle('hidden');
+      } else {
+        // No border — add one and open panel
+        this.undo.snapshot();
+        this.store.updateVoice(sel.id, {
+          border: { color: 'white', double: false, thickness: normalizedCoord(0.5) },
+        });
+        panel.classList.remove('hidden');
+        this._updateBorderPanel();
+      }
+    });
+
+    // Close panel on outside click
+    document.addEventListener('click', (e) => {
+      if (!panel.contains(e.target as Node) && e.target !== btn) {
+        panel.classList.add('hidden');
+      }
+    });
+
+    // Color toggles
+    panel.querySelectorAll<HTMLElement>('.border-color-btn').forEach((colorBtn) => {
+      colorBtn.addEventListener('click', () => {
+        const sel = this.getSelected();
+        if (!sel?.border) return;
+        this.undo.snapshot();
+        this.store.updateVoice(sel.id, {
+          border: { ...sel.border, color: colorBtn.dataset.borderColor as BorderColor },
+        });
+        this._updateBorderPanel();
+      });
+    });
+
+    // Style toggles (single/double)
+    panel.querySelectorAll<HTMLElement>('.border-style-btn').forEach((styleBtn) => {
+      styleBtn.addEventListener('click', () => {
+        const sel = this.getSelected();
+        if (!sel?.border) return;
+        this.undo.snapshot();
+        this.store.updateVoice(sel.id, {
+          border: { ...sel.border, double: styleBtn.dataset.borderDouble === '1' },
+        });
+        this._updateBorderPanel();
+      });
+    });
+
+    // Remove border button
+    const removeBtn = document.getElementById('btn-remove-border');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        const sel = this.getSelected();
+        if (!sel) return;
+        this.undo.snapshot();
+        this.store.updateVoice(sel.id, { border: null });
+        panel.classList.add('hidden');
+        this._updateBorderPanel();
+      });
+    }
+
+    // Thickness slider
+    const slider = document.getElementById('border-thickness') as HTMLInputElement | null;
+    if (slider) {
+      slider.addEventListener('input', () => {
+        const sel = this.getSelected();
+        if (!sel?.border) return;
+        this.store.updateVoice(sel.id, {
+          border: { ...sel.border, thickness: normalizedCoord(parseInt(slider.value) / 100) },
+        });
+      });
+      // Snapshot on pointerdown for undo
+      slider.addEventListener('pointerdown', () => {
+        this.undo.snapshot();
+      });
+    }
+  }
+
+  _updateBorderPanel(): void {
+    const btn = document.getElementById('btn-border');
+    const sel = this.getSelected();
+    const hasBorder = sel?.border != null;
+
+    btn?.classList.toggle('has-border', hasBorder);
+
+    if (!hasBorder) return;
+    const border = sel!.border!;
+
+    // Update color toggles
+    document.querySelectorAll<HTMLElement>('.border-color-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.borderColor === border.color);
+    });
+
+    // Update style toggles
+    document.querySelectorAll<HTMLElement>('.border-style-btn').forEach((b) => {
+      b.classList.toggle('active', (b.dataset.borderDouble === '1') === border.double);
+    });
+
+    // Update thickness slider
+    const slider = document.getElementById('border-thickness') as HTMLInputElement | null;
+    if (slider) {
+      slider.value = String(Math.round(border.thickness * 100));
+    }
   }
 
   _bindFillMode(): void {
@@ -360,5 +476,6 @@ export class Toolbar {
     this.updateSwatchFromSelected();
     this._updatePatternActive();
     this._updateBlendSelector();
+    this._updateBorderPanel();
   }
 }
