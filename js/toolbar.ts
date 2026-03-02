@@ -1,6 +1,6 @@
 // toolbar.ts — Toolbar UI, tool selection, color picker, pattern selector
 
-import { getSwatchColor, drawAngleDial, hslToHex, hexToHsl } from './colors.ts';
+import { getSwatchColor, hslToHex, hexToHsl } from './colors.ts';
 import type { SigilStore, UndoManager } from './state.ts';
 import type {
   Voice,
@@ -44,7 +44,6 @@ export class Toolbar {
     this._bindPatternButtons();
     this._bindActionButtons();
     this._bindColorPicker();
-    this._bindFillMode();
     this._bindBlendSelector();
     this._bindBorderPanel();
     this._bindReverbPanel();
@@ -253,18 +252,6 @@ export class Toolbar {
     }
   }
 
-  _bindFillMode(): void {
-    const select = document.getElementById('fill-mode') as HTMLSelectElement;
-    select.addEventListener('change', () => {
-      const sel = this.getSelected();
-      if (sel) {
-        this._fillDraft.mode = select.value as FillMode;
-        this._commitFill(sel.id, true);
-        this.updateSwatchFromSelected();
-      }
-    });
-  }
-
   _commitFill(id: string, withUndo: boolean): void {
     const fill = fillDraftToFill(this._fillDraft);
     if (withUndo) {
@@ -303,7 +290,6 @@ export class Toolbar {
         if (sel) {
           this._fillDraft.mode = tab.dataset.tab as FillMode;
           this._commitFill(sel.id, false);
-          (document.getElementById('fill-mode') as HTMLSelectElement).value = tab.dataset.tab!;
           this.updateSwatchFromSelected();
         }
 
@@ -316,19 +302,14 @@ export class Toolbar {
     this._bindNativeColorInput('color-lin-1', 'h', 's', 'l');
     this._bindNativeColorInput('color-lin-2', 'h2', 's2', 'l2');
 
-    const angleDial = document.getElementById('angle-dial') as HTMLCanvasElement | null;
-    if (angleDial) {
-      angleDial.addEventListener('click', (e) => {
-        const rect = angleDial.getBoundingClientRect();
-        const x = e.clientX - rect.left - 50;
-        const y = e.clientY - rect.top - 50;
-        const angle = Math.round((Math.atan2(y, x) * 180) / Math.PI);
+    const angleSlider = document.getElementById('angle-slider') as HTMLInputElement | null;
+    if (angleSlider) {
+      angleSlider.addEventListener('input', () => {
         const sel = this.getSelected();
         if (sel) {
-          this._fillDraft.gradAngle = (angle + 360) % 360;
+          this._fillDraft.gradAngle = parseInt(angleSlider.value);
           this._commitFill(sel.id, false);
           this.updateSwatchFromSelected();
-          this._renderAngleDial();
         }
       });
     }
@@ -359,20 +340,13 @@ export class Toolbar {
     this._setColorInput('color-solid', d.h, d.s, d.l);
     this._setColorInput('color-lin-1', d.h, d.s, d.l);
     this._setColorInput('color-lin-2', d.h2, d.s2, d.l2);
-    this._renderAngleDial();
+    const angleSlider = document.getElementById('angle-slider') as HTMLInputElement | null;
+    if (angleSlider) angleSlider.value = String(d.gradAngle);
   }
 
   _setColorInput(inputId: string, h: number, s: number, l: number): void {
     const input = document.getElementById(inputId) as HTMLInputElement | null;
     if (input) input.value = hslToHex(h, s, l);
-  }
-
-  _renderAngleDial(): void {
-    const canvas = document.getElementById('angle-dial') as HTMLCanvasElement | null;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
-    const angle = this._fillDraft.gradAngle;
-    drawAngleDial(ctx, 50, 50, 40, angle);
   }
 
   updateSwatchFromSelected(): void {
@@ -389,8 +363,6 @@ export class Toolbar {
 
     // Populate draft from selected voice's fill
     this._fillDraft = fillToFillDraft(sel.fill);
-
-    (document.getElementById('fill-mode') as HTMLSelectElement).value = sel.fill.mode;
 
     this._syncColorInputs();
 

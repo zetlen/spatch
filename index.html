@@ -59,10 +59,6 @@
         </div>
         <div class="toolbar-group fill-group">
           <div id="fill-swatch" class="swatch" title="Pick color"></div>
-          <select id="fill-mode" title="Fill type">
-            <option value="solid">Solid</option>
-            <option value="linear">Linear</option>
-          </select>
         </div>
         <div class="toolbar-group pattern-group">
           <button class="pattern-btn" data-pattern="none" title="None">&#8709;</button>
@@ -138,7 +134,7 @@
         </div>
         <div class="panel-body">
           <div id="tab-solid" class="tab-content active">
-            <input type="color" id="color-solid" class="native-color-input" title="Fill color" />
+            <input type="color" id="color-solid" class="panel-swatch" title="Fill color" />
           </div>
           <div id="tab-linear" class="tab-content">
             <div class="color-stops">
@@ -147,21 +143,19 @@
                 <input
                   type="color"
                   id="color-lin-1"
-                  class="native-color-input"
+                  class="panel-swatch"
                   title="Stop 1 color (drives audio)"
                 />
               </label>
               <label class="color-stop-label">
                 <span>Stop 2</span>
-                <input
-                  type="color"
-                  id="color-lin-2"
-                  class="native-color-input"
-                  title="Stop 2 color"
-                />
+                <input type="color" id="color-lin-2" class="panel-swatch" title="Stop 2 color" />
               </label>
             </div>
-            <canvas id="angle-dial" width="100" height="100"></canvas>
+            <label class="angle-label">
+              <span>Angle</span>
+              <input type="range" id="angle-slider" min="0" max="359" value="0" />
+            </label>
           </div>
         </div>
       </div>

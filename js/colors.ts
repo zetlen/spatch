@@ -99,34 +99,3 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   }
   return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
 }
-
-// ---- Angle dial rendering ----
-
-export function drawAngleDial(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  r: number,
-  angle: number,
-): void {
-  ctx.clearRect(cx - r - 2, cy - r - 2, (r + 2) * 2, (r + 2) * 2);
-  // Outer ring
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  // Direction indicator
-  const rad = (angle * Math.PI) / 180;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.lineTo(cx + Math.cos(rad) * r * 0.8, cy + Math.sin(rad) * r * 0.8);
-  ctx.strokeStyle = '#2a2a2a';
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  // Center dot
-  ctx.beginPath();
-  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-  ctx.fillStyle = '#2a2a2a';
-  ctx.fill();
-}
