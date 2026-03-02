@@ -1,21 +1,19 @@
-/* style.css — 80s synthwave aesthetic for spatch */
+/* style.css — flat hybrid-bevel theme for spatch */
 
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
 
 :root {
-  --bg-dark: #0a0a1a;
-  --bg-panel: #12122a;
-  --bg-toolbar: #161633;
-  --neon-pink: #ff2d95;
-  --neon-cyan: #00f0ff;
-  --neon-purple: #b44dff;
-  --neon-yellow: #ffe156;
-  --text-primary: #e0e0ff;
-  --text-muted: #7878a0;
-  --border-glow: rgba(0, 240, 255, 0.3);
-  --btn-hover: rgba(255, 45, 149, 0.15);
-  --btn-active: rgba(255, 45, 149, 0.3);
-  --danger: #ff3355;
+  --bg-body: #e8e4e0;
+  --bg-toolbar: #d5d0cb;
+  --bg-panel: #ddd8d3;
+  --border: #b8b3ad;
+  --bevel-hi: #f0ece8;
+  --bevel-lo: #a8a39d;
+  --text-primary: #2a2a2a;
+  --text-muted: #7a7570;
+  --hover-bg: #ccc7c1;
+  --active-bg: #c5c0ba;
+  --danger: #cc3344;
 }
 
 * {
@@ -25,7 +23,7 @@
 }
 
 body {
-  background: var(--bg-dark);
+  background: var(--bg-body);
   color: var(--text-primary);
   font-family: 'Share Tech Mono', monospace;
   overflow: hidden;
@@ -52,7 +50,7 @@ body {
 #toolbar-top,
 #toolbar-bottom {
   background: var(--bg-toolbar);
-  border-bottom: 1px solid var(--border-glow);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   padding: 6px 12px;
@@ -63,7 +61,7 @@ body {
 
 #toolbar-bottom {
   border-bottom: none;
-  border-top: 1px solid var(--border-glow);
+  border-top: 1px solid var(--border);
   padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -76,7 +74,7 @@ body {
 .separator {
   width: 1px;
   height: 24px;
-  background: var(--border-glow);
+  background: var(--border);
   margin: 0 6px;
 }
 
@@ -84,10 +82,7 @@ body {
   font-family: 'Orbitron', sans-serif;
   font-weight: 900;
   font-size: 16px;
-  background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan), var(--neon-purple));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text-primary);
   letter-spacing: 2px;
   white-space: nowrap;
 }
