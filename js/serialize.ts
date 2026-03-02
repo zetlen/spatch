@@ -12,7 +12,6 @@
 //   border = 0 (none) | ["W"|"B", 0|1, thickness]
 //
 //   fill (solid)   = ["s", h, s, l]
-//   fill (radial)  = ["r", h, s, l, h2, s2, l2]
 //   fill (linear)  = ["l", gradAngle, h, s, l, h2, s2, l2]
 //
 //   effect = "s"|"c"|"n"|"g"|"r" | 0
@@ -30,7 +29,6 @@ import {
   type TextDecoration,
   type Fill,
   type SolidFill,
-  type RadialFill,
   type LinearFill,
   type WaveformType,
   type PatternType,
@@ -78,7 +76,6 @@ export function loadFromURL(): SigilData | null {
 
 type PackedFill =
   | ['s', number, number, number]
-  | ['r', number, number, number, number, number, number]
   | ['l', number, number, number, number, number, number, number];
 
 type PackedBorder = 0 | [string, number, number];
@@ -250,8 +247,6 @@ function packFill(f: Fill): PackedFill {
   switch (f.mode) {
     case 'solid':
       return ['s', f.h, f.s, f.l];
-    case 'radial':
-      return ['r', f.h, f.s, f.l, f.h2, f.s2, f.l2];
     case 'linear':
       return ['l', f.gradAngle, f.h, f.s, f.l, f.h2, f.s2, f.l2];
   }
@@ -261,16 +256,6 @@ function unpackFill(f: PackedFill): Fill {
   switch (f[0]) {
     case 's':
       return { mode: 'solid', h: f[1], s: f[2], l: f[3] } satisfies SolidFill;
-    case 'r':
-      return {
-        mode: 'radial',
-        h: f[1],
-        s: f[2],
-        l: f[3],
-        h2: f[4],
-        s2: f[5],
-        l2: f[6],
-      } satisfies RadialFill;
     case 'l':
       return {
         mode: 'linear',

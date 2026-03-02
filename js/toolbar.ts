@@ -1,6 +1,6 @@
 // toolbar.ts — Toolbar UI, tool selection, color picker, pattern selector
 
-import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.ts';
+import { getSwatchColor, hslToHex, hexToHsl } from './colors.ts';
 import type { SigilStore, UndoManager } from './state.ts';
 import type {
   Voice,
@@ -20,7 +20,6 @@ export class Toolbar {
   onToolChange: ((tool: string) => void) | null;
   selectedId: string | null;
   selectedDecoId: string | null;
-  _activeStop: { radial: number; linear: number };
   _fillDraft: FillDraft;
 
   constructor(store: SigilStore, undo: UndoManager) {
@@ -30,7 +29,6 @@ export class Toolbar {
     this.onToolChange = null;
     this.selectedId = null;
     this.selectedDecoId = null;
-    this._activeStop = { radial: 1, linear: 1 };
     this._fillDraft = {
       mode: 'solid',
       h: 200,
@@ -46,7 +44,6 @@ export class Toolbar {
     this._bindPatternButtons();
     this._bindActionButtons();
     this._bindColorPicker();
-    this._bindFillMode();
     this._bindBlendSelector();
     this._bindBorderPanel();
     this._bindReverbPanel();
@@ -255,25 +252,6 @@ export class Toolbar {
     }
   }
 
-  _bindFillMode(): void {
-    const select = document.getElementById('fill-mode') as HTMLSelectElement;
-    select.addEventListener('change', () => {
-      const sel = this.getSelected();
-      if (sel) {
-        this._fillDraft.mode = select.value as FillMode;
-        this._commitFill(sel.id, true);
-        this.updateSwatchFromSelected();
-      }
-    });
-  }
-
-  _getStopFields(tab: string): { hKey: 'h' | 'h2'; sKey: 's' | 's2'; lKey: 'l' | 'l2' } {
-    const stop = tab === 'radial' || tab === 'linear' ? this._activeStop[tab] : 1;
-    return stop === 2
-      ? { hKey: 'h2', sKey: 's2', lKey: 'l2' }
-      : { hKey: 'h', sKey: 's', lKey: 'l' };
-  }
-
   _commitFill(id: string, withUndo: boolean): void {
     const fill = fillDraftToFill(this._fillDraft);
     if (withUndo) {
@@ -290,7 +268,7 @@ export class Toolbar {
       e.stopPropagation();
       panel.classList.toggle('hidden');
       if (!panel.classList.contains('hidden')) {
-        this._renderColorPicker();
+        this._syncColorInputs();
       }
     });
 
@@ -312,129 +290,63 @@ export class Toolbar {
         if (sel) {
           this._fillDraft.mode = tab.dataset.tab as FillMode;
           this._commitFill(sel.id, false);
-          (document.getElementById('fill-mode') as HTMLSelectElement).value = tab.dataset.tab!;
           this.updateSwatchFromSelected();
         }
 
-        this._renderColorPicker();
+        this._syncColorInputs();
       });
     });
 
-    this._bindSLSquare('sl-square', 'solid');
-    this._bindHueSlider('hue-slider', 'solid');
+    // Bind all native color inputs
+    this._bindNativeColorInput('color-solid', 'h', 's', 'l');
+    this._bindNativeColorInput('color-lin-1', 'h', 's', 'l');
+    this._bindNativeColorInput('color-lin-2', 'h2', 's2', 'l2');
 
-    this._bindSLSquare('sl-square-rad', 'radial');
-    this._bindHueSlider('hue-slider-rad', 'radial');
-    this._bindStopToggle('radial');
-
-    this._bindSLSquare('sl-square-lin', 'linear');
-    this._bindHueSlider('hue-slider-lin', 'linear');
-    this._bindStopToggle('linear');
-
-    const angleDial = document.getElementById('angle-dial') as HTMLCanvasElement | null;
-    if (angleDial) {
-      angleDial.addEventListener('click', (e) => {
-        const rect = angleDial.getBoundingClientRect();
-        const x = e.clientX - rect.left - 50;
-        const y = e.clientY - rect.top - 50;
-        const angle = Math.round((Math.atan2(y, x) * 180) / Math.PI);
+    const angleSlider = document.getElementById('angle-slider') as HTMLInputElement | null;
+    if (angleSlider) {
+      angleSlider.addEventListener('input', () => {
         const sel = this.getSelected();
         if (sel) {
-          this._fillDraft.gradAngle = (angle + 360) % 360;
+          this._fillDraft.gradAngle = parseInt(angleSlider.value);
           this._commitFill(sel.id, false);
           this.updateSwatchFromSelected();
-          this._renderAngleDial();
         }
       });
     }
   }
 
-  _bindSLSquare(canvasId: string, tab: string): void {
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
-    if (!canvas) return;
-    canvas.addEventListener('click', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const s = Math.round((x / 160) * 100);
-      const l = Math.round((1 - y / 160) * 100);
+  _bindNativeColorInput(
+    inputId: string,
+    hKey: 'h' | 'h2',
+    sKey: 's' | 's2',
+    lKey: 'l' | 'l2',
+  ): void {
+    const input = document.getElementById(inputId) as HTMLInputElement | null;
+    if (!input) return;
+    input.addEventListener('input', () => {
       const sel = this.getSelected();
-      if (sel) {
-        const { sKey, lKey } = this._getStopFields(tab);
-        this._fillDraft[sKey] = Math.max(0, Math.min(100, s));
-        this._fillDraft[lKey] = Math.max(0, Math.min(100, l));
-        this._commitFill(sel.id, false);
-        this.updateSwatchFromSelected();
-        this._renderColorPicker();
-      }
+      if (!sel) return;
+      const [h, s, l] = hexToHsl(input.value);
+      this._fillDraft[hKey] = h;
+      this._fillDraft[sKey] = s;
+      this._fillDraft[lKey] = l;
+      this._commitFill(sel.id, false);
+      this.updateSwatchFromSelected();
     });
   }
 
-  _bindHueSlider(sliderId: string, tab: string): void {
-    const slider = document.getElementById(sliderId) as HTMLInputElement | null;
-    if (!slider) return;
-    slider.addEventListener('input', () => {
-      const sel = this.getSelected();
-      if (sel) {
-        const { hKey } = this._getStopFields(tab);
-        this._fillDraft[hKey] = parseInt(slider.value);
-        this._commitFill(sel.id, false);
-        this.updateSwatchFromSelected();
-        this._renderColorPicker();
-      }
-    });
+  _syncColorInputs(): void {
+    const d = this._fillDraft;
+    this._setColorInput('color-solid', d.h, d.s, d.l);
+    this._setColorInput('color-lin-1', d.h, d.s, d.l);
+    this._setColorInput('color-lin-2', d.h2, d.s2, d.l2);
+    const angleSlider = document.getElementById('angle-slider') as HTMLInputElement | null;
+    if (angleSlider) angleSlider.value = String(d.gradAngle);
   }
 
-  _bindStopToggle(tab: 'radial' | 'linear'): void {
-    document.querySelectorAll<HTMLElement>(`.stop-btn[data-tab="${tab}"]`).forEach((btn) => {
-      btn.addEventListener('click', () => {
-        this._activeStop[tab] = parseInt(btn.dataset.stop!);
-        document
-          .querySelectorAll<HTMLElement>(`.stop-btn[data-tab="${tab}"]`)
-          .forEach((b) => b.classList.toggle('active', b.dataset.stop === btn.dataset.stop));
-        const sel = this.getSelected();
-        if (sel) {
-          const { hKey } = this._getStopFields(tab);
-          const sliderId = tab === 'radial' ? 'hue-slider-rad' : 'hue-slider-lin';
-          (document.getElementById(sliderId) as HTMLInputElement).value = String(
-            this._fillDraft[hKey],
-          );
-          this._renderColorPicker();
-        }
-      });
-    });
-  }
-
-  _renderColorPicker(): void {
-    this._renderSLSquareForTab('sl-square', 'solid');
-    this._renderSLSquareForTab('sl-square-rad', 'radial');
-    this._renderSLSquareForTab('sl-square-lin', 'linear');
-    this._renderAngleDial();
-  }
-
-  _renderSLSquareForTab(canvasId: string, tab: string): void {
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
-    const { hKey, sKey, lKey } = this._getStopFields(tab);
-    const hue = this._fillDraft[hKey];
-    drawSLSquare(ctx, 0, 0, 160, 160, hue);
-
-    const ix = (this._fillDraft[sKey] / 100) * 160;
-    const iy = (1 - this._fillDraft[lKey] / 100) * 160;
-    ctx.beginPath();
-    ctx.arc(ix, iy, 5, 0, Math.PI * 2);
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
-  _renderAngleDial(): void {
-    const canvas = document.getElementById('angle-dial') as HTMLCanvasElement | null;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
-    const angle = this._fillDraft.gradAngle;
-    drawAngleDial(ctx, 50, 50, 40, angle);
+  _setColorInput(inputId: string, h: number, s: number, l: number): void {
+    const input = document.getElementById(inputId) as HTMLInputElement | null;
+    if (input) input.value = hslToHex(h, s, l);
   }
 
   updateSwatchFromSelected(): void {
@@ -452,27 +364,7 @@ export class Toolbar {
     // Populate draft from selected voice's fill
     this._fillDraft = fillToFillDraft(sel.fill);
 
-    (document.getElementById('fill-mode') as HTMLSelectElement).value = sel.fill.mode;
-
-    (document.getElementById('hue-slider') as HTMLInputElement).value = String(this._fillDraft.h);
-    (document.getElementById('hue-slider-rad') as HTMLInputElement).value = String(
-      this._activeStop.radial === 2 ? this._fillDraft.h2 : this._fillDraft.h,
-    );
-    (document.getElementById('hue-slider-lin') as HTMLInputElement).value = String(
-      this._activeStop.linear === 2 ? this._fillDraft.h2 : this._fillDraft.h,
-    );
-
-    this._activeStop = { radial: 1, linear: 1 };
-    document
-      .querySelectorAll<HTMLElement>('.stop-btn')
-      .forEach((b) => b.classList.toggle('active', b.dataset.stop === '1'));
-
-    (document.getElementById('hue-slider-rad') as HTMLInputElement).value = String(
-      this._fillDraft.h,
-    );
-    (document.getElementById('hue-slider-lin') as HTMLInputElement).value = String(
-      this._fillDraft.h,
-    );
+    this._syncColorInputs();
 
     const panel = document.getElementById('color-picker-panel')!;
     panel

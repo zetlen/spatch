@@ -70,10 +70,19 @@ describe('SigilStore updateVoice / updateFill / updateEnvelope', () => {
   test('updateFill replaces the fill entirely', () => {
     const store = new SigilStore();
     const voice = store.addVoice('sine', 0.5, 0.5);
-    store.updateFill(voice.id, { mode: 'radial', h: 200, s: 80, l: 50, h2: 100, s2: 60, l2: 40 });
+    store.updateFill(voice.id, {
+      mode: 'linear',
+      gradAngle: 0,
+      h: 200,
+      s: 80,
+      l: 50,
+      h2: 100,
+      s2: 60,
+      l2: 40,
+    });
 
     const updated = store.getVoice(voice.id);
-    expect(updated.fill.mode).toBe('radial');
+    expect(updated.fill.mode).toBe('linear');
     expect(updated.fill.h2).toBe(100);
     expect(updated.fill.h).toBe(200);
   });
