@@ -49,30 +49,28 @@ export function getSwatchColor(fill: Fill): string {
   }
 }
 
-// ---- SL square rendering ----
+// ---- HSL ↔ Hex conversion (for native color picker) ----
 
-export function drawSLSquare(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  hue: number,
-): void {
-  const imgData = ctx.createImageData(w, h);
-  for (let py = 0; py < h; py++) {
-    for (let px = 0; px < w; px++) {
-      const s = (px / (w - 1)) * 100;
-      const l = (1 - py / (h - 1)) * 100;
-      const rgb = hslToRgb(hue, s, l);
-      const i = (py * w + px) * 4;
-      imgData.data[i] = rgb[0];
-      imgData.data[i + 1] = rgb[1];
-      imgData.data[i + 2] = rgb[2];
-      imgData.data[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(imgData, x, y);
+export function hslToHex(h: number, s: number, l: number): string {
+  const [r, g, b] = hslToRgb(h, s, l);
+  return '#' + [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
+}
+
+export function hexToHsl(hex: string): [number, number, number] {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, Math.round(l * 100)];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
 }
 
 function hslToRgb(h: number, s: number, l: number): [number, number, number] {

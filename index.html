@@ -139,85 +139,51 @@
           <button class="panel-tab" data-tab="linear">Linear</button>
         </div>
         <div class="panel-body">
-          <!-- Solid HSL -->
           <div id="tab-solid" class="tab-content active">
-            <div class="sl-picker">
-              <canvas id="sl-square" width="160" height="160"></canvas>
-              <input
-                type="range"
-                id="hue-slider"
-                class="hue-slider"
-                min="0"
-                max="360"
-                value="200"
-                orient="vertical"
-              />
-            </div>
+            <input type="color" id="color-solid" class="native-color-input" title="Fill color" />
           </div>
-          <!-- Radial -->
           <div id="tab-radial" class="tab-content">
-            <div class="sl-picker">
-              <canvas id="sl-square-rad" width="160" height="160"></canvas>
-              <input
-                type="range"
-                id="hue-slider-rad"
-                class="hue-slider"
-                min="0"
-                max="360"
-                value="200"
-                orient="vertical"
-              />
-            </div>
-            <div class="stop-toggle">
-              <button
-                class="stop-btn active"
-                data-tab="radial"
-                data-stop="1"
-                title="Center color (drives audio)"
-              >
-                Stop 1
-              </button>
-              <button
-                class="stop-btn"
-                data-tab="radial"
-                data-stop="2"
-                title="Outer color (visual only)"
-              >
-                Stop 2
-              </button>
+            <div class="color-stops">
+              <label class="color-stop-label">
+                <span>Center</span>
+                <input
+                  type="color"
+                  id="color-rad-1"
+                  class="native-color-input"
+                  title="Center color (drives audio)"
+                />
+              </label>
+              <label class="color-stop-label">
+                <span>Edge</span>
+                <input
+                  type="color"
+                  id="color-rad-2"
+                  class="native-color-input"
+                  title="Edge color"
+                />
+              </label>
             </div>
           </div>
-          <!-- Linear -->
           <div id="tab-linear" class="tab-content">
-            <div class="sl-picker">
-              <canvas id="sl-square-lin" width="160" height="160"></canvas>
-              <input
-                type="range"
-                id="hue-slider-lin"
-                class="hue-slider"
-                min="0"
-                max="360"
-                value="200"
-                orient="vertical"
-              />
-            </div>
-            <div class="stop-toggle">
-              <button
-                class="stop-btn active"
-                data-tab="linear"
-                data-stop="1"
-                title="Stop 1 color (drives audio)"
-              >
-                Stop 1
-              </button>
-              <button
-                class="stop-btn"
-                data-tab="linear"
-                data-stop="2"
-                title="Stop 2 color (visual only)"
-              >
-                Stop 2
-              </button>
+            <div class="color-stops">
+              <label class="color-stop-label">
+                <span>Stop 1</span>
+                <input
+                  type="color"
+                  id="color-lin-1"
+                  class="native-color-input"
+                  title="Stop 1 color (drives audio)"
+                />
+              </label>
+              <label class="color-stop-label">
+                <span>Stop 2</span>
+                <input
+                  type="color"
+                  id="color-lin-2"
+                  class="native-color-input"
+                  title="Stop 2 color"
+                />
+              </label>
             </div>
             <canvas id="angle-dial" width="100" height="100"></canvas>
           </div>

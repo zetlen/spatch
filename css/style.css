@@ -357,42 +357,31 @@ select {
   gap: 8px;
 }
 
-.sl-picker {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.hue-slider {
-  writing-mode: vertical-lr;
-  direction: rtl;
-  height: 160px;
-}
-
-.stop-toggle {
-  display: flex;
-  gap: 4px;
-}
-
-.stop-btn {
-  background: var(--bg-toolbar);
-  border-width: 1px;
-  border-style: solid;
-  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
-  color: var(--text-muted);
-  padding: 2px 10px;
+.native-color-input {
+  width: 48px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
   border-radius: 2px;
   cursor: pointer;
+  background: none;
+}
+
+.color-stops {
+  display: flex;
+  gap: 12px;
+}
+
+.color-stop-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   font-family: 'Share Tech Mono', monospace;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-.stop-btn.active {
-  color: var(--text-primary);
-  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
-  background: var(--active-bg);
+  color: var(--text-muted);
 }
 
 #angle-dial {
