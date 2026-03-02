@@ -16,25 +16,25 @@ index.html           Main app (source HTML entry point)
 embed.html           Standalone embed viewer (reads state from URL hash)
 css/style.css        All styles (CSS custom properties, synthwave theme)
 js/
-  types.ts           Shared type definitions: branded primitives, Shape, Fill
-                     (discriminated union), Decoration (discriminated union),
-                     Envelope, branding functions (normalizedCoord, degrees, cents)
+  types.ts           Shared type definitions: branded primitives, Voice
+                     (discriminated union), Fill (discriminated union),
+                     TextDecoration, Envelope, branding functions
   state.ts           SigilStore (data CRUD + change notification) and
                      UndoManager (undo/redo wrapping a store)
   interaction.ts     InteractionState discriminated union (idle, dragging,
                      resizing, rotating, adsr, arpeggio, deco-*, pinch-rotate)
   app.ts             Entry point: init, event wiring, render loop, selection
   embed-entry.ts     Entry point for embed.html viewer
-  canvas.ts          Canvas 2D rendering (shapes, decorations, selection UI)
+  canvas.ts          Canvas 2D rendering (voices, text decorations, selection UI)
   shapes.ts          Hit testing, resize/rotate math
   colors.ts          Color conversions (HSL↔RGB, Lab↔RGB), picker renderers
   patterns.ts        Visual pattern tiles (stripes, checker, noise) + procedural
   effects.ts         Audio effect builders (chorus, tremolo, flanger, phaser, bitcrusher)
-  audio.ts           Web Audio engine: AudioEngine class, Voice discriminated
-                     union (sine/square/triangle), mapping functions
+  audio.ts           Web Audio engine: AudioEngine class, mapping functions
+                     (pitch, pan, gain, timbre, formants), voice building
   envelope.ts        ADSR ↔ canvas corner radius conversion
   toolbar.ts         Toolbar class: tool/pattern/color picker UI binding
-  decorations.ts     DecorationTool class: squiggle/curlicue/text placement
+  decorations.ts     DecorationTool class: text placement only
   vocoder.ts         Formant synthesis for text decorations (bandpass filter bank)
   embed.ts           Embed snippet generator + modal UI
   serialize.ts       Versioned LZ-string URL serialization (compact single-char keys)
