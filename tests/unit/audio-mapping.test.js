@@ -8,6 +8,7 @@ import {
   shapeAreaFraction,
   areaToGain,
   curlicuesToDetune,
+  snapYToNote,
 } from '../../js/audio.ts';
 
 describe('yToFrequency', () => {
@@ -26,13 +27,47 @@ describe('yToFrequency', () => {
     expect(freq).toBeCloseTo(130.81, 0);
   });
 
-  test('y=0.5 (middle) returns a mid-range pentatonic note', () => {
+  test('exact note position has no micro-detuning', () => {
+    // y=0 and y=1 land exactly on note centers (offset=0)
+    // so they should be pure pentatonic pitches
+    const freqTop = yToFrequency(0);
+    const freqBottom = yToFrequency(1);
+    expect(freqTop).toBeCloseTo(1046.5, 0); // C6
+    expect(freqBottom).toBeCloseTo(130.81, 0); // C3
+  });
+
+  test('between-note positions produce micro-detuned pitch', () => {
+    // y=0.5 → continuous=7.5, rounds to index 8 (G4=392Hz), offset=-0.5
+    // Detuning: 40 * tanh(-0.5 * 3) ≈ -36.2 cents → slightly flat G4
     const freq = yToFrequency(0.5);
-    // y=0.5 → normalized=0.5 → index=round(0.5*16)=8 → PENTATONIC_SEMITONES[8]
-    // Semitones: [0,2,4,7,9, 12,14,16,19,21, 24,26,28,31,33, 36]
-    // Index 8 = 19 → MIDI 48+19=67 → G4
-    // But actual result is 392 Hz which is MIDI 67 = G4... let me just use the actual value
-    expect(freq).toBeCloseTo(392.0, 0);
+    expect(freq).toBeLessThan(392.0); // detuned flat
+    expect(freq).toBeGreaterThan(380.0); // but still recognizably G4
+  });
+
+  test('nearby y values produce distinct frequencies', () => {
+    // This was the original problem: slight position changes must produce
+    // audible differences, not dead zones
+    const f1 = yToFrequency(0.5);
+    const f2 = yToFrequency(0.51);
+    const f3 = yToFrequency(0.52);
+    expect(f1).not.toBeCloseTo(f2, 2);
+    expect(f2).not.toBeCloseTo(f3, 2);
+  });
+
+  test('micro-detuning stays within ±40 cents of the base note', () => {
+    // Test many positions and verify detuning never exceeds max
+    for (let y = 0; y <= 1; y += 0.01) {
+      const freq = yToFrequency(y);
+      // Find the nearest pure note frequency (what the old rounding would give)
+      const normalized = 1 - y;
+      const semitones = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33, 36];
+      const index = Math.round(normalized * (semitones.length - 1));
+      const clamped = Math.max(0, Math.min(semitones.length - 1, index));
+      const baseFreq = 440 * Math.pow(2, (48 + semitones[clamped] - 69) / 12);
+      // Detuning in cents: 1200 * log2(freq / baseFreq)
+      const detuneCents = 1200 * Math.log2(freq / baseFreq);
+      expect(Math.abs(detuneCents)).toBeLessThanOrEqual(40.01);
+    }
   });
 
   test('returns positive frequency for any valid y', () => {
@@ -183,5 +218,57 @@ describe('curlicuesToDetune', () => {
   test('multiple curlicues add 15 cents each', () => {
     expect(curlicuesToDetune(1)).toBe(15);
     expect(curlicuesToDetune(3)).toBe(45);
+  });
+});
+
+describe('snapYToNote', () => {
+  // 16 pentatonic notes, spacing = 1/15 ≈ 0.0667
+  const spacing = 1 / 15;
+
+  test('exact note positions are unchanged', () => {
+    // y=0 (top, highest note) and y=1 (bottom, lowest note)
+    expect(snapYToNote(0)).toBeCloseTo(0, 5);
+    expect(snapYToNote(1)).toBeCloseTo(1, 5);
+    // Middle note: index 8, normalized = 8/15, y = 1 - 8/15
+    const midY = 1 - 8 * spacing;
+    expect(snapYToNote(midY)).toBeCloseTo(midY, 5);
+  });
+
+  test('positions near a note are pulled toward it (magnetic)', () => {
+    // Slightly above a note center should snap closer to it
+    const noteY = 1 - 5 * spacing; // note at index 5
+    const slightlyOff = noteY + spacing * 0.1;
+    const snapped = snapYToNote(slightlyOff);
+    // Snapped should be closer to the note than the raw position
+    expect(Math.abs(snapped - noteY)).toBeLessThan(Math.abs(slightlyOff - noteY));
+  });
+
+  test('positions between notes are compressed but reachable', () => {
+    // Halfway between two notes should still map to a position between them
+    const note5Y = 1 - 5 * spacing;
+    const note6Y = 1 - 6 * spacing;
+    const halfway = (note5Y + note6Y) / 2;
+    const snapped = snapYToNote(halfway);
+    // Should still be between the two notes (not collapsed to either)
+    expect(snapped).toBeLessThan(note5Y);
+    expect(snapped).toBeGreaterThan(note6Y);
+  });
+
+  test('result is always clamped to [0, 1]', () => {
+    expect(snapYToNote(0)).toBeGreaterThanOrEqual(0);
+    expect(snapYToNote(0)).toBeLessThanOrEqual(1);
+    expect(snapYToNote(1)).toBeGreaterThanOrEqual(0);
+    expect(snapYToNote(1)).toBeLessThanOrEqual(1);
+    expect(snapYToNote(0.5)).toBeGreaterThanOrEqual(0);
+    expect(snapYToNote(0.5)).toBeLessThanOrEqual(1);
+  });
+
+  test('monotonic: increasing y never decreases snapped y', () => {
+    let prev = snapYToNote(0);
+    for (let y = 0.01; y <= 1; y += 0.01) {
+      const snapped = snapYToNote(y);
+      expect(snapped).toBeGreaterThanOrEqual(prev - 0.0001); // small epsilon for float
+      prev = snapped;
+    }
   });
 });

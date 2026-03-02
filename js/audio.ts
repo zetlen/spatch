@@ -4,6 +4,7 @@ import { createEffect } from './effects.ts';
 import { createVocoderChain } from './vocoder.ts';
 import {
   cents,
+  normalizedCoord,
   type ShapeType,
   type Shape,
   type Fill,
@@ -32,12 +33,47 @@ function midiToFreq(midi: number): number {
 
 // ---- Mapping functions ----
 
+// Maximum micro-detuning in cents when positioned between note snap points.
+// Tanh curve flattens near edges so the pitch always sounds like "that note."
+const MAX_DETUNE_CENTS = 40;
+
 export function yToFrequency(y: NormalizedCoord): number {
   // y is 0–1, where 0=top (high pitch), 1=bottom (low pitch)
   const normalized = 1 - y;
-  const index = Math.round(normalized * (PENTATONIC_SEMITONES.length - 1));
+  const continuous = normalized * (PENTATONIC_SEMITONES.length - 1);
+  const index = Math.round(continuous);
   const clamped = Math.max(0, Math.min(PENTATONIC_SEMITONES.length - 1, index));
-  return midiToFreq(BASE_MIDI + PENTATONIC_SEMITONES[clamped]!);
+  const offset = continuous - clamped; // -0.5 to +0.5
+
+  const baseFreq = midiToFreq(BASE_MIDI + PENTATONIC_SEMITONES[clamped]!);
+
+  // Micro-detuning: tanh flattens near edges, every y produces a unique pitch
+  const detuneCents = MAX_DETUNE_CENTS * Math.tanh(offset * 3);
+  return baseFreq * Math.pow(2, detuneCents / 1200);
+}
+
+// Magnetic snap: pull y toward nearest note position during drag.
+// Uses a cubic curve so positions near note centers are "sticky" while
+// positions between notes are compressed but still reachable.
+export function snapYToNote(y: NormalizedCoord): NormalizedCoord {
+  const noteCount = PENTATONIC_SEMITONES.length;
+  const normalized = 1 - y;
+  const spacing = 1 / (noteCount - 1);
+
+  const continuous = normalized / spacing;
+  const nearestIndex = Math.round(continuous);
+  const clamped = Math.max(0, Math.min(noteCount - 1, nearestIndex));
+  const notePos = clamped * spacing;
+
+  const halfZone = spacing / 2;
+  const rawOffset = normalized - notePos;
+  const t = Math.max(-1, Math.min(1, rawOffset / halfZone));
+
+  // Cubic pull: t³ preserves sign, creates wide sticky center
+  const pulled = t * t * t;
+
+  const snappedNormalized = notePos + pulled * halfZone;
+  return normalizedCoord(1 - snappedNormalized);
 }
 
 export function xToPan(x: NormalizedCoord): number {
