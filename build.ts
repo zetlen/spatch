@@ -1,5 +1,11 @@
 import { watch } from 'fs';
 import { join } from 'path';
+import pkg from './package.json';
+
+async function getVersionComment(): Promise<string> {
+  const sha = (await Bun.$`git rev-parse --short HEAD`.text()).trim();
+  return `<!-- spatch v${pkg.version} (${sha}) -->`;
+}
 
 const isDev = process.argv.includes('--dev');
 const shouldWatch = process.argv.includes('--watch');
@@ -29,6 +35,15 @@ async function build() {
       console.error(log);
     }
     return false;
+  }
+
+  // Inject version comment into each HTML output
+  const versionComment = await getVersionComment();
+  for (const output of htmlResult.outputs) {
+    if (output.path.endsWith('.html')) {
+      const html = await Bun.file(output.path).text();
+      await Bun.write(output.path, html + '\n' + versionComment);
+    }
   }
 
   // Build worklet separately — AudioWorklets must be loaded via addModule()
