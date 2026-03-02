@@ -8,12 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: oven/bun:latest
-      options: -v /home/zetlen/sites/spatch:/site
     steps:
       - run: apt-get update && apt-get install -y --no-install-recommends git
       - run: |
-          git config --global --add safe.directory /site
-          cd /site
+          git config --global --add safe.directory /sites/spatch
+          cd /sites/spatch
           git remote set-url origin https://$DEPLOY_TOKEN@got.colonpipe.org/zetlen/spatch.git
           git fetch --tags
           git checkout ${{ github.event.release.tag_name }}
