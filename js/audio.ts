@@ -353,7 +353,6 @@ export class AudioEngine {
   envelopeGain: GainNode | null;
   compressor: DynamicsCompressorNode | null;
   isPlaying: boolean;
-  playingShapeIds: Set<string>;
   _workletReady: boolean;
   _sessionId: number;
   _autoEQ: BiquadFilterNode[];
@@ -370,7 +369,6 @@ export class AudioEngine {
     this.envelopeGain = null;
     this.compressor = null;
     this.isPlaying = false;
-    this.playingShapeIds = new Set();
     this._workletReady = false;
     this._sessionId = 0;
     this._autoEQ = [];
@@ -470,13 +468,10 @@ export class AudioEngine {
     this.envelopeGain.gain.linearRampToValueAtTime(sustain, now + attack + decay);
 
     // Build voices
-    this.playingShapeIds.clear();
-
     for (const voice of sigilState.voices) {
       const audioVoice = this._buildVoice(ctx, voice);
       audioVoice.start(now);
       this.activeVoices.push(audioVoice);
-      this.playingShapeIds.add(voice.id);
     }
 
     // Set initial blend overlap levels
@@ -573,17 +568,18 @@ export class AudioEngine {
       if (!voiceMap.has(audioVoice.shapeId)) {
         this._stopVoice(audioVoice);
         this.activeVoices.splice(i, 1);
-        this.playingShapeIds.delete(audioVoice.shapeId);
       }
     }
 
     // Add audio voices for new voices
+    const activeIds = new Set(
+      this.activeVoices.filter((v): v is AudioVoice => !('isTextVoice' in v)).map((v) => v.shapeId),
+    );
     for (const voice of sigilState.voices) {
-      if (!this.playingShapeIds.has(voice.id)) {
+      if (!activeIds.has(voice.id)) {
         const audioVoice = this._buildVoice(ctx, voice);
         audioVoice.start(now);
         this.activeVoices.push(audioVoice);
-        this.playingShapeIds.add(voice.id);
       }
     }
 
@@ -798,7 +794,6 @@ export class AudioEngine {
     }
     this._reverbStyle = null;
 
-    this.playingShapeIds.clear();
     this.isPlaying = false;
   }
 

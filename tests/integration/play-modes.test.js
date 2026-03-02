@@ -23,11 +23,11 @@ test.describe('Play fan gesture', () => {
     // Real pointer down starts playback
     await page.mouse.move(cx, cy);
     await page.mouse.down();
-    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
+    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
 
     // Quick release stops playback
     await page.mouse.up();
-    await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
+    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
   test('hold opens fan', async ({ page }) => {
@@ -75,13 +75,13 @@ test.describe('Play fan gesture', () => {
 
     // Should still be playing (latched)
     await page.waitForTimeout(200);
-    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
+    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
     const isPlaying = await page.evaluate(() => window.__audioTap?.isPlaying());
     expect(isPlaying).toBe(true);
 
     // Click play to stop
     await playBtn.dispatchEvent('pointerdown', { pointerId: 2 });
-    await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
+    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
   test('drag to loop starts loop', async ({ page }) => {
@@ -114,17 +114,17 @@ test.describe('Play fan gesture', () => {
 
     // Should be playing (looping)
     await page.waitForTimeout(200);
-    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
+    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
 
     // Click play to stop
     await playBtn.dispatchEvent('pointerdown', { pointerId: 2 });
-    await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
+    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
   test('space toggles latch', async ({ page }) => {
     // Press Space to start (latched)
     await page.keyboard.press('Space');
-    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
+    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
 
     await page.waitForTimeout(300);
     const isPlaying = await page.evaluate(() => window.__audioTap?.isPlaying());
@@ -132,6 +132,6 @@ test.describe('Play fan gesture', () => {
 
     // Press Space to stop
     await page.keyboard.press('Space');
-    await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
+    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 });

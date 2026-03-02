@@ -70,7 +70,7 @@ export function render(
   for (let i = 0; i < state.voices.length; i++) {
     const voice = state.voices[i]!;
     bctx.globalCompositeOperation = voice.blend;
-    drawVoice(bctx, voice, canvasSize, voice.id === selectedId);
+    drawVoice(bctx, voice, canvasSize);
   }
   bctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(_blendCanvas!, 0, 0);
@@ -118,12 +118,7 @@ function drawChromaticGuides(ctx: CanvasRenderingContext2D, size: number): void 
   ctx.restore();
 }
 
-function drawVoice(
-  ctx: CanvasRenderingContext2D,
-  voice: Voice,
-  canvasSize: number,
-  _isSelected: boolean,
-): void {
+function drawVoice(ctx: CanvasRenderingContext2D, voice: Voice, canvasSize: number): void {
   const cx = voice.x * canvasSize;
   const cy = voice.y * canvasSize;
   const r = (voice.size / 2) * canvasSize;

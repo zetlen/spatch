@@ -17,7 +17,7 @@ test.describe('Playback', () => {
 
     // Use Space to latch-play (verifies audio starts)
     await page.keyboard.press('Space');
-    await expect(page.locator('#canvas-wrap')).toHaveClass(/playing/);
+    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
 
     // Wait a bit for audio to stabilize
     await page.waitForTimeout(200);
@@ -30,7 +30,7 @@ test.describe('Playback', () => {
     await page.keyboard.press('Space');
 
     // After release time, .playing class should be removed
-    await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/, { timeout: 5000 });
+    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
   test('play button shows stop text while playing', async ({ page }) => {
@@ -60,6 +60,6 @@ test.describe('Playback', () => {
 
     // Should not enter playing state
     await page.waitForTimeout(100);
-    await expect(page.locator('#canvas-wrap')).not.toHaveClass(/playing/);
+    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/);
   });
 });

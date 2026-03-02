@@ -161,14 +161,14 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     await startWith([voiceA]);
 
     expect(engine.activeVoices.length).toBe(1);
-    expect(engine.playingShapeIds.has('a')).toBe(true);
+    expect(engine.activeVoices[0].shapeId).toBe('a');
 
     // Add a second voice
     const voiceB = makeVoice('b');
     engine.updateVoices(makeSigilState([voiceA, voiceB]));
 
     expect(engine.activeVoices.length).toBe(2);
-    expect(engine.playingShapeIds.has('b')).toBe(true);
+    expect(engine.activeVoices.map((v) => v.shapeId).sort()).toEqual(['a', 'b']);
   });
 
   test('deleted shapes lose voices during playback', async () => {
@@ -182,8 +182,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine.updateVoices(makeSigilState([voiceA]));
 
     expect(engine.activeVoices.length).toBe(1);
-    expect(engine.playingShapeIds.has('a')).toBe(true);
-    expect(engine.playingShapeIds.has('b')).toBe(false);
+    expect(engine.activeVoices[0].shapeId).toBe('a');
   });
 
   test('simultaneous add and remove reconciles correctly', async () => {
@@ -198,8 +197,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     expect(engine.activeVoices.length).toBe(2);
     const ids = engine.activeVoices.map((v) => v.shapeId).sort();
     expect(ids).toEqual(['b', 'c']);
-    expect(engine.playingShapeIds.has('a')).toBe(false);
-    expect(engine.playingShapeIds.has('c')).toBe(true);
+    expect(ids).not.toContain('a');
   });
 
   test('no-op when shapes unchanged', async () => {
@@ -220,7 +218,6 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine.updateVoices(makeSigilState([]));
 
     expect(engine.activeVoices.length).toBe(0);
-    expect(engine.playingShapeIds.size).toBe(0);
   });
 
   test('works with all three waveform types', async () => {
@@ -230,9 +227,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine.updateVoices(makeSigilState(voices));
 
     expect(engine.activeVoices.length).toBe(3);
-    expect(engine.playingShapeIds.has('circ')).toBe(true);
-    expect(engine.playingShapeIds.has('sq')).toBe(true);
-    expect(engine.playingShapeIds.has('tri')).toBe(true);
+    expect(engine.activeVoices.map((v) => v.shapeId).sort()).toEqual(['circ', 'sq', 'tri']);
   });
 
   test('does nothing when not playing', () => {
@@ -568,5 +563,58 @@ describe('AudioEngine — master reverb', () => {
     expect(engine._reverbConvolver).not.toBe(originalConvolver);
     expect(engine._reverbStyle).toBe('dim');
     expect(engine._reverbWet.gain.value).toBe(0.6);
+  });
+});
+
+describe('AudioEngine — getLevel()', () => {
+  let engine;
+
+  test('returns 0 when analyser is null', () => {
+    engine = new AudioEngine();
+    expect(engine.getLevel()).toBe(0);
+  });
+
+  test('returns 0 for silent buffer', async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+
+    const state = makeSigilState([makeVoice('a')]);
+    await engine.play(state, state.envelope);
+
+    // Stub fills buffer with zeros by default
+    expect(engine.getLevel()).toBe(0);
+  });
+
+  test('returns correct RMS for known signal', async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+
+    const state = makeSigilState([makeVoice('a')]);
+    await engine.play(state, state.envelope);
+
+    // Inject a known buffer: all 0.5 → RMS = 0.5
+    const buf = new Float32Array(256);
+    buf.fill(0.5);
+    engine._analyserBuf = buf;
+    engine._analyser.getFloatTimeDomainData = (arr) => {
+      for (let i = 0; i < arr.length; i++) arr[i] = buf[i];
+    };
+
+    const level = engine.getLevel();
+    expect(level).toBeCloseTo(0.5, 5);
+  });
+
+  test('returns 0 after stop', async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+
+    const state = makeSigilState([makeVoice('a')]);
+    await engine.play(state, state.envelope);
+    engine.stop();
+
+    expect(engine.getLevel()).toBe(0);
   });
 });

@@ -615,7 +615,7 @@ if (sigilState.reverb) {
 
 **Step 5: Clean up reverb in _cleanup()**
 
-In `_cleanup()`, before the `this.playingShapeIds.clear()` line, add:
+In `_cleanup()`, before the `this.isPlaying = false` line, add:
 
 ```ts
 if (this._reverbConvolver) {
