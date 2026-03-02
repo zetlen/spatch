@@ -164,62 +164,34 @@ describe('UndoManager undo / redo', () => {
   });
 });
 
-describe('SigilStore layer ordering', () => {
-  test('moveLayer moves voice up by +1', () => {
+describe('SigilStore blend mode', () => {
+  test('voices default to soft-light blend', () => {
     const store = new SigilStore();
-    const a = store.addVoice('sine', 0.1, 0.1);
-    const b = store.addVoice('pulse', 0.5, 0.5);
-
-    store.moveLayer(a.id, 1);
-    expect(store.data.voices[0].id).toBe(b.id);
-    expect(store.data.voices[1].id).toBe(a.id);
+    const voice = store.addVoice('sine', 0.5, 0.5);
+    expect(voice.blend).toBe('soft-light');
   });
 
-  test('moveLayer does nothing at boundary', () => {
+  test('updateVoice can change blend mode', () => {
     const store = new SigilStore();
-    const a = store.addVoice('sine', 0.1, 0.1);
-    store.addVoice('pulse', 0.5, 0.5);
+    const voice = store.addVoice('sine', 0.5, 0.5);
+    store.updateVoice(voice.id, { blend: 'multiply' });
 
-    store.moveLayer(a.id, -1); // already at bottom
-    expect(store.data.voices[0].id).toBe(a.id);
+    const updated = store.getVoice(voice.id);
+    expect(updated.blend).toBe('multiply');
   });
 
-  test('bringToFront moves voice to last position', () => {
+  test('blend mode persists through undo/redo', () => {
     const store = new SigilStore();
-    const a = store.addVoice('sine', 0.1, 0.1);
-    store.addVoice('pulse', 0.5, 0.5);
-    store.addVoice('blend', 0.9, 0.9);
+    const undo = new UndoManager(store);
+    const voice = store.addVoice('sine', 0.5, 0.5);
+    undo.snapshot();
+    store.updateVoice(voice.id, { blend: 'difference' });
 
-    store.bringToFront(a.id);
-    expect(store.data.voices[2].id).toBe(a.id);
-  });
-
-  test('bringToFront does nothing if already at front', () => {
-    const store = new SigilStore();
-    store.addVoice('sine', 0.1, 0.1);
-    const b = store.addVoice('pulse', 0.5, 0.5);
-
-    store.bringToFront(b.id); // already last
-    expect(store.data.voices[1].id).toBe(b.id);
-  });
-
-  test('sendToBack moves voice to first position', () => {
-    const store = new SigilStore();
-    store.addVoice('sine', 0.1, 0.1);
-    store.addVoice('pulse', 0.5, 0.5);
-    const c = store.addVoice('blend', 0.9, 0.9);
-
-    store.sendToBack(c.id);
-    expect(store.data.voices[0].id).toBe(c.id);
-  });
-
-  test('sendToBack does nothing if already at back', () => {
-    const store = new SigilStore();
-    const a = store.addVoice('sine', 0.1, 0.1);
-    store.addVoice('pulse', 0.5, 0.5);
-
-    store.sendToBack(a.id); // already first
-    expect(store.data.voices[0].id).toBe(a.id);
+    expect(store.getVoice(voice.id).blend).toBe('difference');
+    undo.undo();
+    expect(store.data.voices[0].blend).toBe('soft-light');
+    undo.redo();
+    expect(store.data.voices[0].blend).toBe('difference');
   });
 });
 

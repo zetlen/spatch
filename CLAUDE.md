@@ -29,7 +29,10 @@ js/
   shapes.ts          Hit testing, resize/rotate math
   colors.ts          Color conversions (HSL↔RGB), gradient renderers, picker UI
   patterns.ts        Visual pattern tiles (stripes, checker, noise) + procedural
-  effects.ts         Audio effect builders (chorus, tremolo, flanger, phaser, bitcrusher)
+  effects.ts         Audio effect builders: pattern effects (chorus, tremolo,
+                     flanger, phaser, bitcrusher) and blend effects (saturation,
+                     compression, exciter, gating, comb filter, flanger) +
+                     overlap computation
   audio.ts           Web Audio engine: AudioEngine class, mapping functions
                      (pitch, pan, gain, timbre, formants), voice building
   envelope.ts        ADSR ↔ canvas corner radius conversion
@@ -123,6 +126,12 @@ design rationale and enumeration of past violations.
     ramp, periodic per vertex count (90° for square, 120° for triangle). Every
     angle within the period maps to a unique timbre. Circles have no timbre and
     no rotation.
+  - `blend` → canvas `globalCompositeOperation` + overlap-driven audio effect.
+    Default is `soft-light`. Seven modes, each mapping to an audio chain:
+    soft-light (tape saturation), multiply (heavy saturation), screen (compression),
+    overlay (harmonic exciter), color-burn (gating), difference (comb filter),
+    exclusion (swept flanger). Intensity is derived geometrically from shape
+    overlap — no stored wet/dry parameter.
 
 - **Text decorations** use vocoder synthesis. Fields: text (vocoder content),
   x (pan), y (pitch), size (carrier volume). All text renders black. Every
@@ -162,7 +171,12 @@ design rationale and enumeration of past violations.
   squiggles, no curlicues.
 - **InteractionState** is a discriminated union for the canvas interaction state
   machine (idle, dragging, resizing, rotating, etc.), replacing scattered variables.
-- Audio effects return `{ input, output, dispose }` objects for uniform wiring.
+- **BlendMode** is a string union of the 7 supported canvas composite operations.
+  Each voice has a `blend` field (default `soft-light`). Canvas renders each voice
+  with `globalCompositeOperation = voice.blend`. Audio routes each voice through
+  a blend effect whose wet/dry is computed from geometric overlap with other voices.
+- Audio pattern effects return `{ input, output, dispose }` objects. Blend effects
+  return `{ input, output, wetGain, dispose }` (wetGain is externally controlled).
 - **Every new field must satisfy the bijection principle.** If you add a field
   to a voice or text decoration, you must add both a visual rendering path and
   an audio mapping. If you cannot identify both, the field should not exist.
@@ -181,6 +195,10 @@ files anywhere else.**
   The new variant MUST map every field to both a visual and audio interpretation.
 - To add a new pattern/effect: update `patterns.ts` (visual), `effects.ts`
   (audio), and add a button in `index.html`. Both sides are required.
+- To add a new blend mode: add to the `BlendMode` union in `types.ts`,
+  add a case in `createBlendEffect` in `effects.ts`, add pack/unpack entries
+  in `serialize.ts`, and add an `<option>` in `index.html`. The mode must
+  produce a visible difference when shapes overlap and map to an audio effect.
 - To add a new fill mode: add a variant to the `Fill` union in `types.ts`, update
   `fillToFillDraft`/`fillDraftToFill`, `colors.ts`, `toolbar.ts` picker, `audio.ts`
   formant mapping, and `serialize.ts`. Every fill field must affect the formant
