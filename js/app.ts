@@ -20,7 +20,13 @@ import { DecorationTool } from './decorations.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
 import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
 import { IDLE, type InteractionState } from './interaction.ts';
-import { normalizedCoord, type Voice, type TextDecoration, type WaveformType } from './types.ts';
+import {
+  normalizedCoord,
+  type Voice,
+  type TextDecoration,
+  type WaveformType,
+  type Reverb,
+} from './types.ts';
 
 // ---- Init ----
 
@@ -62,6 +68,23 @@ if (loaded) {
   store.loadState(loaded);
 }
 
+// ---- Reverb shadow on canvas frame ----
+
+function updateReverbShadow(frameEl: HTMLElement, reverb: Reverb | null, canvasSize: number): void {
+  if (!reverb) {
+    frameEl.style.boxShadow = 'none';
+    return;
+  }
+  const maxBlur = canvasSize * 0.15;
+  const blur = reverb.depth * maxBlur;
+  const alpha = 0.3 + reverb.depth * 0.5;
+  const color =
+    reverb.style === 'glow'
+      ? `rgba(255,255,255,${alpha.toFixed(2)})`
+      : `rgba(0,0,0,${alpha.toFixed(2)})`;
+  frameEl.style.boxShadow = `inset 0 0 ${blur.toFixed(1)}px ${color}`;
+}
+
 // ---- Responsive canvas sizing ----
 
 function resizeCanvas(): void {
@@ -81,6 +104,7 @@ function resizeCanvas(): void {
   canvas.height = CANVAS_SIZE;
 
   updateCanvasBorderRadius(canvasFrame, store.data.envelope, size);
+  updateReverbShadow(canvasFrame, store.data.reverb, size);
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -107,6 +131,7 @@ function renderLoop(): void {
       store.data.envelope,
       parseInt(canvas.style.width) || CANVAS_SIZE,
     );
+    updateReverbShadow(canvasFrame, store.data.reverb, parseInt(canvas.style.width) || CANVAS_SIZE);
 
     needsRender = false;
   }

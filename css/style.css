@@ -227,6 +227,9 @@ select {
   border-width: 2px;
   border-style: solid;
   border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+  transition:
+    box-shadow 0.15s,
+    border-radius 0.15s;
 }
 
 #sigil-canvas {
