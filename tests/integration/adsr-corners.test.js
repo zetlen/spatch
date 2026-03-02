@@ -3,7 +3,6 @@ import { hitTestADSRCorner } from '../../js/shapes.ts';
 import { envelopeToCornerRadii, dragToEnvelopeValue } from '../../js/envelope.ts';
 
 const CANVAS_SIZE = 800;
-const HIT_RADIUS = CANVAS_SIZE * 0.08; // 64px at 800px canvas
 const MAX_RADIUS = CANVAS_SIZE * 0.15; // 120px
 const defaultEnvelope = { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 };
 
@@ -49,7 +48,6 @@ describe('ADSR corner hit testing', () => {
 
     // At half canvas size, hit radius should be 32px
     const halfCanvas = 400;
-    const halfHitRadius = halfCanvas * 0.08; // 32
     const insideHalf = hitTestADSRCorner(defaultEnvelope, 31, halfCanvas, halfCanvas);
     expect(insideHalf).toBe('attack');
 
