@@ -11,6 +11,7 @@ jobs:
       volumes:
         - /home/zetlen/sites/spatch:/site
     steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends git
       - run: |
           git config --global --add safe.directory /site
           cd /site
