@@ -27,7 +27,7 @@ js/
   embed-entry.ts     Entry point for embed.html viewer
   canvas.ts          Canvas 2D rendering (voices, text decorations, selection UI)
   shapes.ts          Hit testing, resize/rotate math
-  colors.ts          Color conversions (HSL↔RGB, Lab↔RGB), picker renderers
+  colors.ts          Color conversions (HSL↔RGB), gradient renderers, picker UI
   patterns.ts        Visual pattern tiles (stripes, checker, noise) + procedural
   effects.ts         Audio effect builders (chorus, tremolo, flanger, phaser, bitcrusher)
   audio.ts           Web Audio engine: AudioEngine class, mapping functions
@@ -37,13 +37,12 @@ js/
   decorations.ts     DecorationTool class: text placement only
   vocoder.ts         Formant synthesis for text decorations (bandpass filter bank)
   embed.ts           Embed snippet generator + modal UI
-  serialize.ts       Versioned LZ-string URL serialization (compact single-char keys)
+  serialize.ts       LZ-string URL serialization (positional arrays, no keys)
   worklets/
     bitcrusher.js    AudioWorkletProcessor for the "rough" pattern effect
 dist/                Build output (gitignored)
 plans/
-  sigil-synth-design.md  Original design document
-  spatch-architecture.md Runtime architecture reference
+  precursor-format.md    Sigil data schema (visual↔audio field mappings)
 ```
 
 ## How to Run
@@ -56,11 +55,46 @@ bun run dev          # build to dist/ (unminified, with source maps)
 
 Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 
-## The Bijection Principle
+## Transforms
 
-**STRICT INVARIANT.** The canvas and the patch are bijective. Every field in the
-canonical state must affect both canvas rendering and audio synthesis. No
-visual-only state. No hidden audio parameters.
+`SigilData` is the single source of truth. Three transforms consume it:
+
+```
+                  ┌─────────────┐
+                  │  SigilData  │
+                  └──────┬──────┘
+                         │
+            ┌────────────┼────────────┐
+            │            │            │
+            ▼            ▼            ▼
+     ┌─────────┐  ┌─────────────┐  ┌───────┐
+     │  Canvas │  │  Serializer │  │ Audio │
+     │ (bijec) │  │   (bijec)   │  │ (one  │
+     │ data ↔  │  │  data ↔     │  │  way) │
+     │ geometry│  │  string     │  │ data →│
+     │         │  │             │  │ graph │
+     └─────────┘  └─────────────┘  └───────┘
+```
+
+**Canvas** and **Serializer** are bijective transforms — they must go both
+directions without information loss. The canvas maps state to geometry and
+geometry back to state (hit testing, resize handles, rotation gestures). The
+serializer maps state to a URL string and back. If either direction is lossy or
+ambiguous, tools or sharing break.
+
+**Audio** is a one-way projection. State maps to audio graph parameters, but we
+never parse audio back into state. When state changes, we reconcile the graph
+(update parameters, rebuild voices if topology changed). There is no
+`audioToState()`.
+
+The two bijective transforms share no code — one is data↔data, the other is
+data↔geometry — but they share the same **constraint**: every field in
+`SigilData` must survive the round-trip. This is tested, not abstracted.
+
+### The Bijection Principle
+
+**STRICT INVARIANT.** Every field in SigilData must affect both canvas rendering
+and audio synthesis. No visual-only state. No hidden audio parameters.
 
 - Two states that look identical MUST sound identical.
 - Two states that sound identical MUST look identical.
@@ -85,13 +119,14 @@ design rationale and enumeration of past violations.
   - `size` → shape area + gain
   - `fill` → color/gradient + formant filter (hue→vowel, sat→Q, light→brightness)
   - `effect` → pattern overlay + audio effect chain
-  - `timbre` (pulse/blend only) → rotation + waveform parameter. Rotation maps
-    via symmetric half-sine, periodic per vertex count (90° for square, 120° for
-    triangle). Circles have no timbre and no rotation.
+  - `timbre` (pulse/blend only) → rotation + waveform parameter. Linear sawtooth
+    ramp, periodic per vertex count (90° for square, 120° for triangle). Every
+    angle within the period maps to a unique timbre. Circles have no timbre and
+    no rotation.
 
 - **Text decorations** use vocoder synthesis. Fields: text (vocoder content),
-  x (pan), y (pitch), size (carrier volume), color (carrier formant filter,
-  same hue→formant mapping as voice fills).
+  x (pan), y (pitch), size (carrier volume). All text renders black. Every
+  field is bijective.
 
 - **ADSR envelope** is encoded as the canvas corner radii. Drag corners to adjust.
   Bottom-left = attack, top-left = decay, top-right = sustain, bottom-right = release.
@@ -104,8 +139,10 @@ design rationale and enumeration of past violations.
   wraps the store and provides undo/redo via JSON snapshots. Selection state is
   app-level, not in the store.
 
-- **Serialization** uses compact single-character keys + LZ-string compression →
-  URL hash fragment. No backend needed for sharing.
+- **Serialization** uses positional arrays + LZ-string compression →
+  URL hash fragment. No keys, no IDs in wire format. **No backwards compatibility
+  until v1.** Old URLs will break. Do not write migration code, version checks,
+  or legacy deserializers. Just change the format and move on.
 
 ## Code Conventions
 
@@ -121,8 +158,8 @@ design rationale and enumeration of past violations.
   converted via `fillToFillDraft()` / `fillDraftToFill()`.
 - **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice`),
   discriminated on the `waveform` field. Sine has no `timbre`; pulse and blend do.
-- **TextDecoration** has text, x, y, size, and color fields — all with both
-  visual and audio roles. No squiggles or curlicues.
+- **TextDecoration** has text, x, y, size — all bijective. No color, no
+  squiggles, no curlicues.
 - **InteractionState** is a discriminated union for the canvas interaction state
   machine (idle, dragging, resizing, rotating, etc.), replacing scattered variables.
 - Audio effects return `{ input, output, dispose }` objects for uniform wiring.

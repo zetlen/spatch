@@ -30,7 +30,7 @@ export function clampSize(size: number): NormalizedCoord {
 function voiceRotation(voice: Voice): number {
   if ('timbre' in voice) {
     const period = voice.waveform === 'pulse' ? 90 : 120;
-    return (Math.asin(Math.min(1, Math.max(0, voice.timbre))) * period) / Math.PI;
+    return Math.min(1, Math.max(0, voice.timbre)) * period;
   }
   return 0;
 }
@@ -285,10 +285,4 @@ export function hitTestDecoHandles(
     }
   }
   return null;
-}
-
-// Move a text decoration by a normalized delta
-export function moveDeco(text: TextDecoration, dnx: number, dny: number): void {
-  text.x = normalizedCoord(text.x + dnx);
-  text.y = normalizedCoord(text.y + dny);
 }

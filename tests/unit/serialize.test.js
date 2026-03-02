@@ -1,5 +1,4 @@
 import { describe, test, expect } from 'bun:test';
-import LZString from 'lz-string';
 import { serializeState, deserializeState, _serializeToJSON } from '../../js/serialize.ts';
 
 function makeState(overrides = {}) {
@@ -39,12 +38,11 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decoded.texts).toHaveLength(0);
   });
 
-  test('state with voices round-trips (values and IDs preserved)', () => {
+  test('state with voices round-trips (values preserved, IDs regenerated)', () => {
     const state = makeState({
       voices: [
-        makeVoice({ id: 'original1', waveform: 'sine', x: 0.3, y: 0.7, size: 0.15 }),
+        makeVoice({ waveform: 'sine', x: 0.3, y: 0.7, size: 0.15 }),
         makeVoice({
-          id: 'original2',
           waveform: 'pulse',
           x: 0.8,
           y: 0.2,
@@ -55,12 +53,10 @@ describe('serializeState / deserializeState round-trip', () => {
       ],
     });
 
-    const encoded = serializeState(state);
-    const decoded = deserializeState(encoded);
+    const decoded = deserializeState(serializeState(state));
 
     expect(decoded.voices).toHaveLength(2);
 
-    // Values preserved
     expect(decoded.voices[0].waveform).toBe('sine');
     expect(decoded.voices[0].x).toBeCloseTo(0.3);
     expect(decoded.voices[0].y).toBeCloseTo(0.7);
@@ -70,9 +66,10 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decoded.voices[1].effect).toBe('stripes');
     expect(decoded.voices[1].timbre).toBeCloseTo(0.5);
 
-    // IDs are preserved through round-trip
-    expect(decoded.voices[0].id).toBe('original1');
-    expect(decoded.voices[1].id).toBe('original2');
+    // IDs are regenerated on load, not preserved
+    expect(decoded.voices[0].id).toBeTruthy();
+    expect(decoded.voices[1].id).toBeTruthy();
+    expect(decoded.voices[0].id).not.toBe(decoded.voices[1].id);
   });
 
   test('all waveform types survive round-trip', () => {
@@ -127,22 +124,12 @@ describe('serializeState / deserializeState round-trip', () => {
 
   test('text decorations round-trip', () => {
     const state = makeState({
-      texts: [
-        {
-          id: 't1',
-          text: 'Hello World',
-          x: 0.5,
-          y: 0.5,
-          size: 0.06,
-          color: { h: 50, s: 100, l: 60 },
-        },
-      ],
+      texts: [{ id: 't1', text: 'Hello World', x: 0.5, y: 0.5, size: 0.06 }],
     });
 
     const decoded = deserializeState(serializeState(state));
     expect(decoded.texts).toHaveLength(1);
     expect(decoded.texts[0].text).toBe('Hello World');
-    expect(decoded.texts[0].color.h).toBe(50);
     expect(decoded.texts[0].size).toBeCloseTo(0.06);
   });
 
@@ -179,106 +166,27 @@ describe('serializeState output', () => {
     const encoded = serializeState(
       makeState({
         voices: [makeVoice()],
-        texts: [
-          {
-            id: 't1',
-            text: 'Test!@#',
-            x: 0,
-            y: 0,
-            size: 0.06,
-            color: { h: 50, s: 100, l: 60 },
-          },
-        ],
+        texts: [{ id: 't1', text: 'Test!@#', x: 0, y: 0, size: 0.06 }],
       }),
     );
     // LZ-string compressToEncodedURIComponent uses A-Z, a-z, 0-9, +, -, =
     expect(encoded).toMatch(/^[A-Za-z0-9+\-=]*$/);
   });
 
-  test('serialized output includes v: 2 version field', () => {
+  test('wire format is positional arrays with no keys or IDs', () => {
     const json = _serializeToJSON(makeState({ voices: [makeVoice()] }));
-    const compact = JSON.parse(json);
-    expect(compact.v).toBe(2);
-  });
-});
-
-describe('legacy format (no v field) backwards compat', () => {
-  test('deserializes legacy format without v field', () => {
-    // Manually construct a legacy compact format (no v field)
-    const legacy = {
-      e: { a: 0.1, d: 0.2, s: 0.7, r: 0.4 },
-      sh: [
-        {
-          i: 'legacy1',
-          t: 'c',
-          x: 0.5,
-          y: 0.5,
-          z: 0.12,
-          r: 45,
-          f: { m: 's', h: 200, s: 80, l: 50 },
-          p: 0,
-        },
-      ],
-      d: [],
-    };
-    const json = JSON.stringify(legacy);
-    const encoded = LZString.compressToEncodedURIComponent(json);
-    const decoded = deserializeState(encoded);
-
-    expect(decoded).not.toBeNull();
-    expect(decoded.voices).toHaveLength(1);
-    expect(decoded.voices[0].id).toBe('legacy1');
-    expect(decoded.voices[0].waveform).toBe('sine'); // 'c' (circle) -> sine
-    expect(decoded.voices[0].x).toBeCloseTo(0.5);
-    expect(decoded.voices[0].fill.mode).toBe('solid');
-  });
-
-  test('legacy format with text decorations still works', () => {
-    const legacy = {
-      e: { a: 0.1, d: 0.2, s: 0.7, r: 0.4 },
-      sh: [],
-      d: [
-        {
-          i: 'dlegacy1',
-          t: 't',
-          p: [],
-          x: 0.5,
-          y: 0.5,
-          c: 'hsl(50, 100%, 60%)',
-          w: 2,
-          tx: 'Legacy Text',
-          fs: 32,
-        },
-      ],
-    };
-    const json = JSON.stringify(legacy);
-    const encoded = LZString.compressToEncodedURIComponent(json);
-    const decoded = deserializeState(encoded);
-
-    expect(decoded).not.toBeNull();
-    expect(decoded.texts).toHaveLength(1);
-    expect(decoded.texts[0].text).toBe('Legacy Text');
-    expect(decoded.texts[0].color.h).toBe(50);
-    expect(decoded.texts[0].color.s).toBe(100);
-    expect(decoded.texts[0].color.l).toBe(60);
-  });
-
-  test('legacy format drops squiggles and curlicues', () => {
-    const legacy = {
-      e: { a: 0.1, d: 0.2, s: 0.7, r: 0.4 },
-      sh: [],
-      d: [
-        { i: 'd1', t: 's', p: [[0.1, 0.2], [0.3, 0.4]], x: 0, y: 0, c: '#f00', w: 3 },
-        { i: 'd2', t: 'c', p: [], x: 0.5, y: 0.5, c: '#0f0', w: 2 },
-        { i: 'd3', t: 't', p: [], x: 0.5, y: 0.5, c: 'hsl(100, 80%, 50%)', w: 2, tx: 'Keep me' },
-      ],
-    };
-    const json = JSON.stringify(legacy);
-    const encoded = LZString.compressToEncodedURIComponent(json);
-    const decoded = deserializeState(encoded);
-
-    // Only the text decoration should survive
-    expect(decoded.texts).toHaveLength(1);
-    expect(decoded.texts[0].text).toBe('Keep me');
+    const packed = JSON.parse(json);
+    // Top level is [envelope, voices, texts]
+    expect(Array.isArray(packed)).toBe(true);
+    expect(packed).toHaveLength(3);
+    // Envelope is [a, d, s, r]
+    expect(packed[0]).toEqual([0.1, 0.2, 0.7, 0.4]);
+    // Voice is [waveform, x, y, size, fill, effect]
+    expect(packed[1]).toHaveLength(1);
+    expect(packed[1][0][0]).toBe('s'); // sine
+    // No keys, no IDs anywhere
+    expect(json).not.toContain('"i"');
+    expect(json).not.toContain('"w"');
+    expect(json).not.toContain('"v"');
   });
 });

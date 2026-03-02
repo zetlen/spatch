@@ -2,7 +2,6 @@ import { describe, test, expect } from 'bun:test';
 import {
   yToFrequency,
   xToPan,
-  sizeToGain,
   rotationToTimbre,
   waveformGain,
   shapeAreaFraction,
@@ -101,37 +100,21 @@ describe('xToPan', () => {
   });
 });
 
-describe('sizeToGain', () => {
-  test('size=0 returns minimum gain 0.05', () => {
-    expect(sizeToGain(0)).toBeCloseTo(0.05);
-  });
-
-  test('large size caps at 0.8', () => {
-    expect(sizeToGain(1)).toBe(0.8);
-    expect(sizeToGain(10)).toBe(0.8);
-  });
-
-  test('moderate size returns intermediate gain', () => {
-    const gain = sizeToGain(0.1);
-    expect(gain).toBeGreaterThan(0.05);
-    expect(gain).toBeLessThan(0.8);
-  });
-});
-
 describe('rotationToTimbre', () => {
   test('pulse (square): 0° and 90° both return 0 (period boundaries)', () => {
     expect(rotationToTimbre(0, 'pulse')).toBeCloseTo(0);
     expect(rotationToTimbre(90, 'pulse')).toBeCloseTo(0);
   });
 
-  test('pulse (square): 45° returns peak 1.0', () => {
-    expect(rotationToTimbre(45, 'pulse')).toBeCloseTo(1.0);
+  test('pulse (square): linear ramp — 45° returns 0.5', () => {
+    expect(rotationToTimbre(45, 'pulse')).toBeCloseTo(0.5);
   });
 
-  test('pulse (square): 10° and 80° produce the same value (mirror symmetry)', () => {
+  test('pulse (square): every angle in period is unique (no mirror symmetry)', () => {
     const t10 = rotationToTimbre(10, 'pulse');
     const t80 = rotationToTimbre(80, 'pulse');
-    expect(t10).toBeCloseTo(t80, 10);
+    expect(t10).not.toBeCloseTo(t80, 2);
+    expect(t10).toBeLessThan(t80);
   });
 
   test('blend (triangle): 0° and 120° both return 0 (period boundaries)', () => {
@@ -139,14 +122,15 @@ describe('rotationToTimbre', () => {
     expect(rotationToTimbre(120, 'blend')).toBeCloseTo(0);
   });
 
-  test('blend (triangle): 60° returns peak 1.0', () => {
-    expect(rotationToTimbre(60, 'blend')).toBeCloseTo(1.0);
+  test('blend (triangle): linear ramp — 60° returns 0.5', () => {
+    expect(rotationToTimbre(60, 'blend')).toBeCloseTo(0.5);
   });
 
-  test('blend (triangle): 20° and 100° produce the same value (mirror symmetry)', () => {
+  test('blend (triangle): every angle in period is unique (no mirror symmetry)', () => {
     const t20 = rotationToTimbre(20, 'blend');
     const t100 = rotationToTimbre(100, 'blend');
-    expect(t20).toBeCloseTo(t100, 10);
+    expect(t20).not.toBeCloseTo(t100, 2);
+    expect(t20).toBeLessThan(t100);
   });
 
   test('sine always returns 0 (no timbre parameter)', () => {

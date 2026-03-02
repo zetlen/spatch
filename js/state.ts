@@ -44,18 +44,13 @@ function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCo
   }
 }
 
-function createTextDeco(
-  text: string,
-  x: NormalizedCoord,
-  y: NormalizedCoord,
-): TextDecoration {
+function createTextDeco(text: string, x: NormalizedCoord, y: NormalizedCoord): TextDecoration {
   return {
     id: genId('t'),
     text,
     x,
     y,
     size: normalizedCoord(0.06),
-    color: { h: 50, s: 100, l: 60 },
   };
 }
 
@@ -167,11 +162,7 @@ export class SigilStore {
     return text;
   }
 
-  addTextDeco(
-    text: string,
-    x: NormalizedCoord,
-    y: NormalizedCoord,
-  ): TextDecoration {
+  addTextDeco(text: string, x: NormalizedCoord, y: NormalizedCoord): TextDecoration {
     const deco = createTextDeco(text, x, y);
     return this.addText(deco);
   }

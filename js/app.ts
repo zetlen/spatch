@@ -22,7 +22,6 @@ import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
 import { IDLE, type InteractionState } from './interaction.ts';
 import {
   normalizedCoord,
-  degrees,
   type Voice,
   type TextDecoration,
   type NormalizedCoord,
@@ -170,7 +169,7 @@ toolbar.onToolChange = (tool: string) => {
 function voiceRotation(voice: Voice): number {
   if ('timbre' in voice) {
     const period = voice.waveform === 'pulse' ? 90 : 120;
-    return (Math.asin(Math.min(1, Math.max(0, voice.timbre))) * period) / Math.PI;
+    return Math.min(1, Math.max(0, voice.timbre)) * period;
   }
   return 0;
 }
@@ -294,7 +293,12 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
     setSelection(null, hitDecoId);
     undo.snapshot();
     const deco = store.getText(hitDecoId)!;
-    interaction = { mode: 'deco-dragging', origin: { x: deco.x, y: deco.y }, startNx: nx, startNy: ny };
+    interaction = {
+      mode: 'deco-dragging',
+      origin: { x: deco.x, y: deco.y },
+      startNx: nx,
+      startNy: ny,
+    };
     needsRender = true;
     return;
   }
@@ -345,10 +349,8 @@ canvas.addEventListener('mousemove', (e: MouseEvent) => {
   if (interaction.mode === 'rotating') {
     const voice = getSelected();
     if (!voice) return;
-    // Only pulse/blend voices can be rotated (sine has no timbre)
     if (voice.waveform === 'sine') return;
     const rotation = calcRotation(voice, px, py, CANVAS_SIZE);
-    // Convert rotation angle to timbre via the periodic mapping
     const timbre = rotationToTimbre(rotation, voice.waveform);
     store.updateVoice(voice.id, { timbre: normalizedCoord(timbre) });
     return;
@@ -496,7 +498,6 @@ canvas.addEventListener(
       if (!voice) return;
 
       if (voice.waveform === 'sine') {
-        // Sine voices have no timbre, only resize
         store.updateVoice(interaction.shapeId, { size: newSize });
       } else {
         const angleDelta = angle - interaction.initAngle;

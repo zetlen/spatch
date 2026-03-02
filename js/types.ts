@@ -164,7 +164,6 @@ export interface TextDecoration {
   x: NormalizedCoord;
   y: NormalizedCoord;
   size: NormalizedCoord;
-  color: { h: number; s: number; l: number };
 }
 
 // ---- Envelope ----

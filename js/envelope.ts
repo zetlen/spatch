@@ -51,7 +51,5 @@ export function dragToEnvelopeValue(
       return Math.max(0, Math.min(1.0, normalizedDist));
     case 'release':
       return Math.max(0.01, Math.min(3.0, normalizedDist * 3.0));
-    default:
-      return 0;
   }
 }

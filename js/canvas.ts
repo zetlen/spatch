@@ -3,7 +3,7 @@
 import { getFillStyle } from './colors.ts';
 import { applyPattern } from './patterns.ts';
 import { getDecoBounds } from './shapes.ts';
-import type { Voice, TextDecoration, SigilData, DecoBounds, WaveformType } from './types.ts';
+import type { Voice, TextDecoration, SigilData, WaveformType } from './types.ts';
 import { waveformShape } from './types.ts';
 
 const CANVAS_BG = '#1a1a2e';
@@ -26,7 +26,7 @@ export function isLastInputTouch(): boolean {
 function timbreToRotation(timbre: number, waveform: WaveformType): number {
   if (waveform === 'sine') return 0;
   const period = waveform === 'pulse' ? 90 : 120;
-  return (Math.asin(Math.min(1, Math.max(0, timbre))) * period) / Math.PI;
+  return Math.min(1, Math.max(0, timbre)) * period;
 }
 
 /** Get the visual rotation angle for a voice (in degrees). */
@@ -281,17 +281,12 @@ function drawDecoSelectionHandles(
 function drawText(ctx: CanvasRenderingContext2D, text: TextDecoration, canvasSize: number): void {
   if (!text.text) return;
   const fontSize = text.size * canvasSize;
-  const { h, s, l } = text.color;
-  const colorStr = `hsl(${h}, ${s}%, ${l}%)`;
 
   ctx.save();
   ctx.font = `${fontSize}px 'Orbitron', sans-serif`;
-  ctx.fillStyle = colorStr;
-  ctx.shadowColor = colorStr;
-  ctx.shadowBlur = 10;
+  ctx.fillStyle = '#000';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text.text, text.x * canvasSize, text.y * canvasSize);
-  ctx.shadowBlur = 0;
   ctx.restore();
 }

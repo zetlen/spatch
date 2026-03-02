@@ -77,10 +77,6 @@ export function xToPan(x: NormalizedCoord): number {
   return x * 2 - 1; // 0->-1 (left), 1->+1 (right)
 }
 
-export function sizeToGain(size: NormalizedCoord): number {
-  return Math.min(0.8, 0.05 + size * 3);
-}
-
 // Area of a shape as a fraction of the 1x1 normalized canvas.
 // All shapes use r = size/2 as bounding radius.
 export function shapeAreaFraction(waveform: WaveformType, size: NormalizedCoord): number {
@@ -106,8 +102,8 @@ export function areaToGain(waveform: WaveformType, size: NormalizedCoord): numbe
 // Map rotation to a periodic timbre parameter.
 // Each waveform's visual symmetry period determines the audio cycle:
 // a square repeats every 90 deg, a triangle every 120 deg.
-// Uses a half-sine curve so that visually identical orientations produce
-// identical audio, and the mapping is smooth with a peak at mid-period.
+// Linear sawtooth ramp: every angle within the period maps to a unique
+// timbre value (0 at the start, approaching 1 at the end).
 const WAVEFORM_PERIOD: Record<string, number> = {
   pulse: 90,
   blend: 120,
@@ -117,18 +113,7 @@ export function rotationToTimbre(rotation: number, waveform: string): number {
   const period = WAVEFORM_PERIOD[waveform];
   if (!period) return 0; // sine has no timbre
   const phase = ((rotation % period) + period) % period;
-  return Math.sin((Math.PI * phase) / period);
-}
-
-function oscillatorType(waveform: WaveformType): OscillatorType {
-  switch (waveform) {
-    case 'blend':
-      return 'sawtooth';
-    case 'pulse':
-      return 'square';
-    case 'sine':
-      return 'sine';
-  }
+  return phase / period;
 }
 
 // Per-waveform perceived-loudness normalization.  Square and sawtooth have
@@ -283,6 +268,7 @@ function safeDisconnect(node: AudioNode): void {
 interface AudioVoiceBase {
   outputNode: StereoPannerNode;
   effectDispose: (() => void) | null;
+  currentEffect: string | null;
   shapeId: string;
   gain: GainNode;
   formantF1: BiquadFilterNode;
@@ -630,10 +616,22 @@ export class AudioEngine {
     }
 
     // Update existing audio voices
-    for (const audioVoice of this.activeVoices) {
+    for (let i = this.activeVoices.length - 1; i >= 0; i--) {
+      const audioVoice = this.activeVoices[i]!;
       if ('isTextVoice' in audioVoice) continue;
       const voice = voiceMap.get(audioVoice.shapeId);
       if (!voice) continue;
+
+      // Effect changed — tear down and rebuild the entire voice
+      if (voice.effect !== audioVoice.currentEffect) {
+        const layerIndex = sigilState.voices.indexOf(voice);
+        this._stopVoice(audioVoice);
+        this.activeVoices.splice(i, 1);
+        const rebuilt = this._buildVoice(ctx, voice, layerIndex, totalLayers);
+        rebuilt.start(now);
+        this.activeVoices.push(rebuilt);
+        continue;
+      }
 
       const timbre = 'timbre' in voice ? voice.timbre : 0;
       const freq = yToFrequency(voice.y);
@@ -661,7 +659,12 @@ export class AudioEngine {
         now,
       );
       audioVoice.panner.pan.setValueAtTime(xToPan(voice.x), now);
-      applyFormantFilter(audioVoice.formantF1, audioVoice.formantF2, audioVoice.brightness, voice.fill);
+      applyFormantFilter(
+        audioVoice.formantF1,
+        audioVoice.formantF2,
+        audioVoice.brightness,
+        voice.fill,
+      );
     }
 
     // Update auto EQ for changed positions/sizes
@@ -808,6 +811,7 @@ export class AudioEngine {
     const shared = {
       outputNode: panner,
       effectDispose,
+      currentEffect: voice.effect,
       shapeId: voice.id,
       gain,
       formantF1,

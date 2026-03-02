@@ -76,8 +76,4 @@ describe('dragToEnvelopeValue', () => {
     expect(dragToEnvelopeValue('sustain', halfMax, CANVAS_SIZE)).toBeCloseTo(0.5);
     expect(dragToEnvelopeValue('release', halfMax, CANVAS_SIZE)).toBeCloseTo(1.5);
   });
-
-  test('unknown corner returns 0', () => {
-    expect(dragToEnvelopeValue('unknown', 50, CANVAS_SIZE)).toBe(0);
-  });
 });
