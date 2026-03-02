@@ -2,7 +2,7 @@
 
 import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.ts';
 import type { SigilStore, UndoManager } from './state.ts';
-import type { Shape, FillDraft, FillMode, PatternType } from './types.ts';
+import type { Voice, FillDraft, FillMode, PatternType } from './types.ts';
 import { fillToFillDraft, fillDraftToFill } from './types.ts';
 
 export class Toolbar {
@@ -43,8 +43,8 @@ export class Toolbar {
     this._updateToolActive();
   }
 
-  getSelected(): Shape | null {
-    return this.selectedId ? (this.store.getShape(this.selectedId) ?? null) : null;
+  getSelected(): Voice | null {
+    return this.selectedId ? (this.store.getVoice(this.selectedId) ?? null) : null;
   }
 
   _bindToolButtons(): void {
@@ -80,9 +80,9 @@ export class Toolbar {
         if (!sel) return;
 
         const newPattern = pattern === 'none' ? null : (pattern as PatternType);
-        const finalPattern = sel.pattern === newPattern ? null : newPattern;
+        const finalPattern = sel.effect === newPattern ? null : newPattern;
         this.undo.snapshot();
-        this.store.updateShape(sel.id, { pattern: finalPattern });
+        this.store.updateVoice(sel.id, { effect: finalPattern });
         this._updatePatternActive();
       });
     });
@@ -90,7 +90,7 @@ export class Toolbar {
 
   _updatePatternActive(): void {
     const sel = this.getSelected();
-    const current = sel ? sel.pattern : null;
+    const current = sel ? sel.effect : null;
     document.querySelectorAll<HTMLElement>('.pattern-btn').forEach((btn) => {
       const p = btn.dataset.pattern;
       btn.classList.toggle('active', (p === 'none' && !current) || p === current);
@@ -103,10 +103,10 @@ export class Toolbar {
     document.getElementById('btn-delete')!.addEventListener('click', () => {
       if (this.selectedId) {
         this.undo.snapshot();
-        this.store.removeShape(this.selectedId);
+        this.store.removeVoice(this.selectedId);
       } else if (this.selectedDecoId) {
         this.undo.snapshot();
-        this.store.removeDecoration(this.selectedDecoId);
+        this.store.removeText(this.selectedDecoId);
       }
     });
   }
@@ -320,7 +320,7 @@ export class Toolbar {
     const sel = this.getSelected();
     if (!sel) return;
 
-    // Populate draft from selected shape's fill
+    // Populate draft from selected voice's fill
     this._fillDraft = fillToFillDraft(sel.fill);
 
     (document.getElementById('fill-mode') as HTMLSelectElement).value = sel.fill.mode;

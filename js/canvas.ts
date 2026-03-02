@@ -3,7 +3,8 @@
 import { getFillStyle } from './colors.ts';
 import { applyPattern } from './patterns.ts';
 import { getDecoBounds } from './shapes.ts';
-import type { Shape, Decoration, SigilData, DecoBounds } from './types.ts';
+import type { Voice, TextDecoration, SigilData, WaveformType } from './types.ts';
+import { waveformShape } from './types.ts';
 
 const CANVAS_BG = '#1a1a2e';
 
@@ -21,6 +22,21 @@ export function isLastInputTouch(): boolean {
   return lastInputWasTouch;
 }
 
+/** Convert a voice's timbre to a visual rotation angle for rendering. */
+function timbreToRotation(timbre: number, waveform: WaveformType): number {
+  if (waveform === 'sine') return 0;
+  const period = waveform === 'pulse' ? 90 : 120;
+  return Math.min(1, Math.max(0, timbre)) * period;
+}
+
+/** Get the visual rotation angle for a voice (in degrees). */
+function voiceRotation(voice: Voice): number {
+  if ('timbre' in voice) {
+    return timbreToRotation(voice.timbre, voice.waveform);
+  }
+  return 0;
+}
+
 export function render(
   ctx: CanvasRenderingContext2D,
   state: SigilData,
@@ -36,23 +52,23 @@ export function render(
 
   drawChromaticGuides(ctx, canvasSize);
 
-  for (let i = 0; i < state.shapes.length; i++) {
-    const shape = state.shapes[i]!;
-    const isPlaying = playingShapeIds != null && playingShapeIds.has(shape.id);
-    drawShape(ctx, shape, canvasSize, shape.id === selectedId, isPlaying);
+  for (let i = 0; i < state.voices.length; i++) {
+    const voice = state.voices[i]!;
+    const isPlaying = playingShapeIds != null && playingShapeIds.has(voice.id);
+    drawVoice(ctx, voice, canvasSize, voice.id === selectedId, isPlaying);
   }
 
-  for (const deco of state.decorations) {
-    drawDecoration(ctx, deco, canvasSize);
+  for (const text of state.texts) {
+    drawText(ctx, text, canvasSize);
   }
 
   if (!lastInputWasTouch) {
     if (selectedId) {
-      const sel = state.shapes.find((s) => s.id === selectedId);
+      const sel = state.voices.find((s) => s.id === selectedId);
       if (sel) drawSelectionHandles(ctx, sel, canvasSize);
     }
     if (selectedDecoId) {
-      const sel = state.decorations.find((d) => d.id === selectedDecoId);
+      const sel = state.texts.find((d) => d.id === selectedDecoId);
       if (sel) drawDecoSelectionHandles(ctx, sel, canvasSize);
     }
   }
@@ -75,33 +91,34 @@ function drawChromaticGuides(ctx: CanvasRenderingContext2D, size: number): void 
   ctx.restore();
 }
 
-function drawShape(
+function drawVoice(
   ctx: CanvasRenderingContext2D,
-  shape: Shape,
+  voice: Voice,
   canvasSize: number,
   isSelected: boolean,
   isPlaying: boolean,
 ): void {
-  const cx = shape.x * canvasSize;
-  const cy = shape.y * canvasSize;
-  const r = (shape.size / 2) * canvasSize;
-  const rotRad = (shape.rotation * Math.PI) / 180;
+  const cx = voice.x * canvasSize;
+  const cy = voice.y * canvasSize;
+  const r = (voice.size / 2) * canvasSize;
+  const rotDeg = voiceRotation(voice);
+  const rotRad = (rotDeg * Math.PI) / 180;
 
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(rotRad);
 
-  buildShapePath(ctx, shape, canvasSize);
+  buildShapePath(ctx, voice, canvasSize);
   ctx.save();
   ctx.clip();
 
-  const fillStyle = getFillStyle(ctx, shape.fill, r);
+  const fillStyle = getFillStyle(ctx, voice.fill, r);
   ctx.fillStyle = fillStyle;
-  buildShapePath(ctx, shape, canvasSize);
+  buildShapePath(ctx, voice, canvasSize);
   ctx.fill();
 
-  if (shape.pattern) {
-    applyPattern(ctx, shape, canvasSize);
+  if (voice.effect) {
+    applyPattern(ctx, voice, canvasSize);
   }
 
   ctx.restore();
@@ -129,7 +146,7 @@ function drawShape(
       ctx.shadowColor = '#00f0ff';
       ctx.shadowBlur = 15;
     }
-    buildShapePath(ctx, shape, canvasSize);
+    buildShapePath(ctx, voice, canvasSize);
     ctx.stroke();
     ctx.shadowBlur = 0;
     ctx.restore();
@@ -140,12 +157,13 @@ function drawShape(
 
 export function buildShapePath(
   ctx: CanvasRenderingContext2D,
-  shape: Shape,
+  voice: Voice,
   canvasSize: number,
 ): void {
-  const r = (shape.size / 2) * canvasSize;
+  const r = (voice.size / 2) * canvasSize;
+  const shape = waveformShape(voice.waveform);
   ctx.beginPath();
-  switch (shape.type) {
+  switch (shape) {
     case 'circle':
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       break;
@@ -167,13 +185,14 @@ export function buildShapePath(
 
 function drawSelectionHandles(
   ctx: CanvasRenderingContext2D,
-  shape: Shape,
+  voice: Voice,
   canvasSize: number,
 ): void {
-  const cx = shape.x * canvasSize;
-  const cy = shape.y * canvasSize;
-  const r = (shape.size / 2) * canvasSize;
-  const rotRad = (shape.rotation * Math.PI) / 180;
+  const cx = voice.x * canvasSize;
+  const cy = voice.y * canvasSize;
+  const r = (voice.size / 2) * canvasSize;
+  const rotDeg = voiceRotation(voice);
+  const rotRad = (rotDeg * Math.PI) / 180;
 
   ctx.save();
   ctx.translate(cx, cy);
@@ -204,7 +223,8 @@ function drawSelectionHandles(
     ctx.strokeRect(hx - handleSize, hy - handleSize, handleSize * 2, handleSize * 2);
   }
 
-  if (shape.type !== 'circle') {
+  // No rotation handle for sine voices (circles have no distinguishable rotation)
+  if (voice.waveform !== 'sine') {
     const rotHandleY = -r - 25;
     ctx.beginPath();
     ctx.moveTo(0, -r);
@@ -226,10 +246,10 @@ function drawSelectionHandles(
 
 function drawDecoSelectionHandles(
   ctx: CanvasRenderingContext2D,
-  deco: Decoration,
+  text: TextDecoration,
   canvasSize: number,
 ): void {
-  const bounds = getDecoBounds(deco, canvasSize);
+  const bounds = getDecoBounds(text, canvasSize);
   if (!bounds) return;
 
   ctx.save();
@@ -258,84 +278,15 @@ function drawDecoSelectionHandles(
   ctx.restore();
 }
 
-function drawDecoration(ctx: CanvasRenderingContext2D, deco: Decoration, canvasSize: number): void {
-  switch (deco.type) {
-    case 'squiggle': {
-      if (deco.points.length < 2) break;
-      ctx.save();
-      ctx.strokeStyle = deco.strokeColor;
-      ctx.lineWidth = deco.strokeWidth;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.shadowColor = deco.strokeColor;
-      ctx.shadowBlur = 8;
-
-      ctx.beginPath();
-      const pts = deco.points;
-      ctx.moveTo(pts[0]![0] * canvasSize, pts[0]![1] * canvasSize);
-      for (let i = 1; i < pts.length - 1; i++) {
-        const midX = ((pts[i]![0] + pts[i + 1]![0]) / 2) * canvasSize;
-        const midY = ((pts[i]![1] + pts[i + 1]![1]) / 2) * canvasSize;
-        ctx.quadraticCurveTo(pts[i]![0] * canvasSize, pts[i]![1] * canvasSize, midX, midY);
-      }
-      const last = pts[pts.length - 1]!;
-      ctx.lineTo(last[0] * canvasSize, last[1] * canvasSize);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.restore();
-      break;
-    }
-
-    case 'curlicue':
-      drawCurlicue(ctx, deco, canvasSize);
-      break;
-
-    case 'text': {
-      const s = deco.scale || 1;
-      ctx.save();
-      ctx.font = `${deco.fontSize * s}px 'Orbitron', sans-serif`;
-      ctx.fillStyle = deco.strokeColor;
-      ctx.shadowColor = deco.strokeColor;
-      ctx.shadowBlur = 10;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(deco.text, deco.x * canvasSize, deco.y * canvasSize);
-      ctx.shadowBlur = 0;
-      ctx.restore();
-      break;
-    }
-  }
-}
-
-function drawCurlicue(
-  ctx: CanvasRenderingContext2D,
-  deco: Decoration & { type: 'curlicue' },
-  canvasSize: number,
-): void {
-  const cx = deco.x * canvasSize;
-  const cy = deco.y * canvasSize;
-  const scale = 1.2 * (deco.scale || 1);
+function drawText(ctx: CanvasRenderingContext2D, text: TextDecoration, canvasSize: number): void {
+  if (!text.text) return;
+  const fontSize = text.size * canvasSize;
 
   ctx.save();
-  ctx.translate(cx, cy);
-  ctx.strokeStyle = deco.strokeColor;
-  ctx.lineWidth = deco.strokeWidth || 2;
-  ctx.lineCap = 'round';
-  ctx.shadowColor = deco.strokeColor;
-  ctx.shadowBlur = 6;
-
-  ctx.beginPath();
-  const a = 3 * scale;
-  const b = 0.15;
-  for (let t = 0; t < 12; t += 0.1) {
-    const r = a * Math.exp(b * t);
-    const x = r * Math.cos(t);
-    const y = r * Math.sin(t);
-    if (t === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-
-  ctx.shadowBlur = 0;
+  ctx.font = `${fontSize}px 'Orbitron', sans-serif`;
+  ctx.fillStyle = '#000';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text.text, text.x * canvasSize, text.y * canvasSize);
   ctx.restore();
 }

@@ -33,9 +33,9 @@ export function cents(n: number): Cents {
   return n as Cents;
 }
 
-// ---- Shape types ----
+// ---- Voice types ----
 
-export type ShapeType = 'circle' | 'triangle' | 'square';
+export type WaveformType = 'sine' | 'pulse' | 'blend';
 
 export type PatternType = 'stripes' | 'checker' | 'noise' | 'gradient' | 'rough';
 
@@ -131,55 +131,40 @@ export function createDefaultFill(): SolidFill {
   return { mode: 'solid', h: 200, s: 80, l: 50 };
 }
 
-export interface Shape {
+interface VoiceBase {
   id: string;
-  type: ShapeType;
-  /** Normalized 0–1, horizontal position */
   x: NormalizedCoord;
-  /** Normalized 0–1, vertical position (0=top, 1=bottom) */
   y: NormalizedCoord;
-  /** Normalized 0–1, default 0.12 */
   size: NormalizedCoord;
-  /** Degrees 0–360 */
-  rotation: Degrees;
   fill: Fill;
-  /** Visual pattern overlay, null = none */
-  pattern: PatternType | null;
+  effect: PatternType | null;
 }
 
-// ---- Decoration types ----
+export interface SineVoice extends VoiceBase {
+  waveform: 'sine';
+}
 
-export type DecorationType = 'squiggle' | 'curlicue' | 'text';
+export interface PulseVoice extends VoiceBase {
+  waveform: 'pulse';
+  timbre: NormalizedCoord;
+}
 
-interface DecorationBase {
+export interface BlendVoice extends VoiceBase {
+  waveform: 'blend';
+  timbre: NormalizedCoord;
+}
+
+export type Voice = SineVoice | PulseVoice | BlendVoice;
+
+// ---- Text decoration ----
+
+export interface TextDecoration {
   id: string;
-  strokeColor: string;
-  strokeWidth: number;
-  targetShapeId: string | null;
-}
-
-export interface SquiggleDecoration extends DecorationBase {
-  type: 'squiggle';
-  points: [NormalizedCoord, NormalizedCoord][];
-}
-
-export interface CurlicueDecoration extends DecorationBase {
-  type: 'curlicue';
-  x: NormalizedCoord;
-  y: NormalizedCoord;
-  scale: number;
-}
-
-export interface TextDecoration extends DecorationBase {
-  type: 'text';
   text: string;
   x: NormalizedCoord;
   y: NormalizedCoord;
-  scale: number;
-  fontSize: number;
+  size: NormalizedCoord;
 }
-
-export type Decoration = SquiggleDecoration | CurlicueDecoration | TextDecoration;
 
 // ---- Envelope ----
 
@@ -198,8 +183,19 @@ export interface Envelope {
 
 export interface SigilData {
   envelope: Envelope;
-  shapes: Shape[];
-  decorations: Decoration[];
+  voices: Voice[];
+  texts: TextDecoration[];
+}
+
+export function waveformShape(waveform: WaveformType): 'circle' | 'square' | 'triangle' {
+  switch (waveform) {
+    case 'sine':
+      return 'circle';
+    case 'pulse':
+      return 'square';
+    case 'blend':
+      return 'triangle';
+  }
 }
 
 // ---- Audio contracts ----

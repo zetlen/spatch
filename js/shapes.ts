@@ -3,8 +3,9 @@
 import {
   normalizedCoord,
   degrees,
-  type Shape,
-  type Decoration,
+  waveformShape,
+  type Voice,
+  type TextDecoration,
   type Envelope,
   type SigilData,
   type NormalizedCoord,
@@ -24,30 +25,40 @@ export function clampSize(size: number): NormalizedCoord {
   return normalizedCoord(Math.max(MIN_SIZE, Math.min(MAX_SIZE, size)));
 }
 
-// Hit test against all shapes (back-to-front, return topmost)
+/** Get the visual rotation for a voice (derived from timbre). */
+function voiceRotation(voice: Voice): number {
+  if ('timbre' in voice) {
+    const period = voice.waveform === 'pulse' ? 90 : 120;
+    return Math.min(1, Math.max(0, voice.timbre)) * period;
+  }
+  return 0;
+}
+
+// Hit test against all voices (back-to-front, return topmost)
 export function hitTestShapes(
   state: SigilData,
   mx: number,
   my: number,
   canvasSize: number,
 ): string | null {
-  // Iterate in reverse (front shapes first)
-  for (let i = state.shapes.length - 1; i >= 0; i--) {
-    const shape = state.shapes[i]!;
-    if (isPointInShape(shape, mx, my, canvasSize)) {
-      return shape.id;
+  // Iterate in reverse (front voices first)
+  for (let i = state.voices.length - 1; i >= 0; i--) {
+    const voice = state.voices[i]!;
+    if (isPointInVoice(voice, mx, my, canvasSize)) {
+      return voice.id;
     }
   }
   return null;
 }
 
-function isPointInShape(shape: Shape, mx: number, my: number, canvasSize: number): boolean {
-  const cx = shape.x * canvasSize;
-  const cy = shape.y * canvasSize;
-  const r = (shape.size / 2) * canvasSize;
-  const rotRad = (shape.rotation * Math.PI) / 180;
+function isPointInVoice(voice: Voice, mx: number, my: number, canvasSize: number): boolean {
+  const cx = voice.x * canvasSize;
+  const cy = voice.y * canvasSize;
+  const r = (voice.size / 2) * canvasSize;
+  const rotDeg = voiceRotation(voice);
+  const rotRad = (rotDeg * Math.PI) / 180;
 
-  // Transform mouse point into shape-local coordinates
+  // Transform mouse point into voice-local coordinates
   const dx = mx - cx;
   const dy = my - cy;
   const cos = Math.cos(-rotRad);
@@ -55,7 +66,9 @@ function isPointInShape(shape: Shape, mx: number, my: number, canvasSize: number
   const lx = dx * cos - dy * sin;
   const ly = dx * sin + dy * cos;
 
-  switch (shape.type) {
+  const shape = waveformShape(voice.waveform);
+
+  switch (shape) {
     case 'circle':
       return lx * lx + ly * ly <= r * r;
 
@@ -94,16 +107,17 @@ function pointInTriangle(
 
 // Hit test selection handles. Returns handle type or null.
 export function hitTestHandles(
-  shape: Shape | null,
+  voice: Voice | null,
   mx: number,
   my: number,
   canvasSize: number,
 ): HandleType | null {
-  if (!shape) return null;
-  const cx = shape.x * canvasSize;
-  const cy = shape.y * canvasSize;
-  const r = (shape.size / 2) * canvasSize;
-  const rotRad = (shape.rotation * Math.PI) / 180;
+  if (!voice) return null;
+  const cx = voice.x * canvasSize;
+  const cy = voice.y * canvasSize;
+  const r = (voice.size / 2) * canvasSize;
+  const rotDeg = voiceRotation(voice);
+  const rotRad = (rotDeg * Math.PI) / 180;
 
   // Transform to local coords
   const dx = mx - cx;
@@ -113,9 +127,9 @@ export function hitTestHandles(
   const lx = dx * cos - dy * sin;
   const ly = dx * sin + dy * cos;
 
-  // Rotation handle (disabled for circles)
+  // Rotation handle (disabled for sine voices / circles)
   const rotY = -r - ROT_HANDLE_OFFSET;
-  if (shape.type !== 'circle' && Math.abs(lx) < 8 && Math.abs(ly - rotY) < 8) {
+  if (voice.waveform !== 'sine' && Math.abs(lx) < 8 && Math.abs(ly - rotY) < 8) {
     return 'rotate';
   }
 
@@ -166,13 +180,13 @@ export function hitTestADSRCorner(
 
 // Calculate new size from a resize handle drag
 export function calcResize(
-  shape: Shape,
+  voice: Voice,
   handleType: HandleType,
   localDx: number,
   localDy: number,
   canvasSize: number,
 ): NormalizedCoord {
-  const r = (shape.size / 2) * canvasSize;
+  const r = (voice.size / 2) * canvasSize;
   let newR = r;
 
   switch (handleType) {
@@ -197,10 +211,10 @@ export function calcResize(
   return clampSize((newR * 2) / canvasSize);
 }
 
-// Calculate rotation from mouse position relative to shape center
-export function calcRotation(shape: Shape, mx: number, my: number, canvasSize: number): Degrees {
-  const cx = shape.x * canvasSize;
-  const cy = shape.y * canvasSize;
+// Calculate rotation from mouse position relative to voice center
+export function calcRotation(voice: Voice, mx: number, my: number, canvasSize: number): Degrees {
+  const cx = voice.x * canvasSize;
+  const cy = voice.y * canvasSize;
   const angle = Math.atan2(my - cy, mx - cx);
   // Convert to degrees, offset so "up" = 0
   let deg = (angle * 180) / Math.PI + 90;
@@ -208,60 +222,32 @@ export function calcRotation(shape: Shape, mx: number, my: number, canvasSize: n
   return degrees(deg);
 }
 
-// ---- Decoration hit testing ----
+// ---- Text decoration hit testing ----
 
 const DECO_HANDLE_SIZE = 8;
-const CURLICUE_EXTENT = 22; // approx max spiral radius in pixels at scale=1
 const TEXT_APPROX_CHAR_W = 14; // approximate character width for hit testing
 
-// Compute bounding box for a decoration in pixel coordinates
-export function getDecoBounds(deco: Decoration, canvasSize: number): DecoBounds | null {
-  switch (deco.type) {
-    case 'squiggle': {
-      if (deco.points.length < 2) return null;
-      let minX = Infinity,
-        minY = Infinity,
-        maxX = -Infinity,
-        maxY = -Infinity;
-      for (const [px, py] of deco.points) {
-        minX = Math.min(minX, px * canvasSize);
-        minY = Math.min(minY, py * canvasSize);
-        maxX = Math.max(maxX, px * canvasSize);
-        maxY = Math.max(maxY, py * canvasSize);
-      }
-      const pad = (deco.strokeWidth || 3) + 4;
-      return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
-    }
-    case 'curlicue': {
-      const cx = deco.x * canvasSize;
-      const cy = deco.y * canvasSize;
-      const scale = deco.scale || 1;
-      const extent = CURLICUE_EXTENT * scale + 6;
-      return { x: cx - extent, y: cy - extent, w: extent * 2, h: extent * 2 };
-    }
-    case 'text': {
-      if (!deco.text) return null;
-      const cx = deco.x * canvasSize;
-      const cy = deco.y * canvasSize;
-      const scale = deco.scale || 1;
-      const fontSize = deco.fontSize * scale;
-      const tw = deco.text.length * TEXT_APPROX_CHAR_W * scale;
-      const th = fontSize * 1.2;
-      return { x: cx - tw / 2, y: cy - th / 2, w: tw, h: th };
-    }
-  }
+// Compute bounding box for a text decoration in pixel coordinates
+export function getDecoBounds(text: TextDecoration, canvasSize: number): DecoBounds | null {
+  if (!text.text) return null;
+  const cx = text.x * canvasSize;
+  const cy = text.y * canvasSize;
+  const fontSize = text.size * canvasSize;
+  const tw = text.text.length * TEXT_APPROX_CHAR_W * (text.size / 0.06); // scale proportionally
+  const th = fontSize * 1.2;
+  return { x: cx - tw / 2, y: cy - th / 2, w: tw, h: th };
 }
 
-// Hit test decorations (back-to-front, return topmost)
+// Hit test text decorations (back-to-front, return topmost)
 export function hitTestDecorations(
   state: SigilData,
   mx: number,
   my: number,
   canvasSize: number,
 ): string | null {
-  for (let i = state.decorations.length - 1; i >= 0; i--) {
-    const deco = state.decorations[i]!;
-    const bounds = getDecoBounds(deco, canvasSize);
+  for (let i = state.texts.length - 1; i >= 0; i--) {
+    const text = state.texts[i]!;
+    const bounds = getDecoBounds(text, canvasSize);
     if (
       bounds &&
       mx >= bounds.x &&
@@ -269,7 +255,7 @@ export function hitTestDecorations(
       my >= bounds.y &&
       my <= bounds.y + bounds.h
     ) {
-      return deco.id;
+      return text.id;
     }
   }
   return null;
@@ -277,12 +263,12 @@ export function hitTestDecorations(
 
 // Hit test decoration resize handles (corner handles only)
 export function hitTestDecoHandles(
-  deco: Decoration,
+  text: TextDecoration,
   mx: number,
   my: number,
   canvasSize: number,
 ): HandleType | null {
-  const bounds = getDecoBounds(deco, canvasSize);
+  const bounds = getDecoBounds(text, canvasSize);
   if (!bounds) return null;
 
   const corners: { x: number; y: number; type: HandleType }[] = [
@@ -298,21 +284,4 @@ export function hitTestDecoHandles(
     }
   }
   return null;
-}
-
-// Move a decoration by a normalized delta
-export function moveDeco(deco: Decoration, dnx: number, dny: number): void {
-  switch (deco.type) {
-    case 'squiggle':
-      for (const pt of deco.points) {
-        pt[0] = normalizedCoord(pt[0] + dnx);
-        pt[1] = normalizedCoord(pt[1] + dny);
-      }
-      break;
-    case 'curlicue':
-    case 'text':
-      deco.x = normalizedCoord(deco.x + dnx);
-      deco.y = normalizedCoord(deco.y + dny);
-      break;
-  }
 }

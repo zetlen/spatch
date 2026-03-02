@@ -1,39 +1,53 @@
 // serialize.ts — URL encode/decode sigil state with lz-string
+//
+// Wire format: positional arrays, no keys, no IDs.
+//
+//   [envelope, voices, texts]
+//
+//   envelope = [attack, decay, sustain, release]
+//
+//   voice (sine)        = ["s", x, y, size, fill, effect]
+//   voice (pulse/blend) = ["p"|"b", x, y, size, fill, effect, timbre]
+//
+//   fill (solid)   = ["s", h, s, l]
+//   fill (radial)  = ["r", h, s, l, h2, s2, l2]
+//   fill (linear)  = ["l", gradAngle, h, s, l, h2, s2, l2]
+//
+//   effect = "s"|"c"|"n"|"g"|"r" | 0
+//
+//   text = [text, x, y, size]
 
 import LZString from 'lz-string';
 import { genId } from './state.ts';
 import {
   normalizedCoord,
-  degrees,
   type SigilData,
+  type Voice,
+  type TextDecoration,
   type Fill,
   type SolidFill,
   type RadialFill,
   type LinearFill,
-  type Decoration,
-  type NormalizedCoord,
+  type WaveformType,
   type PatternType,
 } from './types.ts';
 
 export function serializeState(state: SigilData): string {
-  const compact = compactify(state);
-  const json = JSON.stringify(compact);
+  const packed = pack(state);
+  const json = JSON.stringify(packed);
   return LZString.compressToEncodedURIComponent(json);
 }
 
-/** Expose the raw compact JSON for testing. */
+/** Expose the raw packed JSON for testing. */
 export function _serializeToJSON(state: SigilData): string {
-  return JSON.stringify(compactify(state));
+  return JSON.stringify(pack(state));
 }
 
 export function deserializeState(hash: string): SigilData | null {
   try {
     const json = LZString.decompressFromEncodedURIComponent(hash);
     if (!json) return null;
-    const compact = JSON.parse(json);
-    // Legacy format (no v field) or v1 — both go through the same decompact path.
-    // Future versions can branch here.
-    return decompactify(compact);
+    return unpack(JSON.parse(json));
   } catch (e) {
     console.warn('Failed to deserialize state:', e);
     return null;
@@ -51,240 +65,138 @@ export function loadFromURL(): SigilData | null {
   return deserializeState(hash);
 }
 
-// ---- Compact format (single-char keys) ----
+// ---- Pack ----
 
-interface CompactEnvelope {
-  a: number;
-  d: number;
-  s: number;
-  r: number;
-}
+type PackedFill =
+  | ['s', number, number, number]
+  | ['r', number, number, number, number, number, number]
+  | ['l', number, number, number, number, number, number, number];
 
-interface CompactSolidFill {
-  m: 's';
-  h: number;
-  s: number;
-  l: number;
-}
+type PackedVoice =
+  | [string, number, number, number, PackedFill, string | 0]
+  | [string, number, number, number, PackedFill, string | 0, number];
 
-interface CompactRadialFill {
-  m: 'r';
-  h: number;
-  s: number;
-  l: number;
-  h2: number;
-  s2: number;
-  l2: number;
-}
+type PackedText = [string, number, number, number];
 
-interface CompactLinearFill {
-  m: 'l';
-  g: number;
-  h: number;
-  s: number;
-  l: number;
-  h2: number;
-  s2: number;
-  l2: number;
-}
+type PackedState = [
+  [number, number, number, number], // envelope
+  PackedVoice[], // voices
+  PackedText[], // texts
+];
 
-type CompactFill = CompactSolidFill | CompactRadialFill | CompactLinearFill;
-
-interface CompactShape {
-  i: string;
-  t: string;
-  x: number;
-  y: number;
-  z: number;
-  r: number;
-  f: CompactFill;
-  p: string | 0;
-}
-
-interface CompactDecoration {
-  i: string;
-  t: string;
-  p: [number, number][];
-  x: number;
-  y: number;
-  c: string;
-  w: number;
-  tx?: string;
-  fs?: number;
-  ts?: string;
-}
-
-interface CompactStateLegacy {
-  e: CompactEnvelope;
-  sh: CompactShape[];
-  d: CompactDecoration[];
-}
-
-interface CompactStateV1 extends CompactStateLegacy {
-  v: 1;
-}
-
-function compactify(state: SigilData): CompactStateV1 {
-  return {
-    v: 1,
-    e: {
-      a: round2(state.envelope.attack),
-      d: round2(state.envelope.decay),
-      s: round2(state.envelope.sustain),
-      r: round2(state.envelope.release),
-    },
-    sh: state.shapes.map((s) => ({
-      i: s.id,
-      t: s.type[0]!,
-      x: round3(s.x),
-      y: round3(s.y),
-      z: round3(s.size),
-      r: Math.round(s.rotation),
-      f: compactFill(s.fill),
-      p: s.pattern ? s.pattern[0]! : 0,
-    })),
-    d: state.decorations.map((d) => {
-      const base: CompactDecoration = {
-        i: d.id,
-        t: d.type[0]!,
-        p: d.type === 'squiggle' ? d.points.map(([x, y]) => [round3(x), round3(y)]) : [],
-        x: round3(d.type !== 'squiggle' ? d.x : 0),
-        y: round3(d.type !== 'squiggle' ? d.y : 0),
-        c: d.strokeColor,
-        w: d.strokeWidth,
-      };
-      if (d.type === 'text') {
-        base.tx = d.text;
-        base.fs = d.fontSize;
+function pack(state: SigilData): PackedState {
+  return [
+    [
+      round2(state.envelope.attack),
+      round2(state.envelope.decay),
+      round2(state.envelope.sustain),
+      round2(state.envelope.release),
+    ],
+    state.voices.map((v): PackedVoice => {
+      const w = v.waveform[0]!;
+      const f = packFill(v.fill);
+      const e: string | 0 = v.effect ? v.effect[0]! : 0;
+      if ('timbre' in v) {
+        return [w, round3(v.x), round3(v.y), round3(v.size), f, e, round3(v.timbre)];
       }
-      if (d.targetShapeId) base.ts = d.targetShapeId;
-      return base;
+      return [w, round3(v.x), round3(v.y), round3(v.size), f, e];
     }),
-  };
+    state.texts.map((t): PackedText => [t.text, round3(t.x), round3(t.y), round3(t.size)]),
+  ];
 }
 
-function decompactify(c: CompactStateLegacy | CompactStateV1): SigilData {
-  const typeMap: Record<string, string> = { t: 'triangle', s: 'square', c: 'circle' };
-  const patMap: Record<string, string> = {
-    s: 'stripes',
-    c: 'checker',
-    n: 'noise',
-    g: 'gradient',
-    r: 'rough',
-  };
-  const decoMap: Record<string, string> = { s: 'squiggle', c: 'curlicue', t: 'text' };
+// ---- Unpack ----
 
+const waveformMap: Record<string, WaveformType> = { s: 'sine', p: 'pulse', b: 'blend' };
+const effectMap: Record<string, PatternType> = {
+  s: 'stripes',
+  c: 'checker',
+  n: 'noise',
+  g: 'gradient',
+  r: 'rough',
+};
+
+function unpack(packed: PackedState): SigilData {
+  const [env, voices, texts] = packed;
   return {
     envelope: {
-      attack: c.e.a,
-      decay: c.e.d,
-      sustain: c.e.s,
-      release: c.e.r,
+      attack: env[0],
+      decay: env[1],
+      sustain: env[2],
+      release: env[3],
     },
-    shapes: (c.sh || []).map((s) => ({
-      id: s.i || genId('s'),
-      type: (typeMap[s.t] || 'circle') as 'circle' | 'triangle' | 'square',
-      x: normalizedCoord(s.x),
-      y: normalizedCoord(s.y),
-      size: normalizedCoord(s.z),
-      rotation: degrees(s.r),
-      fill: decompactFill(s.f),
-      pattern: (s.p ? (patMap[s.p as string] ?? null) : null) as PatternType | null,
-    })),
-    decorations: (c.d || []).map((d) => {
-      const decoType = (decoMap[d.t] || 'squiggle') as 'squiggle' | 'curlicue' | 'text';
-      return decompactDecoration(d, decoType);
+    voices: (voices || []).map((pv): Voice => {
+      const waveform: WaveformType = waveformMap[pv[0]] || 'sine';
+      const effect: PatternType | null = pv[5] ? (effectMap[pv[5] as string] ?? null) : null;
+      const base = {
+        id: genId('v'),
+        x: normalizedCoord(pv[1]),
+        y: normalizedCoord(pv[2]),
+        size: normalizedCoord(pv[3]),
+        fill: unpackFill(pv[4]),
+        effect,
+      };
+      switch (waveform) {
+        case 'sine':
+          return { ...base, waveform: 'sine' };
+        case 'pulse':
+          return { ...base, waveform: 'pulse', timbre: normalizedCoord((pv[6] as number) ?? 0) };
+        case 'blend':
+          return { ...base, waveform: 'blend', timbre: normalizedCoord((pv[6] as number) ?? 0) };
+      }
     }),
+    texts: (texts || []).map(
+      (pt): TextDecoration => ({
+        id: genId('t'),
+        text: pt[0],
+        x: normalizedCoord(pt[1]),
+        y: normalizedCoord(pt[2]),
+        size: normalizedCoord(pt[3]),
+      }),
+    ),
   };
 }
 
-function decompactDecoration(
-  d: CompactDecoration,
-  decoType: 'squiggle' | 'curlicue' | 'text',
-): Decoration {
-  const base = {
-    id: d.i || genId('d'),
-    strokeColor: d.c || 'hsl(320, 100%, 60%)',
-    strokeWidth: d.w || 3,
-    targetShapeId: d.ts || null,
-  };
+// ---- Fill pack/unpack ----
 
-  switch (decoType) {
-    case 'squiggle':
-      return {
-        ...base,
-        type: 'squiggle',
-        points: (d.p || []).map(
-          (pt: [number, number]) =>
-            [normalizedCoord(pt[0]), normalizedCoord(pt[1])] as [NormalizedCoord, NormalizedCoord],
-        ),
-      };
-    case 'curlicue':
-      return {
-        ...base,
-        type: 'curlicue',
-        x: normalizedCoord(d.x || 0),
-        y: normalizedCoord(d.y || 0),
-        scale: 1,
-      };
-    case 'text':
-      return {
-        ...base,
-        type: 'text',
-        text: d.tx || '',
-        x: normalizedCoord(d.x || 0),
-        y: normalizedCoord(d.y || 0),
-        scale: 1,
-        fontSize: d.fs || 24,
-      };
-  }
-}
-
-function compactFill(f: Fill): CompactFill {
+function packFill(f: Fill): PackedFill {
   switch (f.mode) {
     case 'solid':
-      return { m: 's', h: f.h, s: f.s, l: f.l };
+      return ['s', f.h, f.s, f.l];
     case 'radial':
-      return { m: 'r', h: f.h, s: f.s, l: f.l, h2: f.h2, s2: f.s2, l2: f.l2 };
+      return ['r', f.h, f.s, f.l, f.h2, f.s2, f.l2];
     case 'linear':
-      return {
-        m: 'l',
-        g: f.gradAngle,
-        h: f.h,
-        s: f.s,
-        l: f.l,
-        h2: f.h2,
-        s2: f.s2,
-        l2: f.l2,
-      };
+      return ['l', f.gradAngle, f.h, f.s, f.l, f.h2, f.s2, f.l2];
   }
 }
 
-function decompactFill(f: CompactFill): Fill {
-  switch (f.m) {
+function unpackFill(f: PackedFill): Fill {
+  switch (f[0]) {
     case 's':
-      return { mode: 'solid', h: f.h, s: f.s, l: f.l } satisfies SolidFill;
+      return { mode: 'solid', h: f[1], s: f[2], l: f[3] } satisfies SolidFill;
     case 'r':
       return {
         mode: 'radial',
-        h: f.h,
-        s: f.s,
-        l: f.l,
-        h2: f.h2,
-        s2: f.s2,
-        l2: f.l2,
+        h: f[1],
+        s: f[2],
+        l: f[3],
+        h2: f[4],
+        s2: f[5],
+        l2: f[6],
       } satisfies RadialFill;
     case 'l':
       return {
         mode: 'linear',
-        gradAngle: f.g,
-        h: f.h,
-        s: f.s,
-        l: f.l,
-        h2: f.h2,
-        s2: f.s2,
-        l2: f.l2,
+        gradAngle: f[1],
+        h: f[2],
+        s: f[3],
+        l: f[4],
+        h2: f[5],
+        s2: f[6],
+        l2: f[7],
       } satisfies LinearFill;
+    default:
+      return { mode: 'solid', h: 200, s: 80, l: 50 };
   }
 }
 

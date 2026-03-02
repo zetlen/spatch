@@ -3,16 +3,13 @@
 import { createEffect } from './effects.ts';
 import { createVocoderChain } from './vocoder.ts';
 import {
-  cents,
   normalizedCoord,
-  type ShapeType,
-  type Shape,
+  type WaveformType,
+  type Voice,
   type Fill,
   type SigilData,
   type Envelope,
   type NormalizedCoord,
-  type Degrees,
-  type Cents,
 } from './types.ts';
 
 // ---- Pentatonic scale ----
@@ -38,7 +35,7 @@ function midiToFreq(midi: number): number {
 const MAX_DETUNE_CENTS = 40;
 
 export function yToFrequency(y: NormalizedCoord): number {
-  // y is 0–1, where 0=top (high pitch), 1=bottom (low pitch)
+  // y is 0-1, where 0=top (high pitch), 1=bottom (low pitch)
   const normalized = 1 - y;
   const continuous = normalized * (PENTATONIC_SEMITONES.length - 1);
   const index = Math.round(continuous);
@@ -69,7 +66,7 @@ export function snapYToNote(y: NormalizedCoord): NormalizedCoord {
   const rawOffset = normalized - notePos;
   const t = Math.max(-1, Math.min(1, rawOffset / halfZone));
 
-  // Cubic pull: t³ preserves sign, creates wide sticky center
+  // Cubic pull: t^3 preserves sign, creates wide sticky center
   const pulled = t * t * t;
 
   const snappedNormalized = notePos + pulled * halfZone;
@@ -80,68 +77,56 @@ export function xToPan(x: NormalizedCoord): number {
   return x * 2 - 1; // 0->-1 (left), 1->+1 (right)
 }
 
-export function sizeToGain(size: NormalizedCoord): number {
-  return Math.min(0.8, 0.05 + size * 3);
-}
-
-// Area of a shape as a fraction of the 1×1 normalized canvas.
+// Area of a shape as a fraction of the 1x1 normalized canvas.
 // All shapes use r = size/2 as bounding radius.
-export function shapeAreaFraction(type: ShapeType, size: NormalizedCoord): number {
+export function shapeAreaFraction(waveform: WaveformType, size: NormalizedCoord): number {
   const halfSize = size / 2;
-  switch (type) {
-    case 'circle':
+  switch (waveform) {
+    case 'sine':
       return Math.PI * halfSize * halfSize;
-    case 'square':
+    case 'pulse':
       return size * size; // side = 2r = size
-    case 'triangle':
+    case 'blend':
       // Equilateral inscribed in circle of radius size/2
       return ((3 * Math.sqrt(3)) / 4) * halfSize * halfSize;
-    default:
-      return size * size;
   }
 }
 
 // Map a shape's canvas area fraction to gain.
-// Max area for a shape at size 0.9: square = 0.81, circle ≈ 0.636, triangle ≈ 0.263.
-export function areaToGain(type: ShapeType, size: NormalizedCoord): number {
-  const fraction = shapeAreaFraction(type, size);
+// Max area for a shape at size 0.9: square = 0.81, circle ~= 0.636, triangle ~= 0.263.
+export function areaToGain(waveform: WaveformType, size: NormalizedCoord): number {
+  const fraction = shapeAreaFraction(waveform, size);
   return Math.min(0.8, 0.05 + fraction);
 }
 
-// Map rotation (0-360) to a parameter for wave shaping
-export function rotationToParam(rotation: Degrees): number {
-  return rotation / 360; // 0.0 to 1.0
-}
+// Map rotation to a periodic timbre parameter.
+// Each waveform's visual symmetry period determines the audio cycle:
+// a square repeats every 90 deg, a triangle every 120 deg.
+// Linear sawtooth ramp: every angle within the period maps to a unique
+// timbre value (0 at the start, approaching 1 at the end).
+const WAVEFORM_PERIOD: Record<string, number> = {
+  pulse: 90,
+  blend: 120,
+};
 
-export function curlicuesToDetune(count: number): Cents {
-  return cents(count * 15); // 15 cents per curlicue
-}
-
-function oscillatorType(shapeType: ShapeType): OscillatorType {
-  switch (shapeType) {
-    case 'triangle':
-      return 'sawtooth';
-    case 'square':
-      return 'square';
-    case 'circle':
-      return 'sine';
-    default:
-      return 'sine';
-  }
+export function rotationToTimbre(rotation: number, waveform: string): number {
+  const period = WAVEFORM_PERIOD[waveform];
+  if (!period) return 0; // sine has no timbre
+  const phase = ((rotation % period) + period) % period;
+  return phase / period;
 }
 
 // Per-waveform perceived-loudness normalization.  Square and sawtooth have
 // higher RMS *and* excite more auditory critical bands than a pure sine,
 // making them sound louder at the same amplitude.  Sine needs a boost (~3 dB)
 // to match perceived loudness; square and sawtooth are attenuated.
-export function waveformGain(shapeType: ShapeType): number {
-  switch (shapeType) {
-    case 'square':
-      return 0.7; // square RMS ≈ 1.41× sine, rich harmonics
-    case 'triangle':
-      return 0.85; // sawtooth RMS ≈ 1.15× sine
-    case 'circle':
-    default:
+export function waveformGain(waveform: WaveformType): number {
+  switch (waveform) {
+    case 'pulse':
+      return 0.7; // square RMS ~= 1.41x sine, rich harmonics
+    case 'blend':
+      return 0.85; // sawtooth RMS ~= 1.15x sine
+    case 'sine':
       return 1.4; // sine is single-partial; boost to match perceived loudness
   }
 }
@@ -178,12 +163,12 @@ interface FormantPoint {
 }
 
 const FORMANT_ANCHORS: FormantPoint[] = [
-  { hue: 0, f1: 730, f2: 1090 }, // /a/ — open central
-  { hue: 60, f1: 530, f2: 1840 }, // /e/ — mid front
-  { hue: 120, f1: 270, f2: 2290 }, // /i/ — close front
-  { hue: 180, f1: 300, f2: 870 }, // /u/ — close back
-  { hue: 240, f1: 570, f2: 840 }, // /o/ — mid back
-  { hue: 300, f1: 680, f2: 1100 }, // /ɑ/ — open back
+  { hue: 0, f1: 730, f2: 1090 }, // /a/ -- open central
+  { hue: 60, f1: 530, f2: 1840 }, // /e/ -- mid front
+  { hue: 120, f1: 270, f2: 2290 }, // /i/ -- close front
+  { hue: 180, f1: 300, f2: 870 }, // /u/ -- close back
+  { hue: 240, f1: 570, f2: 840 }, // /o/ -- mid back
+  { hue: 300, f1: 680, f2: 1100 }, // /a:/ -- open back
 ];
 
 export function hueToFormants(hue: number): { f1: number; f2: number } {
@@ -225,15 +210,15 @@ function applyFormantFilter(
 
   if (fill.mode === 'linear') {
     // Crossfade formants between primary and secondary colors.
-    // Gradient angle sets the blend: 0° = primary, 90° = 50/50, 180° = secondary.
-    const blend = Math.abs(Math.sin(((fill.gradAngle % 360) * Math.PI) / 360));
+    // Gradient angle sets the blend: 0 deg = primary, 90 deg = 50/50, 180 deg = secondary.
+    const blend = (((fill.gradAngle % 360) + 360) % 360) / 360;
     h = h + (fill.h2 - h) * blend;
     s = s + (fill.s2 - s) * blend;
     l = l + (fill.l2 - l) * blend;
   } else if (fill.mode === 'radial') {
-    // Radial gradient: widen the formant Q to blend both colors' character
-    const avgS = (s + fill.s2) / 2;
-    s = avgS;
+    h = (h + fill.h2) / 2;
+    s = (s + fill.s2) / 2;
+    l = (l + fill.l2) / 2;
   }
 
   const formants = hueToFormants(h);
@@ -244,7 +229,7 @@ function applyFormantFilter(
   f2Node.frequency.value = formants.f2;
   f2Node.Q.value = q * 0.7;
 
-  // Lightness → brightness shelf: dark = muffled, light = bright
+  // Lightness -> brightness shelf: dark = muffled, light = bright
   brightnessNode.gain.value = (l / 100) * 14 - 7; // -7 to +7 dB
 }
 
@@ -265,7 +250,7 @@ function createLayerEQ(audioCtx: AudioContext, layerIndex: number, totalLayers: 
   return shelf;
 }
 
-// ---- Voice types (internal) ----
+// ---- Internal audio voice types ----
 
 function safeStop(node: AudioScheduledSourceNode): void {
   try {
@@ -280,9 +265,10 @@ function safeDisconnect(node: AudioNode): void {
   } catch {}
 }
 
-interface VoiceBase {
+interface AudioVoiceBase {
   outputNode: StereoPannerNode;
   effectDispose: (() => void) | null;
+  currentEffect: string | null;
   shapeId: string;
   gain: GainNode;
   formantF1: BiquadFilterNode;
@@ -293,18 +279,18 @@ interface VoiceBase {
   stop(time: number): void;
 }
 
-interface SineVoice extends VoiceBase {
+interface SineAudioVoice extends AudioVoiceBase {
   waveform: 'sine';
   oscillator: OscillatorNode;
 }
 
-interface SquareVoice extends VoiceBase {
+interface SquareAudioVoice extends AudioVoiceBase {
   waveform: 'square';
   oscRaw: OscillatorNode;
   pwmOffset: ConstantSourceNode;
 }
 
-interface TriangleVoice extends VoiceBase {
+interface TriangleAudioVoice extends AudioVoiceBase {
   waveform: 'triangle';
   oscSaw: OscillatorNode;
   oscTri: OscillatorNode;
@@ -312,35 +298,33 @@ interface TriangleVoice extends VoiceBase {
   gainTri: GainNode;
 }
 
-type Voice = SineVoice | SquareVoice | TriangleVoice;
+type AudioVoice = SineAudioVoice | SquareAudioVoice | TriangleAudioVoice;
 
-interface TextVoice {
+interface TextAudioVoice {
   isTextVoice: true;
   textCarrier: OscillatorNode;
   outputNode: StereoPannerNode;
   effectDispose: () => void;
 }
 
-type AnyVoice = Voice | TextVoice;
+type AnyAudioVoice = AudioVoice | TextAudioVoice;
 
 // ---- Auto EQ: spectral presence boost ----
 
 // How much EQ help each waveform needs to be audible in a mix.
 // Sine has no harmonics and gets easily masked; rich waveforms cut through.
-function spectralNeed(shapeType: ShapeType): number {
-  switch (shapeType) {
-    case 'circle':
+function spectralNeed(waveform: WaveformType): number {
+  switch (waveform) {
+    case 'sine':
       return 1.0; // sine: single partial, easily masked
-    case 'triangle':
+    case 'blend':
       return 0.3; // sawtooth blend: moderate harmonics
-    case 'square':
+    case 'pulse':
       return 0.2; // pulse: rich harmonics, strong presence
-    default:
-      return 0.5;
   }
 }
 
-// Maximum number of EQ bands in the pool. Shapes beyond this count
+// Maximum number of EQ bands in the pool. Voices beyond this count
 // don't get dedicated EQ presence bands (still audible via gain).
 const MAX_EQ_BANDS = 8;
 
@@ -348,7 +332,7 @@ const MAX_EQ_BANDS = 8;
 
 export class AudioEngine {
   audioCtx: AudioContext | null;
-  activeVoices: AnyVoice[];
+  activeVoices: AnyAudioVoice[];
   masterGain: GainNode | null;
   envelopeGain: GainNode | null;
   compressor: DynamicsCompressorNode | null;
@@ -412,9 +396,7 @@ export class AudioEngine {
     this.masterGain.gain.value = 0.5;
 
     // Auto EQ: pool of peaking filters between masterGain and envelopeGain.
-    // Each band boosts a voice's fundamental frequency proportional to its
-    // spectral need and visual area. Unused bands sit at 0 dB gain.
-    const poolSize = Math.max(MAX_EQ_BANDS, sigilState.shapes.length);
+    const poolSize = Math.max(MAX_EQ_BANDS, sigilState.voices.length);
     this._autoEQ = [];
     for (let i = 0; i < poolSize; i++) {
       const band = ctx.createBiquadFilter();
@@ -435,7 +417,7 @@ export class AudioEngine {
     this.envelopeGain.connect(this.compressor);
     this.compressor.connect(ctx.destination);
 
-    this._applyAutoEQ(sigilState.shapes);
+    this._applyAutoEQ(sigilState.voices);
 
     // Apply ADSR envelope
     const now = ctx.currentTime;
@@ -448,26 +430,19 @@ export class AudioEngine {
     this.envelopeGain.gain.linearRampToValueAtTime(sustain, now + attack + decay);
 
     // Build voices
-    const totalLayers = sigilState.shapes.length;
+    const totalLayers = sigilState.voices.length;
     this.playingShapeIds.clear();
 
-    const curlicues = sigilState.decorations
-      ? sigilState.decorations.filter((d) => d.type === 'curlicue').length
-      : 0;
-
     for (let i = 0; i < totalLayers; i++) {
-      const shape = sigilState.shapes[i]!;
-      const voice = this._buildVoice(ctx, shape, i, totalLayers, curlicues);
-      voice.start(now);
-      this.activeVoices.push(voice);
-      this.playingShapeIds.add(shape.id);
+      const voice = sigilState.voices[i]!;
+      const audioVoice = this._buildVoice(ctx, voice, i, totalLayers);
+      audioVoice.start(now);
+      this.activeVoices.push(audioVoice);
+      this.playingShapeIds.add(voice.id);
     }
 
     // Play text vocoders
-    const texts = sigilState.decorations
-      ? sigilState.decorations.filter((d) => d.type === 'text')
-      : [];
-    for (const textDeco of texts) {
+    for (const textDeco of sigilState.texts) {
       const freq = yToFrequency(textDeco.y);
       const carrier = ctx.createOscillator();
       carrier.type = 'sawtooth';
@@ -478,7 +453,12 @@ export class AudioEngine {
         const panner = ctx.createStereoPanner();
         panner.pan.value = xToPan(textDeco.x);
 
-        vocoder.output.connect(panner);
+        // Scale gain by text size
+        const textGain = ctx.createGain();
+        textGain.gain.value = Math.min(0.8, 0.1 + textDeco.size * 5);
+
+        vocoder.output.connect(textGain);
+        textGain.connect(panner);
         panner.connect(this.masterGain!);
 
         carrier.start(now);
@@ -488,7 +468,10 @@ export class AudioEngine {
           isTextVoice: true,
           textCarrier: carrier,
           outputNode: panner,
-          effectDispose: vocoder.dispose,
+          effectDispose: () => {
+            vocoder.dispose();
+            safeDisconnect(textGain);
+          },
         });
       }
     }
@@ -516,17 +499,17 @@ export class AudioEngine {
     );
   }
 
-  triggerArpeggio(sigilState: SigilData, envelope: Envelope, shapeId: string): void {
-    // Trigger a single shape with a fast mini-envelope
+  triggerArpeggio(sigilState: SigilData, envelope: Envelope, voiceId: string): void {
+    // Trigger a single voice with a fast mini-envelope
     if (!this.audioCtx) return;
     const ctx = this.audioCtx;
     if (ctx.state === 'suspended') ctx.resume();
 
-    const shape = sigilState.shapes.find((s) => s.id === shapeId);
-    if (!shape) return;
+    const voice = sigilState.voices.find((v) => v.id === voiceId);
+    if (!voice) return;
 
-    const idx = sigilState.shapes.indexOf(shape);
-    const total = sigilState.shapes.length;
+    const idx = sigilState.voices.indexOf(voice);
+    const total = sigilState.voices.length;
 
     // Set up a dedicated arpeggio gain as the "masterGain" so _buildVoice
     // connects to it instead of ctx.destination (avoids double-routing)
@@ -546,8 +529,7 @@ export class AudioEngine {
     // Temporarily set masterGain so _buildVoice routes to our arpeggio chain
     const prevMaster = this.masterGain;
     this.masterGain = this._arpeggioGain;
-    const curlicues = sigilState.decorations.filter((d) => d.type === 'curlicue').length;
-    const voice = this._buildVoice(ctx, shape, idx, total, curlicues);
+    const audioVoice = this._buildVoice(ctx, voice, idx, total);
     this.masterGain = prevMaster;
 
     // Mini envelope: quick attack, short sustain, quick release
@@ -560,23 +542,22 @@ export class AudioEngine {
     miniGain.gain.linearRampToValueAtTime(0, now + 0.5);
 
     // Re-route voice output through the mini envelope
-    voice.outputNode.disconnect();
-    voice.outputNode.connect(miniGain);
+    audioVoice.outputNode.disconnect();
+    audioVoice.outputNode.connect(miniGain);
     miniGain.connect(this._arpeggioGain!);
 
-    voice.start(now);
-    // Schedule stop after 0.6s — we use setTimeout since voice.stop()
-    // does immediate cleanup rather than scheduled stop
-    setTimeout(() => voice.stop(0), 600);
+    audioVoice.start(now);
+    // Schedule stop after 0.6s
+    setTimeout(() => audioVoice.stop(0), 600);
 
     // Track voice for cleanup
-    this.activeVoices.push(voice);
+    this.activeVoices.push(audioVoice);
 
-    this.playingShapeIds.add(shapeId);
+    this.playingShapeIds.add(voiceId);
     setTimeout(() => {
-      this.playingShapeIds.delete(shapeId);
+      this.playingShapeIds.delete(voiceId);
       // Remove from activeVoices after it's done
-      const i = this.activeVoices.indexOf(voice);
+      const i = this.activeVoices.indexOf(audioVoice);
       if (i !== -1) this.activeVoices.splice(i, 1);
       try {
         miniGain.disconnect();
@@ -608,72 +589,86 @@ export class AudioEngine {
     if (!this.isPlaying || !this.audioCtx) return;
     const ctx = this.audioCtx;
     const now = ctx.currentTime;
-    const shapeMap = new Map(sigilState.shapes.map((s) => [s.id, s]));
+    const voiceMap = new Map(sigilState.voices.map((v) => [v.id, v]));
 
-    // Remove voices for deleted shapes
+    // Remove audio voices for deleted voices
     for (let i = this.activeVoices.length - 1; i >= 0; i--) {
-      const voice = this.activeVoices[i]!;
-      if ('isTextVoice' in voice) continue;
-      if (!shapeMap.has(voice.shapeId)) {
-        this._stopVoice(voice);
+      const audioVoice = this.activeVoices[i]!;
+      if ('isTextVoice' in audioVoice) continue;
+      if (!voiceMap.has(audioVoice.shapeId)) {
+        this._stopVoice(audioVoice);
         this.activeVoices.splice(i, 1);
-        this.playingShapeIds.delete(voice.shapeId);
+        this.playingShapeIds.delete(audioVoice.shapeId);
       }
     }
 
-    // Add voices for new shapes
-    const totalLayers = sigilState.shapes.length;
-    const curlicues = sigilState.decorations
-      ? sigilState.decorations.filter((d) => d.type === 'curlicue').length
-      : 0;
+    // Add audio voices for new voices
+    const totalLayers = sigilState.voices.length;
 
     for (let i = 0; i < totalLayers; i++) {
-      const shape = sigilState.shapes[i]!;
-      if (!this.playingShapeIds.has(shape.id)) {
-        const voice = this._buildVoice(ctx, shape, i, totalLayers, curlicues);
-        voice.start(now);
-        this.activeVoices.push(voice);
-        this.playingShapeIds.add(shape.id);
+      const voice = sigilState.voices[i]!;
+      if (!this.playingShapeIds.has(voice.id)) {
+        const audioVoice = this._buildVoice(ctx, voice, i, totalLayers);
+        audioVoice.start(now);
+        this.activeVoices.push(audioVoice);
+        this.playingShapeIds.add(voice.id);
       }
     }
 
-    // Update existing voices
-    for (const voice of this.activeVoices) {
-      if ('isTextVoice' in voice) continue;
-      const shape = shapeMap.get(voice.shapeId);
-      if (!shape) continue;
+    // Update existing audio voices
+    for (let i = this.activeVoices.length - 1; i >= 0; i--) {
+      const audioVoice = this.activeVoices[i]!;
+      if ('isTextVoice' in audioVoice) continue;
+      const voice = voiceMap.get(audioVoice.shapeId);
+      if (!voice) continue;
 
-      const param = rotationToParam(shape.rotation);
-      const freq = yToFrequency(shape.y);
+      // Effect changed — tear down and rebuild the entire voice
+      if (voice.effect !== audioVoice.currentEffect) {
+        const layerIndex = sigilState.voices.indexOf(voice);
+        this._stopVoice(audioVoice);
+        this.activeVoices.splice(i, 1);
+        const rebuilt = this._buildVoice(ctx, voice, layerIndex, totalLayers);
+        rebuilt.start(now);
+        this.activeVoices.push(rebuilt);
+        continue;
+      }
 
-      switch (voice.waveform) {
+      const timbre = 'timbre' in voice ? voice.timbre : 0;
+      const freq = yToFrequency(voice.y);
+
+      switch (audioVoice.waveform) {
         case 'square':
-          voice.oscRaw.frequency.setValueAtTime(freq, now);
-          voice.pwmOffset.offset.setValueAtTime((param * 2 - 1) * 0.9, now);
+          audioVoice.oscRaw.frequency.setValueAtTime(freq, now);
+          audioVoice.pwmOffset.offset.setValueAtTime((timbre * 2 - 1) * 0.9, now);
           break;
         case 'triangle': {
-          voice.oscSaw.frequency.setValueAtTime(freq, now);
-          voice.oscTri.frequency.setValueAtTime(freq, now);
-          const mix = 1.0 - Math.abs(param - 0.5) * 2;
-          voice.gainTri.gain.setValueAtTime(Math.sin((mix * Math.PI) / 2), now);
-          voice.gainSaw.gain.setValueAtTime(Math.cos((mix * Math.PI) / 2), now);
+          audioVoice.oscSaw.frequency.setValueAtTime(freq, now);
+          audioVoice.oscTri.frequency.setValueAtTime(freq, now);
+          const mix = 1.0 - Math.abs(timbre - 0.5) * 2;
+          audioVoice.gainTri.gain.setValueAtTime(Math.sin((mix * Math.PI) / 2), now);
+          audioVoice.gainSaw.gain.setValueAtTime(Math.cos((mix * Math.PI) / 2), now);
           break;
         }
         case 'sine':
-          voice.oscillator.frequency.setValueAtTime(freq, now);
+          audioVoice.oscillator.frequency.setValueAtTime(freq, now);
           break;
       }
 
-      voice.gain.gain.setValueAtTime(
-        areaToGain(shape.type, shape.size) * waveformGain(shape.type),
+      audioVoice.gain.gain.setValueAtTime(
+        areaToGain(voice.waveform, voice.size) * waveformGain(voice.waveform),
         now,
       );
-      voice.panner.pan.setValueAtTime(xToPan(shape.x), now);
-      applyFormantFilter(voice.formantF1, voice.formantF2, voice.brightness, shape.fill);
+      audioVoice.panner.pan.setValueAtTime(xToPan(voice.x), now);
+      applyFormantFilter(
+        audioVoice.formantF1,
+        audioVoice.formantF2,
+        audioVoice.brightness,
+        voice.fill,
+      );
     }
 
     // Update auto EQ for changed positions/sizes
-    this._applyAutoEQ(sigilState.shapes);
+    this._applyAutoEQ(sigilState.voices);
   }
 
   stop(): void {
@@ -681,25 +676,25 @@ export class AudioEngine {
     this._cleanup();
   }
 
-  _applyAutoEQ(shapes: Shape[]): void {
+  _applyAutoEQ(voices: Voice[]): void {
     if (!this.audioCtx || this._autoEQ.length === 0) return;
     const now = this.audioCtx.currentTime;
 
     for (let i = 0; i < this._autoEQ.length; i++) {
       const band = this._autoEQ[i]!;
-      if (i < shapes.length) {
-        const shape = shapes[i]!;
-        const freq = yToFrequency(shape.y);
-        const area = shapeAreaFraction(shape.type, shape.size);
-        const need = spectralNeed(shape.type);
+      if (i < voices.length) {
+        const voice = voices[i]!;
+        const freq = yToFrequency(voice.y);
+        const area = shapeAreaFraction(voice.waveform, voice.size);
+        const need = spectralNeed(voice.waveform);
 
-        // Boost: 4–18 dB for sine, 1–5 dB for rich waveforms
+        // Boost: 4-18 dB for sine, 1-5 dB for rich waveforms
         const boostDb = need * (4 + area * 14);
 
         band.frequency.setValueAtTime(freq, now);
         band.gain.setValueAtTime(boostDb, now);
       } else {
-        // Unused band — passthrough
+        // Unused band -- passthrough
         band.gain.setValueAtTime(0, now);
       }
     }
@@ -708,8 +703,8 @@ export class AudioEngine {
   _cleanup(): void {
     this._sessionId++;
 
-    for (const voice of this.activeVoices) {
-      this._stopVoice(voice);
+    for (const audioVoice of this.activeVoices) {
+      this._stopVoice(audioVoice);
     }
     this.activeVoices = [];
 
@@ -746,32 +741,30 @@ export class AudioEngine {
     this.isPlaying = false;
   }
 
-  _stopVoice(voice: AnyVoice): void {
-    if ('isTextVoice' in voice) {
-      safeDisconnect(voice.textCarrier);
-      safeDisconnect(voice.outputNode);
-      if (voice.effectDispose) voice.effectDispose();
+  _stopVoice(audioVoice: AnyAudioVoice): void {
+    if ('isTextVoice' in audioVoice) {
+      safeDisconnect(audioVoice.textCarrier);
+      safeDisconnect(audioVoice.outputNode);
+      if (audioVoice.effectDispose) audioVoice.effectDispose();
       return;
     }
 
-    voice.stop(0);
-    safeDisconnect(voice.outputNode);
-    voice.effectDispose?.();
+    audioVoice.stop(0);
+    safeDisconnect(audioVoice.outputNode);
+    audioVoice.effectDispose?.();
   }
 
   _buildVoice(
     ctx: AudioContext,
-    shape: Shape,
+    voice: Voice,
     layerIndex: number,
     totalLayers: number,
-    curlicues = 0,
-  ): Voice {
+  ): AudioVoice {
+    const timbre = 'timbre' in voice ? voice.timbre : 0;
     const gain = ctx.createGain();
-    gain.gain.value = areaToGain(shape.type, shape.size) * waveformGain(shape.type);
+    gain.gain.value = areaToGain(voice.waveform, voice.size) * waveformGain(voice.waveform);
 
-    const freq = yToFrequency(shape.y);
-    const param = rotationToParam(shape.rotation);
-    const detuneCents = curlicuesToDetune(curlicues);
+    const freq = yToFrequency(voice.y);
 
     // Dual formant filter bank + brightness shelf
     const formantF1 = ctx.createBiquadFilter();
@@ -784,10 +777,10 @@ export class AudioEngine {
     brightness.type = 'highshelf';
     brightness.frequency.value = 2000;
 
-    applyFormantFilter(formantF1, formantF2, brightness, shape.fill);
+    applyFormantFilter(formantF1, formantF2, brightness, voice.fill);
 
     const panner = ctx.createStereoPanner();
-    panner.pan.value = xToPan(shape.x);
+    panner.pan.value = xToPan(voice.x);
 
     const layerEQ = createLayerEQ(ctx, layerIndex, totalLayers);
 
@@ -802,8 +795,8 @@ export class AudioEngine {
     let lastNode: AudioNode = brightness;
     let effectDispose: (() => void) | null = null;
 
-    if (shape.pattern) {
-      const effect = createEffect(ctx, shape.pattern, this._workletReady);
+    if (voice.effect) {
+      const effect = createEffect(ctx, voice.effect, this._workletReady);
       if (effect) {
         lastNode.connect(effect.input);
         lastNode = effect.output;
@@ -818,7 +811,8 @@ export class AudioEngine {
     const shared = {
       outputNode: panner,
       effectDispose,
-      shapeId: shape.id,
+      currentEffect: voice.effect,
+      shapeId: voice.id,
       gain,
       formantF1,
       formantF2,
@@ -826,14 +820,13 @@ export class AudioEngine {
       panner,
     };
 
-    if (shape.type === 'square') {
+    if (voice.waveform === 'pulse') {
       const osc = ctx.createOscillator();
       osc.type = 'sawtooth';
       osc.frequency.value = freq;
-      osc.detune.value = detuneCents;
 
       const pwmOffset = ctx.createConstantSource();
-      pwmOffset.offset.value = (param * 2 - 1) * 0.9;
+      pwmOffset.offset.value = (timbre * 2 - 1) * 0.9;
 
       const ws = createPWMWaveshaper(ctx);
 
@@ -860,21 +853,19 @@ export class AudioEngine {
       };
     }
 
-    if (shape.type === 'triangle') {
+    if (voice.waveform === 'blend') {
       const oscSaw = ctx.createOscillator();
       oscSaw.type = 'sawtooth';
       oscSaw.frequency.value = freq;
-      oscSaw.detune.value = detuneCents;
 
       const oscTri = ctx.createOscillator();
       oscTri.type = 'triangle';
       oscTri.frequency.value = freq;
-      oscTri.detune.value = detuneCents;
 
       const gainSaw = ctx.createGain();
       const gainTri = ctx.createGain();
 
-      const mix = 1.0 - Math.abs(param - 0.5) * 2;
+      const mix = 1.0 - Math.abs(timbre - 0.5) * 2;
       gainTri.gain.value = Math.sin((mix * Math.PI) / 2);
       gainSaw.gain.value = Math.cos((mix * Math.PI) / 2);
 
@@ -901,11 +892,10 @@ export class AudioEngine {
       };
     }
 
-    // Sine (circle) — default
+    // Sine -- default
     const osc = ctx.createOscillator();
-    osc.type = oscillatorType(shape.type);
+    osc.type = 'sine';
     osc.frequency.value = freq;
-    osc.detune.value = detuneCents;
     osc.connect(gain);
 
     return {

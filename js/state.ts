@@ -2,13 +2,9 @@
 
 import {
   normalizedCoord,
-  degrees,
   createDefaultFill,
-  type ShapeType,
-  type Shape,
-  type Decoration,
-  type SquiggleDecoration,
-  type CurlicueDecoration,
+  type WaveformType,
+  type Voice,
   type TextDecoration,
   type SigilData,
   type Envelope,
@@ -24,72 +20,37 @@ export function genId(prefix = 's'): string {
 export function createDefaultState(): SigilData {
   return {
     envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
-    shapes: [],
-    decorations: [],
+    voices: [],
+    texts: [],
   };
 }
 
-function createShape(type: ShapeType, x: NormalizedCoord, y: NormalizedCoord): Shape {
-  return {
-    id: genId('s'),
-    type,
+function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCoord): Voice {
+  const base = {
+    id: genId('v'),
     x,
     y,
     size: normalizedCoord(0.12),
-    rotation: degrees(0),
     fill: createDefaultFill(),
-    pattern: null,
+    effect: null as Voice['effect'],
   };
+  switch (waveform) {
+    case 'sine':
+      return { ...base, waveform: 'sine' };
+    case 'pulse':
+      return { ...base, waveform: 'pulse', timbre: normalizedCoord(0) };
+    case 'blend':
+      return { ...base, waveform: 'blend', timbre: normalizedCoord(0) };
+  }
 }
 
-function createSquiggle(
-  points: [NormalizedCoord, NormalizedCoord][],
-  color?: string,
-): SquiggleDecoration {
+function createTextDeco(text: string, x: NormalizedCoord, y: NormalizedCoord): TextDecoration {
   return {
-    id: genId('d'),
-    type: 'squiggle',
-    points,
-    targetShapeId: null,
-    strokeColor: color || 'hsl(320, 100%, 60%)',
-    strokeWidth: 3,
-  };
-}
-
-function createCurlicue(
-  x: NormalizedCoord,
-  y: NormalizedCoord,
-  color?: string,
-): CurlicueDecoration {
-  return {
-    id: genId('d'),
-    type: 'curlicue',
-    x,
-    y,
-    scale: 1,
-    targetShapeId: null,
-    strokeColor: color || 'hsl(280, 100%, 65%)',
-    strokeWidth: 3,
-  };
-}
-
-function createTextDeco(
-  text: string,
-  x: NormalizedCoord,
-  y: NormalizedCoord,
-  color?: string,
-): TextDecoration {
-  return {
-    id: genId('d'),
-    type: 'text',
+    id: genId('t'),
     text,
     x,
     y,
-    scale: 1,
-    fontSize: 24,
-    targetShapeId: null,
-    strokeColor: color || 'hsl(50, 100%, 60%)',
-    strokeWidth: 3,
+    size: normalizedCoord(0.06),
   };
 }
 
@@ -116,77 +77,77 @@ export class SigilStore {
     return JSON.parse(JSON.stringify(this.data));
   }
 
-  addShape(type: ShapeType, x: NormalizedCoord, y: NormalizedCoord): Shape {
-    const shape = createShape(type, x, y);
-    this.data.shapes.push(shape);
+  addVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCoord): Voice {
+    const voice = createVoice(waveform, x, y);
+    this.data.voices.push(voice);
     this._notify();
-    return shape;
+    return voice;
   }
 
-  pasteShape(shapeData: Shape, offsetX = 0, offsetY = 0): Shape {
-    const clone: Shape = JSON.parse(JSON.stringify(shapeData));
-    clone.id = genId('s');
+  pasteVoice(voiceData: Voice, offsetX = 0, offsetY = 0): Voice {
+    const clone: Voice = JSON.parse(JSON.stringify(voiceData));
+    clone.id = genId('v');
     clone.x = normalizedCoord(clone.x + offsetX);
     clone.y = normalizedCoord(clone.y + offsetY);
-    this.data.shapes.push(clone);
+    this.data.voices.push(clone);
     this._notify();
     return clone;
   }
 
-  duplicateShape(id: string, offsetX = 0, offsetY = 0): Shape | null {
-    const source = this.getShape(id);
+  duplicateVoice(id: string, offsetX = 0, offsetY = 0): Voice | null {
+    const source = this.getVoice(id);
     if (!source) return null;
-    return this.pasteShape(source, offsetX, offsetY);
+    return this.pasteVoice(source, offsetX, offsetY);
   }
 
-  removeShape(id: string): void {
-    const idx = this.data.shapes.findIndex((s) => s.id === id);
+  removeVoice(id: string): void {
+    const idx = this.data.voices.findIndex((s) => s.id === id);
     if (idx === -1) return;
-    this.data.shapes.splice(idx, 1);
+    this.data.voices.splice(idx, 1);
     this._notify();
   }
 
-  updateShape(id: string, updates: Partial<Shape>): void {
-    const shape = this.data.shapes.find((s) => s.id === id);
-    if (!shape) return;
-    Object.assign(shape, updates);
+  updateVoice(id: string, updates: Partial<Voice>): void {
+    const voice = this.data.voices.find((s) => s.id === id);
+    if (!voice) return;
+    Object.assign(voice, updates);
     this._notify();
   }
 
   updateFill(id: string, fill: Fill): void {
-    const shape = this.data.shapes.find((s) => s.id === id);
-    if (!shape) return;
-    shape.fill = fill;
+    const voice = this.data.voices.find((s) => s.id === id);
+    if (!voice) return;
+    voice.fill = fill;
     this._notify();
   }
 
-  getShape(id: string): Shape | undefined {
-    return this.data.shapes.find((s) => s.id === id);
+  getVoice(id: string): Voice | undefined {
+    return this.data.voices.find((s) => s.id === id);
   }
 
   moveLayer(id: string, direction: number): void {
-    const idx = this.data.shapes.findIndex((s) => s.id === id);
+    const idx = this.data.voices.findIndex((s) => s.id === id);
     if (idx === -1) return;
     const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= this.data.shapes.length) return;
-    const shape = this.data.shapes.splice(idx, 1)[0]!;
-    this.data.shapes.splice(newIdx, 0, shape);
+    if (newIdx < 0 || newIdx >= this.data.voices.length) return;
+    const voice = this.data.voices.splice(idx, 1)[0]!;
+    this.data.voices.splice(newIdx, 0, voice);
     this._notify();
   }
 
   bringToFront(id: string): void {
-    const idx = this.data.shapes.findIndex((s) => s.id === id);
-    if (idx === -1 || idx === this.data.shapes.length - 1) return;
-    const shape = this.data.shapes.splice(idx, 1)[0]!;
-    this.data.shapes.push(shape);
+    const idx = this.data.voices.findIndex((s) => s.id === id);
+    if (idx === -1 || idx === this.data.voices.length - 1) return;
+    const voice = this.data.voices.splice(idx, 1)[0]!;
+    this.data.voices.push(voice);
     this._notify();
   }
 
   sendToBack(id: string): void {
-    const idx = this.data.shapes.findIndex((s) => s.id === id);
+    const idx = this.data.voices.findIndex((s) => s.id === id);
     if (idx <= 0) return;
-    const shape = this.data.shapes.splice(idx, 1)[0]!;
-    this.data.shapes.unshift(shape);
+    const voice = this.data.voices.splice(idx, 1)[0]!;
+    this.data.voices.unshift(voice);
     this._notify();
   }
 
@@ -195,45 +156,30 @@ export class SigilStore {
     this._notify();
   }
 
-  addDecoration(deco: Decoration): Decoration {
-    this.data.decorations.push(deco);
+  addText(text: TextDecoration): TextDecoration {
+    this.data.texts.push(text);
     this._notify();
-    return deco;
+    return text;
   }
 
-  addSquiggle(points: [NormalizedCoord, NormalizedCoord][], color?: string): SquiggleDecoration {
-    const deco = createSquiggle(points, color);
-    return this.addDecoration(deco) as SquiggleDecoration;
+  addTextDeco(text: string, x: NormalizedCoord, y: NormalizedCoord): TextDecoration {
+    const deco = createTextDeco(text, x, y);
+    return this.addText(deco);
   }
 
-  addCurlicue(x: NormalizedCoord, y: NormalizedCoord, color?: string): CurlicueDecoration {
-    const deco = createCurlicue(x, y, color);
-    return this.addDecoration(deco) as CurlicueDecoration;
-  }
-
-  addTextDeco(
-    text: string,
-    x: NormalizedCoord,
-    y: NormalizedCoord,
-    color?: string,
-  ): TextDecoration {
-    const deco = createTextDeco(text, x, y, color);
-    return this.addDecoration(deco) as TextDecoration;
-  }
-
-  removeDecoration(id: string): void {
-    const idx = this.data.decorations.findIndex((d) => d.id === id);
+  removeText(id: string): void {
+    const idx = this.data.texts.findIndex((d) => d.id === id);
     if (idx === -1) return;
-    this.data.decorations.splice(idx, 1);
+    this.data.texts.splice(idx, 1);
     this._notify();
   }
 
-  getDecoration(id: string): Decoration | undefined {
-    return this.data.decorations.find((d) => d.id === id);
+  getText(id: string): TextDecoration | undefined {
+    return this.data.texts.find((d) => d.id === id);
   }
 
-  updateDecoration(id: string, updates: Partial<Decoration>): void {
-    const deco = this.getDecoration(id);
+  updateText(id: string, updates: Partial<TextDecoration>): void {
+    const deco = this.getText(id);
     if (!deco) return;
     Object.assign(deco, updates);
     this._notify();
