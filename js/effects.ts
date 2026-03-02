@@ -60,14 +60,14 @@ function createTremolo(ctx: AudioContext): AudioEffect {
   const input = ctx.createGain();
   const output = ctx.createGain();
   const tremoloGain = ctx.createGain();
-  tremoloGain.gain.value = 0.5;
+  tremoloGain.gain.value = 0.7;
 
   const lfo = ctx.createOscillator();
   lfo.type = 'sine';
   lfo.frequency.value = 6;
 
   const lfoDepth = ctx.createGain();
-  lfoDepth.gain.value = 0.5;
+  lfoDepth.gain.value = 0.3;
 
   lfo.connect(lfoDepth);
   lfoDepth.connect(tremoloGain.gain);
