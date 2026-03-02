@@ -3,16 +3,13 @@
 import { createEffect } from './effects.ts';
 import { createVocoderChain } from './vocoder.ts';
 import {
-  cents,
   normalizedCoord,
-  type ShapeType,
+  type WaveformType,
   type Shape,
   type Fill,
   type SigilData,
   type Envelope,
   type NormalizedCoord,
-  type Degrees,
-  type Cents,
 } from './types.ts';
 
 // ---- Pentatonic scale ----
@@ -86,46 +83,50 @@ export function sizeToGain(size: NormalizedCoord): number {
 
 // Area of a shape as a fraction of the 1×1 normalized canvas.
 // All shapes use r = size/2 as bounding radius.
-export function shapeAreaFraction(type: ShapeType, size: NormalizedCoord): number {
+export function shapeAreaFraction(waveform: WaveformType, size: NormalizedCoord): number {
   const halfSize = size / 2;
-  switch (type) {
-    case 'circle':
+  switch (waveform) {
+    case 'sine':
       return Math.PI * halfSize * halfSize;
-    case 'square':
+    case 'pulse':
       return size * size; // side = 2r = size
-    case 'triangle':
+    case 'blend':
       // Equilateral inscribed in circle of radius size/2
       return ((3 * Math.sqrt(3)) / 4) * halfSize * halfSize;
-    default:
-      return size * size;
   }
 }
 
 // Map a shape's canvas area fraction to gain.
 // Max area for a shape at size 0.9: square = 0.81, circle ≈ 0.636, triangle ≈ 0.263.
-export function areaToGain(type: ShapeType, size: NormalizedCoord): number {
-  const fraction = shapeAreaFraction(type, size);
+export function areaToGain(waveform: WaveformType, size: NormalizedCoord): number {
+  const fraction = shapeAreaFraction(waveform, size);
   return Math.min(0.8, 0.05 + fraction);
 }
 
-// Map rotation (0-360) to a parameter for wave shaping
-export function rotationToParam(rotation: Degrees): number {
-  return rotation / 360; // 0.0 to 1.0
+// Map rotation to a periodic timbre parameter.
+// Each waveform's visual symmetry period determines the audio cycle:
+// a square repeats every 90°, a triangle every 120°.
+// Uses a half-sine curve so that visually identical orientations produce
+// identical audio, and the mapping is smooth with a peak at mid-period.
+const WAVEFORM_PERIOD: Record<string, number> = {
+  pulse: 90,
+  blend: 120,
+};
+
+export function rotationToTimbre(rotation: number, waveform: string): number {
+  const period = WAVEFORM_PERIOD[waveform];
+  if (!period) return 0; // sine has no timbre
+  const phase = ((rotation % period) + period) % period;
+  return Math.sin((Math.PI * phase) / period);
 }
 
-export function curlicuesToDetune(count: number): Cents {
-  return cents(count * 15); // 15 cents per curlicue
-}
-
-function oscillatorType(shapeType: ShapeType): OscillatorType {
-  switch (shapeType) {
-    case 'triangle':
+function oscillatorType(waveform: WaveformType): OscillatorType {
+  switch (waveform) {
+    case 'blend':
       return 'sawtooth';
-    case 'square':
+    case 'pulse':
       return 'square';
-    case 'circle':
-      return 'sine';
-    default:
+    case 'sine':
       return 'sine';
   }
 }
@@ -134,14 +135,13 @@ function oscillatorType(shapeType: ShapeType): OscillatorType {
 // higher RMS *and* excite more auditory critical bands than a pure sine,
 // making them sound louder at the same amplitude.  Sine needs a boost (~3 dB)
 // to match perceived loudness; square and sawtooth are attenuated.
-export function waveformGain(shapeType: ShapeType): number {
-  switch (shapeType) {
-    case 'square':
+export function waveformGain(waveform: WaveformType): number {
+  switch (waveform) {
+    case 'pulse':
       return 0.7; // square RMS ≈ 1.41× sine, rich harmonics
-    case 'triangle':
+    case 'blend':
       return 0.85; // sawtooth RMS ≈ 1.15× sine
-    case 'circle':
-    default:
+    case 'sine':
       return 1.4; // sine is single-partial; boost to match perceived loudness
   }
 }
@@ -226,14 +226,14 @@ function applyFormantFilter(
   if (fill.mode === 'linear') {
     // Crossfade formants between primary and secondary colors.
     // Gradient angle sets the blend: 0° = primary, 90° = 50/50, 180° = secondary.
-    const blend = Math.abs(Math.sin(((fill.gradAngle % 360) * Math.PI) / 360));
+    const blend = (((fill.gradAngle % 360) + 360) % 360) / 360;
     h = h + (fill.h2 - h) * blend;
     s = s + (fill.s2 - s) * blend;
     l = l + (fill.l2 - l) * blend;
   } else if (fill.mode === 'radial') {
-    // Radial gradient: widen the formant Q to blend both colors' character
-    const avgS = (s + fill.s2) / 2;
-    s = avgS;
+    h = (h + fill.h2) / 2;
+    s = (s + fill.s2) / 2;
+    l = (l + fill.l2) / 2;
   }
 
   const formants = hueToFormants(h);
@@ -327,16 +327,14 @@ type AnyVoice = Voice | TextVoice;
 
 // How much EQ help each waveform needs to be audible in a mix.
 // Sine has no harmonics and gets easily masked; rich waveforms cut through.
-function spectralNeed(shapeType: ShapeType): number {
-  switch (shapeType) {
-    case 'circle':
+function spectralNeed(waveform: WaveformType): number {
+  switch (waveform) {
+    case 'sine':
       return 1.0; // sine: single partial, easily masked
-    case 'triangle':
+    case 'blend':
       return 0.3; // sawtooth blend: moderate harmonics
-    case 'square':
+    case 'pulse':
       return 0.2; // pulse: rich harmonics, strong presence
-    default:
-      return 0.5;
   }
 }
 

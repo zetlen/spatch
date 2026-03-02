@@ -3,11 +3,10 @@ import {
   yToFrequency,
   xToPan,
   sizeToGain,
-  rotationToParam,
+  rotationToTimbre,
   waveformGain,
   shapeAreaFraction,
   areaToGain,
-  curlicuesToDetune,
   snapYToNote,
   hueToFormants,
 } from '../../js/audio.ts';
@@ -119,64 +118,94 @@ describe('sizeToGain', () => {
   });
 });
 
-describe('rotationToParam', () => {
-  test('rotation=0 returns 0.0', () => {
-    expect(rotationToParam(0)).toBe(0);
+describe('rotationToTimbre', () => {
+  test('pulse (square): 0° and 90° both return 0 (period boundaries)', () => {
+    expect(rotationToTimbre(0, 'pulse')).toBeCloseTo(0);
+    expect(rotationToTimbre(90, 'pulse')).toBeCloseTo(0);
   });
 
-  test('rotation=180 returns 0.5', () => {
-    expect(rotationToParam(180)).toBe(0.5);
+  test('pulse (square): 45° returns peak 1.0', () => {
+    expect(rotationToTimbre(45, 'pulse')).toBeCloseTo(1.0);
   });
 
-  test('rotation=360 returns 1.0', () => {
-    expect(rotationToParam(360)).toBeCloseTo(1.0);
+  test('pulse (square): 10° and 80° produce the same value (mirror symmetry)', () => {
+    const t10 = rotationToTimbre(10, 'pulse');
+    const t80 = rotationToTimbre(80, 'pulse');
+    expect(t10).toBeCloseTo(t80, 10);
   });
 
-  test('rotation=90 returns 0.25', () => {
-    expect(rotationToParam(90)).toBeCloseTo(0.25);
+  test('blend (triangle): 0° and 120° both return 0 (period boundaries)', () => {
+    expect(rotationToTimbre(0, 'blend')).toBeCloseTo(0);
+    expect(rotationToTimbre(120, 'blend')).toBeCloseTo(0);
+  });
+
+  test('blend (triangle): 60° returns peak 1.0', () => {
+    expect(rotationToTimbre(60, 'blend')).toBeCloseTo(1.0);
+  });
+
+  test('blend (triangle): 20° and 100° produce the same value (mirror symmetry)', () => {
+    const t20 = rotationToTimbre(20, 'blend');
+    const t100 = rotationToTimbre(100, 'blend');
+    expect(t20).toBeCloseTo(t100, 10);
+  });
+
+  test('sine always returns 0 (no timbre parameter)', () => {
+    expect(rotationToTimbre(0, 'sine')).toBe(0);
+    expect(rotationToTimbre(45, 'sine')).toBe(0);
+    expect(rotationToTimbre(180, 'sine')).toBe(0);
+  });
+
+  test('all values are in [0, 1]', () => {
+    for (const waveform of ['pulse', 'blend']) {
+      for (let r = 0; r < 360; r += 5) {
+        const t = rotationToTimbre(r, waveform);
+        expect(t).toBeGreaterThanOrEqual(0);
+        expect(t).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });
 
 describe('waveformGain', () => {
-  test('circle (sine) is boosted for perceived loudness matching', () => {
-    expect(waveformGain('circle')).toBe(1.4);
+  test('sine is boosted for perceived loudness matching', () => {
+    expect(waveformGain('sine')).toBe(1.4);
   });
 
-  test('square is attenuated below 1.0', () => {
-    expect(waveformGain('square')).toBeLessThan(1.0);
-    expect(waveformGain('square')).toBeGreaterThan(0);
+  test('pulse is attenuated below 1.0', () => {
+    expect(waveformGain('pulse')).toBeLessThan(1.0);
+    expect(waveformGain('pulse')).toBeGreaterThan(0);
   });
 
-  test('triangle (sawtooth) is attenuated below sine', () => {
-    expect(waveformGain('triangle')).toBeLessThan(waveformGain('circle'));
-    expect(waveformGain('triangle')).toBeGreaterThan(0);
+  test('blend (sawtooth) is attenuated below sine', () => {
+    expect(waveformGain('blend')).toBeLessThan(waveformGain('sine'));
+    expect(waveformGain('blend')).toBeGreaterThan(0);
   });
 
-  test('square is attenuated more than triangle', () => {
-    expect(waveformGain('square')).toBeLessThan(waveformGain('triangle'));
+  test('pulse is attenuated more than blend', () => {
+    expect(waveformGain('pulse')).toBeLessThan(waveformGain('blend'));
   });
 });
 
 describe('shapeAreaFraction', () => {
-  test('circle area = π × (size/2)²', () => {
-    expect(shapeAreaFraction('circle', 0.5)).toBeCloseTo(Math.PI * 0.25 * 0.25);
+  test('sine (circle) area = π × (size/2)²', () => {
+    expect(shapeAreaFraction('sine', 0.5)).toBeCloseTo(Math.PI * 0.25 * 0.25);
   });
 
-  test('square area = size²', () => {
-    expect(shapeAreaFraction('square', 0.5)).toBeCloseTo(0.25);
+  test('pulse (square) area = size²', () => {
+    expect(shapeAreaFraction('pulse', 0.5)).toBeCloseTo(0.25);
   });
 
-  test('triangle area < circle area < square area at same size', () => {
+  test('blend (triangle) area < sine (circle) area < pulse (square) area at same size', () => {
     const size = 0.4;
-    const tri = shapeAreaFraction('triangle', size);
-    const circ = shapeAreaFraction('circle', size);
-    const sq = shapeAreaFraction('square', size);
+    const tri = shapeAreaFraction('blend', size);
+    const circ = shapeAreaFraction('sine', size);
+    const sq = shapeAreaFraction('pulse', size);
     expect(tri).toBeLessThan(circ);
     expect(circ).toBeLessThan(sq);
   });
 
   test('area scales with size squared', () => {
-    for (const type of ['circle', 'square', 'triangle']) {
+    for (const type of ['sine', 'pulse', 'blend']) {
       const small = shapeAreaFraction(type, 0.2);
       const big = shapeAreaFraction(type, 0.4);
       // Doubling size should quadruple area
@@ -187,15 +216,15 @@ describe('shapeAreaFraction', () => {
 
 describe('areaToGain', () => {
   test('tiny shape returns near-minimum gain', () => {
-    expect(areaToGain('circle', 0.025)).toBeCloseTo(0.05, 1);
+    expect(areaToGain('sine', 0.025)).toBeCloseTo(0.05, 1);
   });
 
   test('large shape caps at 0.8', () => {
-    expect(areaToGain('square', 0.95)).toBe(0.8);
+    expect(areaToGain('pulse', 0.95)).toBe(0.8);
   });
 
-  test('gain increases with size for all shape types', () => {
-    for (const type of ['circle', 'square', 'triangle']) {
+  test('gain increases with size for all waveform types', () => {
+    for (const type of ['sine', 'pulse', 'blend']) {
       const small = areaToGain(type, 0.2);
       const big = areaToGain(type, 0.5);
       expect(big).toBeGreaterThan(small);
@@ -204,21 +233,10 @@ describe('areaToGain', () => {
 
   test('same-size shapes produce gain proportional to visual area', () => {
     const size = 0.4;
-    const circGain = areaToGain('circle', size);
-    const sqGain = areaToGain('square', size);
-    // Square has more area, so more gain
-    expect(sqGain).toBeGreaterThan(circGain);
-  });
-});
-
-describe('curlicuesToDetune', () => {
-  test('0 curlicues returns 0 cents', () => {
-    expect(curlicuesToDetune(0)).toBe(0);
-  });
-
-  test('multiple curlicues add 15 cents each', () => {
-    expect(curlicuesToDetune(1)).toBe(15);
-    expect(curlicuesToDetune(3)).toBe(45);
+    const sineGain = areaToGain('sine', size);
+    const pulseGain = areaToGain('pulse', size);
+    // Pulse (square) has more area, so more gain
+    expect(pulseGain).toBeGreaterThan(sineGain);
   });
 });
 
