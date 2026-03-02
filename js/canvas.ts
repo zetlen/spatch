@@ -145,6 +145,31 @@ function drawVoice(
     applyPattern(ctx, voice, canvasSize);
   }
 
+  // Draw border inside the clipped shape (clip shows only the inner half
+  // of edge strokes, creating a natural inset effect)
+  if (voice.border) {
+    const shape = waveformShape(voice.waveform);
+    const maxW = r * 0.12;
+    const w = Math.max(1, voice.border.thickness * maxW);
+    ctx.strokeStyle = voice.border.color;
+
+    // Outer border: stroke at shape edge, clip shows inner half
+    ctx.lineWidth = w * 2;
+    buildShapePathAt(ctx, shape, r);
+    ctx.stroke();
+
+    if (voice.border.double) {
+      // Inner border: concentric shape inset past outer + gap
+      const gap = w * 0.6;
+      const innerR = r - w - gap;
+      if (innerR > 0) {
+        ctx.lineWidth = w;
+        buildShapePathAt(ctx, shape, innerR);
+        ctx.stroke();
+      }
+    }
+  }
+
   ctx.restore();
 
   const glowColor = isPlaying ? 'rgba(0, 240, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)';
@@ -185,7 +210,15 @@ export function buildShapePath(
   canvasSize: number,
 ): void {
   const r = (voice.size / 2) * canvasSize;
-  const shape = waveformShape(voice.waveform);
+  buildShapePathAt(ctx, waveformShape(voice.waveform), r);
+}
+
+/** Build a shape path centered at origin with a given radius. */
+function buildShapePathAt(
+  ctx: CanvasRenderingContext2D,
+  shape: 'circle' | 'square' | 'triangle',
+  r: number,
+): void {
   ctx.beginPath();
   switch (shape) {
     case 'circle':
