@@ -39,6 +39,15 @@ export type WaveformType = 'sine' | 'pulse' | 'blend';
 
 export type PatternType = 'stripes' | 'checker' | 'noise' | 'gradient' | 'rough';
 
+export type BlendMode =
+  | 'soft-light'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'color-burn'
+  | 'difference'
+  | 'exclusion';
+
 export type FillMode = 'solid' | 'radial' | 'linear';
 
 interface FillBase {
@@ -138,6 +147,7 @@ interface VoiceBase {
   size: NormalizedCoord;
   fill: Fill;
   effect: PatternType | null;
+  blend: BlendMode;
 }
 
 export interface SineVoice extends VoiceBase {
