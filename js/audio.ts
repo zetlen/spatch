@@ -211,6 +211,7 @@ function applyFormantFilter(
   f2Node: BiquadFilterNode,
   brightnessNode: BiquadFilterNode,
   fill: Fill,
+  waveform: WaveformType = 'pulse',
 ) {
   let h = fill.h;
   let s = fill.s;
@@ -226,7 +227,10 @@ function applyFormantFilter(
   }
 
   const formants = hueToFormants(h);
-  const q = 1 + (s / 100) * 12; // 1 to 13
+  // Sine has no harmonics — high Q kills the signal when the fundamental
+  // is far from formant centers. Cap Q lower for sine (#82).
+  const maxQ = waveform === 'sine' ? 4 : 12;
+  const q = 1 + (s / 100) * maxQ;
 
   f1Node.frequency.value = formants.f1;
   f1Node.Q.value = q;
@@ -695,6 +699,7 @@ export class AudioEngine {
         audioVoice.formantF2,
         audioVoice.brightness,
         voice.fill,
+        voice.waveform,
       );
     }
 
@@ -876,7 +881,7 @@ export class AudioEngine {
     brightness.type = 'highshelf';
     brightness.frequency.value = 2000;
 
-    applyFormantFilter(formantF1, formantF2, brightness, voice.fill);
+    applyFormantFilter(formantF1, formantF2, brightness, voice.fill, voice.waveform);
 
     const panner = ctx.createStereoPanner();
     panner.pan.value = xToPan(voice.x);
@@ -918,16 +923,20 @@ export class AudioEngine {
       const octaveFreq = freq * Math.pow(2, direction * octaveShift);
 
       octaveOsc = ctx.createOscillator();
-      octaveOsc.type = 'sine';
+      // Match oscillator type to voice waveform (#83)
+      const oscTypeMap: Record<WaveformType, OscillatorType> = {
+        sine: 'sine',
+        pulse: 'square',
+        blend: 'sawtooth',
+      };
+      octaveOsc.type = oscTypeMap[voice.waveform];
       octaveOsc.frequency.value = octaveFreq;
 
       const octaveGain = ctx.createGain();
-      octaveGain.gain.value =
-        voice.border.thickness *
-        areaToGain(voice.waveform, voice.size) *
-        waveformGain(voice.waveform);
+      octaveGain.gain.value = voice.border.thickness;
       octaveOsc.connect(octaveGain);
-      octaveGain.connect(gain); // feeds into same signal chain
+      // Connect to formantMixer to avoid double gain application (#81)
+      octaveGain.connect(formantMixer);
     }
 
     const borderKey = voice.border
