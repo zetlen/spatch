@@ -6,11 +6,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    container:
-      image: oven/bun:latest
     steps:
-      - run: apt-get update && apt-get install -y --no-install-recommends git
+      - run: curl -fsSL https://bun.sh/install | bash
       - run: |
+          export BUN_INSTALL="$HOME/.bun"
+          export PATH="$BUN_INSTALL/bin:$PATH"
           git config --global --add safe.directory /sites/spatch
           cd /sites/spatch
           git remote set-url origin https://$DEPLOY_TOKEN@got.colonpipe.org/zetlen/spatch.git
