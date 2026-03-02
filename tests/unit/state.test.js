@@ -195,6 +195,57 @@ describe('SigilStore blend mode', () => {
   });
 });
 
+describe('SigilStore border', () => {
+  test('voices default to null border', () => {
+    const store = new SigilStore();
+    const voice = store.addVoice('sine', 0.5, 0.5);
+    expect(voice.border).toBeNull();
+  });
+
+  test('updateVoice can set border', () => {
+    const store = new SigilStore();
+    const voice = store.addVoice('sine', 0.5, 0.5);
+    store.updateVoice(voice.id, {
+      border: { color: 'white', double: false, thickness: 0.5 },
+    });
+
+    const updated = store.getVoice(voice.id);
+    expect(updated.border).not.toBeNull();
+    expect(updated.border.color).toBe('white');
+    expect(updated.border.double).toBe(false);
+    expect(updated.border.thickness).toBe(0.5);
+  });
+
+  test('updateVoice can remove border', () => {
+    const store = new SigilStore();
+    const voice = store.addVoice('sine', 0.5, 0.5);
+    store.updateVoice(voice.id, {
+      border: { color: 'black', double: true, thickness: 0.8 },
+    });
+    store.updateVoice(voice.id, { border: null });
+
+    const updated = store.getVoice(voice.id);
+    expect(updated.border).toBeNull();
+  });
+
+  test('border persists through undo/redo', () => {
+    const store = new SigilStore();
+    const undo = new UndoManager(store);
+    const voice = store.addVoice('sine', 0.5, 0.5);
+    undo.snapshot();
+    store.updateVoice(voice.id, {
+      border: { color: 'white', double: false, thickness: 0.6 },
+    });
+
+    expect(store.getVoice(voice.id).border).not.toBeNull();
+    undo.undo();
+    expect(store.data.voices[0].border).toBeNull();
+    undo.redo();
+    expect(store.data.voices[0].border.color).toBe('white');
+    expect(store.data.voices[0].border.thickness).toBe(0.6);
+  });
+});
+
 describe('SigilStore onChange listener', () => {
   test('listener fires on addVoice', () => {
     const store = new SigilStore();

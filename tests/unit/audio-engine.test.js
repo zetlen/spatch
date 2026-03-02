@@ -98,6 +98,7 @@ function makeVoice(id, waveform = 'sine', overrides = {}) {
     fill: { mode: 'solid', h: 200, s: 80, l: 50 },
     effect: null,
     blend: 'soft-light',
+    border: null,
     ...overrides,
   };
   if (waveform === 'pulse' || waveform === 'blend') {
@@ -354,6 +355,108 @@ describe('AudioEngine — blend effects', () => {
       expect(engine.activeVoices.length).toBe(1);
       expect(engine.activeVoices[0].currentBlend).toBe(blend);
       engine.stop();
+    }
+  });
+});
+
+describe('AudioEngine — border / octave doubling', () => {
+  let engine;
+
+  beforeEach(async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+  });
+
+  async function startWith(voices) {
+    const state = makeSigilState(voices);
+    await engine.play(state, state.envelope);
+    return state;
+  }
+
+  test('voice without border has null octaveOsc', async () => {
+    const voice = makeVoice('a', 'sine', { border: null });
+    await startWith([voice]);
+
+    const audioVoice = engine.activeVoices[0];
+    expect(audioVoice.octaveOsc).toBeNull();
+    expect(audioVoice.currentBorder).toBeNull();
+  });
+
+  test('voice with border has octaveOsc', async () => {
+    const voice = makeVoice('a', 'sine', {
+      border: { color: 'white', double: false, thickness: 0.5 },
+    });
+    await startWith([voice]);
+
+    const audioVoice = engine.activeVoices[0];
+    expect(audioVoice.octaveOsc).not.toBeNull();
+    expect(audioVoice.currentBorder).toBe('white:0:0.5');
+  });
+
+  test('border change triggers voice rebuild', async () => {
+    const voice = makeVoice('a', 'sine', {
+      border: { color: 'white', double: false, thickness: 0.5 },
+    });
+    await startWith([voice]);
+
+    const originalVoice = engine.activeVoices[0];
+
+    // Change border color
+    const updated = makeVoice('a', 'sine', {
+      border: { color: 'black', double: false, thickness: 0.5 },
+    });
+    engine.updateVoices(makeSigilState([updated]));
+
+    const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(newVoice).not.toBe(originalVoice);
+    expect(newVoice.currentBorder).toBe('black:0:0.5');
+  });
+
+  test('adding border triggers voice rebuild', async () => {
+    const voice = makeVoice('a', 'sine', { border: null });
+    await startWith([voice]);
+
+    const originalVoice = engine.activeVoices[0];
+
+    // Add border
+    const updated = makeVoice('a', 'sine', {
+      border: { color: 'white', double: true, thickness: 0.7 },
+    });
+    engine.updateVoices(makeSigilState([updated]));
+
+    const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(newVoice).not.toBe(originalVoice);
+    expect(newVoice.octaveOsc).not.toBeNull();
+    expect(newVoice.currentBorder).toBe('white:1:0.7');
+  });
+
+  test('removing border triggers voice rebuild', async () => {
+    const voice = makeVoice('a', 'sine', {
+      border: { color: 'white', double: false, thickness: 0.5 },
+    });
+    await startWith([voice]);
+
+    // Remove border
+    const updated = makeVoice('a', 'sine', { border: null });
+    engine.updateVoices(makeSigilState([updated]));
+
+    const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(newVoice.octaveOsc).toBeNull();
+    expect(newVoice.currentBorder).toBeNull();
+  });
+
+  test('border works with all waveform types', async () => {
+    const border = { color: 'white', double: false, thickness: 0.5 };
+    const voices = [
+      makeVoice('circ', 'sine', { border }),
+      makeVoice('sq', 'pulse', { border }),
+      makeVoice('tri', 'blend', { border }),
+    ];
+    await startWith(voices);
+
+    for (const av of engine.activeVoices) {
+      expect(av.octaveOsc).not.toBeNull();
     }
   });
 });
