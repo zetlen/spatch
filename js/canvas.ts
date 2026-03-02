@@ -6,8 +6,6 @@ import { getDecoBounds } from './shapes.ts';
 import type { Voice, TextDecoration, SigilData, WaveformType } from './types.ts';
 import { waveformShape } from './types.ts';
 
-const CANVAS_BG = '#2a2a2a';
-
 // Offscreen canvas for blend-mode compositing. Shapes are drawn here using
 // their blend modes against a transparent background so they blend with each
 // other but not with the dark canvas background. The result is composited
@@ -63,9 +61,6 @@ export function render(
   selectedDecoId?: string | null,
 ): void {
   ctx.clearRect(0, 0, canvasSize, canvasSize);
-
-  ctx.fillStyle = CANVAS_BG;
-  ctx.fillRect(0, 0, canvasSize, canvasSize);
 
   drawChromaticGuides(ctx, canvasSize);
 

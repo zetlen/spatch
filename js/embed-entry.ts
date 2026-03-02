@@ -19,12 +19,27 @@ if (!hash) {
     const sigil = state; // narrow for closures
     const canvas = document.getElementById('c') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d')!;
+    const frame = document.getElementById('canvas-frame')!;
     const audio = new AudioEngine();
+
+    // Apply ADSR border radius to frame (static in embed — only needs to run once)
+    updateCanvasBorderRadius(frame, sigil.envelope, 800);
+
+    // Apply reverb shadow to frame
+    if (sigil.reverb) {
+      const maxBlur = 800 * 0.15;
+      const blur = sigil.reverb.depth * maxBlur;
+      const alpha = 0.3 + sigil.reverb.depth * 0.5;
+      const color =
+        sigil.reverb.style === 'glow'
+          ? `rgba(255,255,255,${alpha.toFixed(2)})`
+          : `rgba(0,0,0,${alpha.toFixed(2)})`;
+      frame.style.boxShadow = `inset 0 0 ${blur.toFixed(1)}px ${color}`;
+    }
 
     // Render loop: continuously re-render so playback glow effects animate
     function renderLoop(): void {
       render(ctx, sigil, 800, null, audio.playingShapeIds);
-      updateCanvasBorderRadius(canvas, sigil.envelope, 800);
       requestAnimationFrame(renderLoop);
     }
     renderLoop();

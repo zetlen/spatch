@@ -218,16 +218,24 @@ select {
 
 #canvas-wrap {
   position: relative;
-  /* dynamically sized by JS to maintain square aspect ratio */
 }
 
-#sigil-canvas {
-  display: block;
+#canvas-frame {
+  position: absolute;
+  inset: 0;
   background: #2a2a2a;
-  /* ADSR corners will be set via JS */
   border-width: 2px;
   border-style: solid;
   border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+  transition:
+    box-shadow 0.15s,
+    border-radius 0.15s;
+}
+
+#sigil-canvas {
+  position: relative;
+  display: block;
+  background: transparent;
   image-rendering: auto;
 }
 
@@ -472,6 +480,89 @@ select {
 }
 
 #btn-border.has-border {
+  background: var(--active-bg);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+}
+
+/* ---- Reverb Panel ---- */
+
+#reverb-panel {
+  position: fixed;
+  bottom: 50px;
+  left: 12px;
+  top: auto;
+  transform: none;
+}
+
+.reverb-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+}
+
+.reverb-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reverb-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.reverb-style-btn {
+  background: var(--bg-toolbar);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
+  color: var(--text-muted);
+  padding: 2px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.reverb-style-btn.active {
+  color: var(--text-primary);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+  background: var(--active-bg);
+}
+
+.reverb-slider {
+  flex: 1;
+  height: 4px;
+}
+
+.reverb-remove-btn {
+  background: transparent;
+  border: 1px solid rgba(204, 51, 68, 0.3);
+  color: var(--danger);
+  padding: 3px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+  align-self: flex-end;
+}
+
+.reverb-remove-btn:hover {
+  background: rgba(204, 51, 68, 0.12);
+  border-color: var(--danger);
+}
+
+#btn-reverb.has-reverb {
   background: var(--active-bg);
   border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
 }

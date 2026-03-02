@@ -2,7 +2,15 @@
 
 import { getSwatchColor, drawSLSquare, drawAngleDial } from './colors.ts';
 import type { SigilStore, UndoManager } from './state.ts';
-import type { Voice, FillDraft, FillMode, PatternType, BlendMode, BorderColor } from './types.ts';
+import type {
+  Voice,
+  FillDraft,
+  FillMode,
+  PatternType,
+  BlendMode,
+  BorderColor,
+  ReverbStyle,
+} from './types.ts';
 import { normalizedCoord, fillToFillDraft, fillDraftToFill } from './types.ts';
 
 export class Toolbar {
@@ -41,6 +49,7 @@ export class Toolbar {
     this._bindFillMode();
     this._bindBlendSelector();
     this._bindBorderPanel();
+    this._bindReverbPanel();
     this._updateToolActive();
   }
 
@@ -477,5 +486,96 @@ export class Toolbar {
     this._updatePatternActive();
     this._updateBlendSelector();
     this._updateBorderPanel();
+    this._updateReverbPanel();
+  }
+
+  _bindReverbPanel(): void {
+    const btn = document.getElementById('btn-reverb');
+    const panel = document.getElementById('reverb-panel');
+    if (!btn || !panel) return;
+
+    // Toggle reverb on/off and open/close panel
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+
+      if (this.store.data.reverb) {
+        // Has reverb — toggle panel open/close
+        panel.classList.toggle('hidden');
+      } else {
+        // No reverb — add one and open panel
+        this.undo.snapshot();
+        this.store.updateReverb({ depth: normalizedCoord(0.5), style: 'glow' });
+        panel.classList.remove('hidden');
+        this._updateReverbPanel();
+      }
+    });
+
+    // Close panel on outside click
+    document.addEventListener('click', (e) => {
+      if (!panel.contains(e.target as Node) && e.target !== btn) {
+        panel.classList.add('hidden');
+      }
+    });
+
+    // Style toggle buttons
+    panel.querySelectorAll<HTMLElement>('.reverb-style-btn').forEach((styleBtn) => {
+      styleBtn.addEventListener('click', () => {
+        if (!this.store.data.reverb) return;
+        this.undo.snapshot();
+        this.store.updateReverb({
+          ...this.store.data.reverb,
+          style: styleBtn.dataset.reverbStyle as ReverbStyle,
+        });
+        this._updateReverbPanel();
+      });
+    });
+
+    // Remove reverb button
+    const removeBtn = document.getElementById('btn-remove-reverb');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        this.undo.snapshot();
+        this.store.updateReverb(null);
+        panel.classList.add('hidden');
+        this._updateReverbPanel();
+      });
+    }
+
+    // Depth slider
+    const slider = document.getElementById('reverb-depth') as HTMLInputElement | null;
+    if (slider) {
+      slider.addEventListener('input', () => {
+        if (!this.store.data.reverb) return;
+        this.store.updateReverb({
+          ...this.store.data.reverb,
+          depth: normalizedCoord(parseInt(slider.value) / 100),
+        });
+      });
+      // Snapshot on pointerdown for undo
+      slider.addEventListener('pointerdown', () => {
+        this.undo.snapshot();
+      });
+    }
+  }
+
+  _updateReverbPanel(): void {
+    const btn = document.getElementById('btn-reverb');
+    const hasReverb = this.store.data.reverb != null;
+
+    btn?.classList.toggle('has-reverb', hasReverb);
+
+    if (!hasReverb) return;
+    const reverb = this.store.data.reverb!;
+
+    // Update style button active state
+    document.querySelectorAll<HTMLElement>('.reverb-style-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.reverbStyle === reverb.style);
+    });
+
+    // Update depth slider value
+    const slider = document.getElementById('reverb-depth') as HTMLInputElement | null;
+    if (slider) {
+      slider.value = String(Math.round(reverb.depth * 100));
+    }
   }
 }

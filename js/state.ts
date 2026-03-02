@@ -11,6 +11,7 @@ import {
   type Fill,
   type NormalizedCoord,
   type BlendMode,
+  type Reverb,
 } from './types.ts';
 
 let _idCounter = 0;
@@ -23,6 +24,7 @@ export function createDefaultState(): SigilData {
     envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
     voices: [],
     texts: [],
+    reverb: null,
   };
 }
 
@@ -132,6 +134,11 @@ export class SigilStore {
 
   updateEnvelope(updates: Partial<Envelope>): void {
     Object.assign(this.data.envelope, updates);
+    this._notify();
+  }
+
+  updateReverb(reverb: Reverb | null): void {
+    this.data.reverb = reverb;
     this._notify();
   }
 

@@ -7,6 +7,7 @@ describe('generateEmbedSnippet', () => {
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
       voices: [],
       texts: [],
+      reverb: null,
     };
     const snippet = generateEmbedSnippet(state, 'https://example.com/embed.html');
     expect(snippet).toContain('<iframe');
@@ -21,6 +22,7 @@ describe('generateEmbedSnippet', () => {
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
       voices: [],
       texts: [],
+      reverb: null,
     };
     const snippet = generateEmbedSnippet(state, 'https://my-site.com/embed.html');
     expect(snippet).toContain('src="https://my-site.com/embed.html#');

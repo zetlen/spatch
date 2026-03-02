@@ -28,6 +28,7 @@ describe('hitTestShapes', () => {
       voices: [makeVoice({ id: 'c1', waveform: 'sine', x: 0.5, y: 0.5, size: 0.12 })],
       texts: [],
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
+      reverb: null,
     };
     // Center of shape at (400, 400), radius = 0.06 * 800 = 48px
     const result = hitTestShapes(state, 400, 400, CANVAS_SIZE);
@@ -39,6 +40,7 @@ describe('hitTestShapes', () => {
       voices: [makeVoice({ id: 'c1', x: 0.5, y: 0.5, size: 0.12 })],
       texts: [],
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
+      reverb: null,
     };
     // Click far from shape
     const result = hitTestShapes(state, 10, 10, CANVAS_SIZE);
@@ -53,6 +55,7 @@ describe('hitTestShapes', () => {
       ],
       texts: [],
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
+      reverb: null,
     };
     const result = hitTestShapes(state, 400, 400, CANVAS_SIZE);
     expect(result).toBe('top');
@@ -63,6 +66,7 @@ describe('hitTestShapes', () => {
       voices: [makeVoice({ id: 'sq1', waveform: 'pulse', x: 0.5, y: 0.5, size: 0.2, timbre: 0 })],
       texts: [],
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
+      reverb: null,
     };
     const result = hitTestShapes(state, 400, 400, CANVAS_SIZE);
     expect(result).toBe('sq1');
@@ -73,6 +77,7 @@ describe('hitTestShapes', () => {
       voices: [makeVoice({ id: 'tri1', waveform: 'blend', x: 0.5, y: 0.5, size: 0.3, timbre: 0 })],
       texts: [],
       envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
+      reverb: null,
     };
     const result = hitTestShapes(state, 400, 400, CANVAS_SIZE);
     expect(result).toBe('tri1');

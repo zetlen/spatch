@@ -141,14 +141,27 @@ design rationale and enumeration of past violations.
   x (pan), y (pitch), size (carrier volume). All text renders black. Every
   field is bijective.
 
-- **ADSR envelope** is encoded as the canvas corner radii. Drag corners to adjust.
-  Bottom-left = attack, top-left = decay, top-right = sustain, bottom-right = release.
+- **Reverb** is a global effect on `SigilData` (not per-voice). The canvas
+  frame gains an inset shadow (CSS `box-shadow: inset`) that maps to master
+  reverb via a ConvolverNode with algorithmic impulse response. `depth`
+  controls wet/dry mix and shadow intensity. `style` is either `glow` (short
+  bright IR, white shadow) or `dim` (long dark IR, black shadow).
+
+- **Canvas frame**: The canvas is split into `#canvas-frame` (div) and
+  `#sigil-canvas` (canvas). The frame div owns the dark background,
+  border-radius (ADSR corners), bevel border, and inset shadow (reverb).
+  The canvas is transparent and draws shapes only, ensuring they appear
+  above the shadow.
+
+- **ADSR envelope** is encoded as the canvas frame corner radii. Drag
+  corners to adjust. Bottom-left = attack, top-left = decay, top-right =
+  sustain, bottom-right = release.
 
 - **Play modes**: normal (press-and-hold), latch (click to toggle), loop
   (auto-repeating). Shift+drag = arpeggio mode.
 
 - **State** lives in `SigilStore` (js/state.ts). It holds voices, text
-  decorations, and envelope. All mutations go through this class. `UndoManager`
+  decorations, envelope, and reverb. All mutations go through this class. `UndoManager`
   wraps the store and provides undo/redo via JSON snapshots. Selection state is
   app-level, not in the store.
 
@@ -219,5 +232,10 @@ files anywhere else.**
 - To add a new field to any type: you MUST provide both a visual rendering path
   and an audio mapping. If either is missing, the field violates the bijection
   principle and must not be added.
+- To modify reverb behavior: update `Reverb` type in `types.ts`, update
+  `app.ts:updateReverbShadow` (visual rendering), `audio.ts:updateReverb`
+  (ConvolverNode + IR generation), `serialize.ts` (pack/unpack), and
+  `toolbar.ts` (reverb panel bindings). Reverb is global — not per-voice.
 - The `embed.html` page imports the same modules as the main app but only uses
-  `canvas.ts`, `audio.ts`, `serialize.ts`, and `envelope.ts`.
+  `canvas.ts`, `audio.ts`, `serialize.ts`, and `envelope.ts`. Both pages
+  use the same frame div + transparent canvas architecture.

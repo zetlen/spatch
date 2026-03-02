@@ -20,11 +20,18 @@ import { DecorationTool } from './decorations.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
 import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
 import { IDLE, type InteractionState } from './interaction.ts';
-import { normalizedCoord, type Voice, type TextDecoration, type WaveformType } from './types.ts';
+import {
+  normalizedCoord,
+  type Voice,
+  type TextDecoration,
+  type WaveformType,
+  type Reverb,
+} from './types.ts';
 
 // ---- Init ----
 
 const canvas = document.getElementById('sigil-canvas') as HTMLCanvasElement;
+const canvasFrame = document.getElementById('canvas-frame')!;
 const ctx = canvas.getContext('2d')!;
 const CANVAS_SIZE = 800;
 
@@ -61,6 +68,23 @@ if (loaded) {
   store.loadState(loaded);
 }
 
+// ---- Reverb shadow on canvas frame ----
+
+function updateReverbShadow(frameEl: HTMLElement, reverb: Reverb | null, canvasSize: number): void {
+  if (!reverb) {
+    frameEl.style.boxShadow = 'none';
+    return;
+  }
+  const maxBlur = canvasSize * 0.15;
+  const blur = reverb.depth * maxBlur;
+  const alpha = 0.3 + reverb.depth * 0.5;
+  const color =
+    reverb.style === 'glow'
+      ? `rgba(255,255,255,${alpha.toFixed(2)})`
+      : `rgba(0,0,0,${alpha.toFixed(2)})`;
+  frameEl.style.boxShadow = `inset 0 0 ${blur.toFixed(1)}px ${color}`;
+}
+
 // ---- Responsive canvas sizing ----
 
 function resizeCanvas(): void {
@@ -79,7 +103,8 @@ function resizeCanvas(): void {
   canvas.width = CANVAS_SIZE;
   canvas.height = CANVAS_SIZE;
 
-  updateCanvasBorderRadius(canvas, store.data.envelope, size);
+  updateCanvasBorderRadius(canvasFrame, store.data.envelope, size);
+  updateReverbShadow(canvasFrame, store.data.reverb, size);
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -94,6 +119,7 @@ store.onChange(() => {
   debouncedSave();
   if (audio.isPlaying) {
     audio.updateVoices(store.data);
+    audio.updateReverb(store.data.reverb);
   }
 });
 
@@ -102,10 +128,11 @@ function renderLoop(): void {
     render(ctx, store.data, CANVAS_SIZE, selectedId, audio.playingShapeIds, selectedDecoId);
 
     updateCanvasBorderRadius(
-      canvas,
+      canvasFrame,
       store.data.envelope,
       parseInt(canvas.style.width) || CANVAS_SIZE,
     );
+    updateReverbShadow(canvasFrame, store.data.reverb, parseInt(canvas.style.width) || CANVAS_SIZE);
 
     needsRender = false;
   }

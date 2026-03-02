@@ -126,8 +126,8 @@
 
       <main id="canvas-area">
         <div id="canvas-wrap">
+          <div id="canvas-frame"></div>
           <canvas id="sigil-canvas" width="800" height="800"></canvas>
-          <!-- ADSR corner handles are rendered on the canvas itself -->
         </div>
       </main>
 
@@ -268,6 +268,29 @@
         </div>
       </div>
 
+      <!-- Reverb Panel (hidden by default) -->
+      <div id="reverb-panel" class="panel hidden">
+        <div class="reverb-controls">
+          <div class="reverb-row">
+            <span class="reverb-label">Style</span>
+            <button class="reverb-style-btn active" data-reverb-style="glow">G</button>
+            <button class="reverb-style-btn" data-reverb-style="dim">D</button>
+          </div>
+          <div class="reverb-row">
+            <span class="reverb-label">Depth</span>
+            <input
+              id="reverb-depth"
+              class="reverb-slider"
+              type="range"
+              min="1"
+              max="100"
+              value="50"
+            />
+          </div>
+          <button id="btn-remove-reverb" class="reverb-remove-btn">Remove</button>
+        </div>
+      </div>
+
       <footer id="toolbar-bottom">
         <div class="toolbar-group blend-group">
           <select id="blend-mode" title="Blend mode">
@@ -282,6 +305,7 @@
           <button id="btn-border" class="action-btn" title="Border (octave doubling)">
             &#9632;
           </button>
+          <button id="btn-reverb" class="action-btn" title="Reverb (inset shadow)">&#9676;</button>
           <button id="btn-delete" class="action-btn danger" title="Delete (Del)">&#10005;</button>
         </div>
         <div class="toolbar-group play-group">

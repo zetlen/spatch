@@ -148,6 +148,13 @@ export interface Border {
   thickness: NormalizedCoord;
 }
 
+export type ReverbStyle = 'glow' | 'dim';
+
+export interface Reverb {
+  depth: NormalizedCoord;
+  style: ReverbStyle;
+}
+
 interface VoiceBase {
   id: string;
   x: NormalizedCoord;
@@ -204,6 +211,7 @@ export interface SigilData {
   envelope: Envelope;
   voices: Voice[];
   texts: TextDecoration[];
+  reverb: Reverb | null;
 }
 
 export function waveformShape(waveform: WaveformType): 'circle' | 'square' | 'triangle' {

@@ -6,6 +6,7 @@ function makeState(overrides = {}) {
     envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
     voices: [],
     texts: [],
+    reverb: null,
     ...overrides,
   };
 }
@@ -197,6 +198,39 @@ describe('deserializeState edge cases', () => {
 
   test('returns null for empty string', () => {
     expect(deserializeState('')).toBeNull();
+  });
+});
+
+describe('reverb serialization', () => {
+  test('null reverb round-trips', () => {
+    const state = makeState({ reverb: null });
+    const encoded = serializeState(state);
+    const decoded = deserializeState(encoded);
+    expect(decoded.reverb).toBeNull();
+  });
+
+  test('glow reverb round-trips', () => {
+    const state = makeState({ reverb: { depth: 0.6, style: 'glow' } });
+    const encoded = serializeState(state);
+    const decoded = deserializeState(encoded);
+    expect(decoded.reverb).not.toBeNull();
+    expect(decoded.reverb.style).toBe('glow');
+    expect(decoded.reverb.depth).toBeCloseTo(0.6);
+  });
+
+  test('dim reverb round-trips', () => {
+    const state = makeState({ reverb: { depth: 0.3, style: 'dim' } });
+    const encoded = serializeState(state);
+    const decoded = deserializeState(encoded);
+    expect(decoded.reverb.style).toBe('dim');
+    expect(decoded.reverb.depth).toBeCloseTo(0.3);
+  });
+
+  test('old URLs without reverb deserialize with null reverb', () => {
+    const state = makeState();
+    const encoded = serializeState(state);
+    const decoded = deserializeState(encoded);
+    expect(decoded.reverb).toBeNull();
   });
 });
 

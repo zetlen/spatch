@@ -16,6 +16,8 @@ import {
   type SigilData,
   type Envelope,
   type NormalizedCoord,
+  type ReverbStyle,
+  type Reverb,
 } from './types.ts';
 
 // ---- Pentatonic scale ----
@@ -254,6 +256,27 @@ function safeDisconnect(node: AudioNode): void {
   } catch {}
 }
 
+function generateImpulseResponse(ctx: AudioContext, style: ReverbStyle): AudioBuffer {
+  const sampleRate = ctx.sampleRate;
+  const duration = style === 'glow' ? 0.3 : 2.0;
+  const length = Math.floor(sampleRate * duration);
+  const buffer = ctx.createBuffer(2, length, sampleRate);
+  const cutoff = style === 'glow' ? 1.0 : 0.3;
+
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      const t = i / length;
+      let sample = (Math.random() * 2 - 1) * Math.exp((-3 * t) / duration);
+      if (cutoff < 1.0) {
+        sample *= Math.max(0, 1 - t * (1 - cutoff));
+      }
+      data[i] = sample;
+    }
+  }
+  return buffer;
+}
+
 interface AudioVoiceBase {
   outputNode: StereoPannerNode;
   effectDispose: (() => void) | null;
@@ -336,6 +359,9 @@ export class AudioEngine {
   _arpeggioGain: GainNode | null;
   _arpeggioReady: boolean;
   _autoEQ: BiquadFilterNode[];
+  _reverbConvolver: ConvolverNode | null;
+  _reverbWet: GainNode | null;
+  _reverbStyle: ReverbStyle | null;
 
   constructor() {
     this.audioCtx = null;
@@ -350,6 +376,9 @@ export class AudioEngine {
     this._arpeggioGain = null;
     this._arpeggioReady = false;
     this._autoEQ = [];
+    this._reverbConvolver = null;
+    this._reverbWet = null;
+    this._reverbStyle = null;
   }
 
   async _init(): Promise<void> {
@@ -409,6 +438,18 @@ export class AudioEngine {
     prev.connect(this.envelopeGain);
     this.envelopeGain.connect(this.compressor);
     this.compressor.connect(ctx.destination);
+
+    // Master reverb (if active)
+    if (sigilState.reverb) {
+      this._reverbConvolver = ctx.createConvolver();
+      this._reverbConvolver.buffer = generateImpulseResponse(ctx, sigilState.reverb.style);
+      this._reverbWet = ctx.createGain();
+      this._reverbWet.gain.value = sigilState.reverb.depth;
+      this.envelopeGain.connect(this._reverbConvolver);
+      this._reverbConvolver.connect(this._reverbWet);
+      this._reverbWet.connect(this.compressor);
+      this._reverbStyle = sigilState.reverb.style;
+    }
 
     this._applyAutoEQ(sigilState.voices);
 
@@ -668,6 +709,43 @@ export class AudioEngine {
     this._updateBlendOverlaps(sigilState.voices);
   }
 
+  updateReverb(reverb: Reverb | null): void {
+    if (!this.audioCtx || !this.isPlaying) return;
+    const ctx = this.audioCtx;
+
+    if (!reverb) {
+      if (this._reverbConvolver) {
+        safeDisconnect(this._reverbConvolver);
+        this._reverbConvolver = null;
+      }
+      if (this._reverbWet) {
+        safeDisconnect(this._reverbWet);
+        this._reverbWet = null;
+      }
+      this._reverbStyle = null;
+      return;
+    }
+
+    if (!this._reverbConvolver || this._reverbStyle !== reverb.style) {
+      if (this._reverbConvolver) safeDisconnect(this._reverbConvolver);
+      if (this._reverbWet) safeDisconnect(this._reverbWet);
+
+      this._reverbConvolver = ctx.createConvolver();
+      this._reverbConvolver.buffer = generateImpulseResponse(ctx, reverb.style);
+
+      this._reverbWet = ctx.createGain();
+
+      // Wire: envelopeGain → convolver → wetGain → compressor
+      this.envelopeGain!.connect(this._reverbConvolver);
+      this._reverbConvolver.connect(this._reverbWet);
+      this._reverbWet.connect(this.compressor!);
+
+      this._reverbStyle = reverb.style;
+    }
+
+    this._reverbWet!.gain.value = reverb.depth;
+  }
+
   stop(): void {
     if (!this.isPlaying) return;
     this._cleanup();
@@ -755,6 +833,15 @@ export class AudioEngine {
       } catch {}
       this._arpeggioGain = null;
     }
+    if (this._reverbConvolver) {
+      safeDisconnect(this._reverbConvolver);
+      this._reverbConvolver = null;
+    }
+    if (this._reverbWet) {
+      safeDisconnect(this._reverbWet);
+      this._reverbWet = null;
+    }
+    this._reverbStyle = null;
 
     this.playingShapeIds.clear();
     this.isPlaying = false;
