@@ -360,6 +360,8 @@ export class AudioEngine {
   _reverbConvolver: ConvolverNode | null;
   _reverbWet: GainNode | null;
   _reverbStyle: ReverbStyle | null;
+  _streamDest: MediaStreamAudioDestinationNode | null;
+  _audioEl: HTMLAudioElement | null;
 
   constructor() {
     this.audioCtx = null;
@@ -375,19 +377,55 @@ export class AudioEngine {
     this._reverbConvolver = null;
     this._reverbWet = null;
     this._reverbStyle = null;
+    this._streamDest = null;
+    this._audioEl = null;
   }
 
-  async _init(): Promise<void> {
+  /** Synchronously create and unlock the AudioContext.
+   *  Everything here MUST be synchronous — iOS Safari revokes user-gesture
+   *  privileges after any microtask boundary (including await). */
+  _init(): void {
     if (this.audioCtx) return;
     this.audioCtx = new AudioContext();
+
+    // Classic iOS Safari unlock: play a silent buffer to "warm" the context.
+    // This is the most widely battle-tested workaround.
+    const silent = this.audioCtx.createBuffer(1, 1, 22050);
+    const src = this.audioCtx.createBufferSource();
+    src.buffer = silent;
+    src.connect(this.audioCtx.destination);
+    src.start(0);
+
+    // Resume synchronously — don't await the promise.
+    if (this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume();
+    }
+
+    // Route audio through a MediaStreamDestination → <audio> element.
+    // Safari aggressively suspends bare AudioContext output but treats
+    // <audio> srcObject streams as "real" media that keeps playing.
+    this._streamDest = this.audioCtx.createMediaStreamDestination();
+    this._audioEl = document.createElement('audio');
+    this._audioEl.srcObject = this._streamDest.stream;
+    this._audioEl.style.display = 'none';
+    document.body.appendChild(this._audioEl);
+    this._audioEl.play().catch(() => {});
+  }
+
+  /** Call from any user gesture to pre-warm the AudioContext. */
+  warmUp(): void {
+    this._init();
   }
 
   async play(sigilState: SigilData, envelope: Envelope): Promise<void> {
-    await this._init();
+    this._init();
     this.stop();
 
     const ctx = this.audioCtx!;
-    if (ctx.state === 'suspended') await ctx.resume();
+    // Don't await resume() — warmUp() already called it synchronously from
+    // the user gesture. Awaiting here can hang on iOS Safari if the context
+    // is mid-resume. Fire-and-forget as a fallback only.
+    if (ctx.state === 'suspended') ctx.resume();
 
     // Master chain
     this.compressor = ctx.createDynamicsCompressor();
@@ -429,7 +467,11 @@ export class AudioEngine {
     prev.connect(this.envelopeGain);
     this.envelopeGain.connect(this.compressor);
     this.compressor.connect(this._analyser);
+    // Actual audio output goes through ctx.destination as normal.
     this._analyser.connect(ctx.destination);
+    // Also feed the stream destination — its <audio> element keeps Safari
+    // from suspending the AudioContext, but doesn't produce audible output.
+    if (this._streamDest) this._analyser.connect(this._streamDest);
 
     // Master reverb (if active)
     if (sigilState.reverb) {
@@ -781,6 +823,8 @@ export class AudioEngine {
       this._reverbWet = null;
     }
     this._reverbStyle = null;
+    // Don't pause _audioEl — it stays playing (silently) so we never need
+    // to call play() again, which would require a fresh user gesture on Safari.
 
     this.isPlaying = false;
   }
