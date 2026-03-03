@@ -44,8 +44,11 @@ js/
   worklets/
     bitcrusher.js    AudioWorkletProcessor for the "rough" pattern effect
 dist/                Build output (gitignored)
-plans/
-  precursor-format.md    Sigil data schema (visual↔audio field mappings)
+docs/plans/              Design docs and implementation plans
+                         Convention: YYYY-MM-DD-{topic}-{design|plan}.md
+tests/
+  unit/*.test.js         Unit tests (bun test, plain JS)
+  integration/*.test.js  Playwright integration tests
 ```
 
 ## How to Run
@@ -54,9 +57,36 @@ plans/
 bun install          # install dependencies
 bun run build        # build to dist/ (minified)
 bun run dev          # build to dist/ (unminified, with source maps)
+bun run test         # run unit + integration tests
+bun run test:unit    # unit tests only (bun test)
+bun run test:e2e     # integration tests only (Playwright, needs dev server)
+bun run check        # typecheck (tsc --noEmit)
+bun run lint         # lint (oxlint)
+bun run fmt          # format (oxfmt)
 ```
 
+**Pre-commit hooks** (lefthook): auto-formats staged files with oxfmt, fixes
+lint with oxlint, and runs tsc. Commits will be auto-formatted.
+
 Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
+
+## CI/CD
+
+- **Gitea instance**: `got.colonpipe.org`. API token is in `$GITEA_ACCESS_TOKEN`.
+- **Versioning**: CalVer (`YYYY.MM.MICRO`), bumped automatically by CI on deploy.
+  Micro increments per deploy within the month, resets on month change.
+- **Deploy trigger**: Push to `main` (PR merge) or `workflow_dispatch`.
+  Workflow is `.gitea/workflows/deploy.yml`.
+- **Deploy mechanism**: `docker cp dist/. spatch:/usr/share/nginx/html/`
+  into an nginx container. Site is at `https://spatch.music`.
+- **Bot user**: `tiene` (matches action runner name). Admin collaborator,
+  sole user whitelisted for direct push to protected `main`. Its token is
+  stored as repo secret `PUSH_TOKEN`.
+- **Version bump commit**: Uses `[skip ci]` in message to avoid infinite
+  workflow loop.
+- **Gotcha**: Changing workflow triggers (e.g. `on: release` → `on: push`)
+  won't fire on the merge that introduces the change — Gitea evaluates the
+  workflow file from the target branch *before* the merge lands.
 
 ## Transforms
 
