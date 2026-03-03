@@ -16,6 +16,7 @@ import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
 import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
 import { IDLE, type InteractionState } from './interaction.ts';
+import { initStage, setAudioLevel } from './stage.ts';
 import {
   normalizedCoord,
   type Voice,
@@ -137,6 +138,7 @@ function resizeCanvas(): void {
 
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+initStage();
 
 // ---- Render loop ----
 
@@ -159,6 +161,7 @@ function renderLoop(): void {
     const displaySize = parseInt(wrap.style.width) || 800;
     updateCanvasBorderRadius(canvasFrame, store.data.envelope, displaySize);
     updateFrameShadow(canvasFrame, store.data.reverb, displaySize, audio.getLevel());
+    setAudioLevel(audio.getLevel());
 
     needsRender = false;
   }

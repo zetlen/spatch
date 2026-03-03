@@ -127,6 +127,16 @@ async function build() {
   // containing only the icons actually used.
   await generateTablerSprite();
 
+  // Copy stage background images
+  const stageDir = 'spatch-bgs';
+  const stageOut = 'dist/stage';
+  await Bun.$`mkdir -p ${stageOut}`;
+  const stageGlob = new Bun.Glob('*.jpg');
+  for (const file of stageGlob.scanSync(stageDir)) {
+    await Bun.$`cp ${stageDir}/${file} ${stageOut}/${file}`;
+  }
+  console.log(`  Copied stage backgrounds to ${stageOut}/`);
+
   const totalOutputs = htmlResult.outputs.length;
   console.log(`Build complete: ${totalOutputs} files written to dist/`);
   for (const output of htmlResult.outputs) {

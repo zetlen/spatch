@@ -236,12 +236,17 @@ body {
   padding: 12px;
   overflow: hidden;
   background: var(--bg-body);
+  position: relative;
+  isolation: isolate;
+  --audio-level: 0;
+  --stage-bg: none;
 }
 
 #canvas-wrap {
   position: relative;
   overflow: hidden;
   touch-action: none;
+  z-index: 1;
 }
 
 #canvas-frame {
@@ -258,6 +263,70 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+/* ---- Stage Themes ---- */
+
+#canvas-area::before,
+#canvas-area::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 0;
+}
+
+/* Scan lines base (used by both subtle and florid ::after) */
+#canvas-area::after {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  transform: translateY(calc(var(--audio-level) * 4px));
+}
+
+/* Subtle: pastel gradient + faint scan lines */
+#canvas-area.stage-subtle::before {
+  opacity: 1;
+  background: linear-gradient(135deg, #f0c4d0 0%, #d4bce8 35%, #b8d8e8 65%, #c8e8d4 100%);
+}
+
+#canvas-area.stage-subtle::after {
+  opacity: 1;
+  filter: hue-rotate(calc(var(--audio-level) * 30deg));
+}
+
+/* Florid: background image + gradient tint + scan lines */
+#canvas-area.stage-florid::before {
+  opacity: 1;
+  background-image: var(--stage-bg);
+  background-size: cover;
+  background-position: center;
+}
+
+#canvas-area.stage-florid::after {
+  opacity: 1;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 4px
+    ),
+    linear-gradient(
+      135deg,
+      rgba(240, 196, 208, 0.3) 0%,
+      rgba(212, 188, 232, 0.3) 35%,
+      rgba(184, 216, 232, 0.3) 65%,
+      rgba(200, 232, 212, 0.3) 100%
+    );
+  filter: hue-rotate(calc(var(--audio-level) * 30deg));
 }
 
 /* ---- Play fan menu ---- */
