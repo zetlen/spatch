@@ -21,6 +21,17 @@ if (!hash) {
     const frame = document.getElementById('canvas-frame')!;
     const audio = new AudioEngine();
 
+    // Pre-warm AudioContext on first user gesture. iOS Safari only allows
+    // audio from touchend/click/keydown — NOT pointerdown/mousedown.
+    {
+      const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
+      function onFirstGesture(): void {
+        audio.warmUp();
+        for (const evt of warmUpEvents) document.removeEventListener(evt, onFirstGesture);
+      }
+      for (const evt of warmUpEvents) document.addEventListener(evt, onFirstGesture);
+    }
+
     // Apply ADSR border radius to frame (static in embed — only needs to run once)
     updateCanvasBorderRadius(frame, sigil.envelope, 800);
 

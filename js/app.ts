@@ -36,6 +36,17 @@ const undo = new UndoManager(store);
 const toolbar = new Toolbar(store, undo);
 const audio = new AudioEngine();
 
+// Pre-warm AudioContext on first user gesture. iOS Safari only allows audio
+// from touchend, click, doubleclick, or keydown — NOT pointerdown/mousedown.
+{
+  const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
+  function onFirstGesture(): void {
+    audio.warmUp();
+    for (const evt of warmUpEvents) document.removeEventListener(evt, onFirstGesture);
+  }
+  for (const evt of warmUpEvents) document.addEventListener(evt, onFirstGesture);
+}
+
 // ---- Selection state (app-level, not in store) ----
 
 let selectedId: string | null = null;
@@ -820,6 +831,10 @@ function closeFan(): void {
 
 playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
   e.preventDefault();
+  // Eagerly warm up AudioContext — even though pointerdown isn't a qualifying
+  // gesture on iOS Safari, creating the context now means it's ready when
+  // touchend/click fires and actually unlocks it.
+  audio.warmUp();
 
   // If already playing (latched or looping), stop
   if (playState !== 'idle') {
@@ -945,7 +960,7 @@ if (splashActive) {
   let splashDownTime = 0;
   let splashPointerDown = false;
 
-  function splashReveal(delayAudioRelease: number): void {
+  function splashReveal(delayAudioRelease: number, playReady: Promise<void>): void {
     const FADE_DURATION = 0.5;
     const topBar = document.getElementById('toolbar-top')!;
     const botBar = document.getElementById('toolbar-bottom')!;
@@ -961,8 +976,20 @@ if (splashActive) {
     // Mark URL as seen
     localStorage.setItem(splashKey, '1');
 
-    // Release audio: immediately if held long enough, or after remaining sustain
-    const doRelease = () => {
+    // Release audio: wait for play() to finish first, otherwise release()
+    // fires while isPlaying is still false and becomes a no-op.
+    const doRelease = async () => {
+      try {
+        await playReady;
+      } catch {}
+      // If play() somehow didn't complete, force stop as fallback
+      if (!audio.isPlaying) {
+        audio.stop();
+        playBtn.classList.remove('playing');
+        setPlayIcon(false);
+        playState = 'idle';
+        return;
+      }
       audio.release(store.data.envelope);
       playBtn.classList.remove('playing');
       setPlayIcon(false);
@@ -990,36 +1017,47 @@ if (splashActive) {
       { once: true },
     );
 
-    // Remove splash pointer listeners
-    canvasArea.removeEventListener('pointerdown', splashDown);
-    canvasArea.removeEventListener('pointerup', splashUp);
-    canvasArea.removeEventListener('pointercancel', splashUp);
+    removeSplashListeners();
   }
 
-  function splashDown(e: PointerEvent): void {
-    e.preventDefault();
+  function splashDown(_e: PointerEvent): void {
     if (splashPointerDown) return; // Ignore multi-touch
     splashPointerDown = true;
     splashDownTime = Date.now();
-
-    // Start playback (works even with empty canvas — silence)
-    startPlayback();
+    // Do NOT preventDefault() — iOS Safari cancels click/touchend if we do,
+    // and those are the only events that can unlock audio.
   }
 
-  function splashUp(_e: PointerEvent): void {
+  function splashUp(): void {
     if (!splashPointerDown) return;
     splashPointerDown = false;
+    removeSplashListeners();
+
+    // iOS Safari only unlocks audio from touchend/click — NOT pointerdown.
+    // Warm up + start playback here so AudioContext init happens in a
+    // gesture that Safari accepts.
+    audio.warmUp();
+    const playReady = startPlayback();
 
     const elapsed = Date.now() - splashDownTime;
     const remaining = Math.max(0, MIN_SUSTAIN_MS - elapsed);
 
-    // Always reveal UI immediately; audio sustains for remainder if needed
-    splashReveal(remaining);
+    // Always reveal UI immediately; audio sustains for remainder if needed.
+    // Pass the playback promise so release waits for play() to finish.
+    splashReveal(remaining, playReady);
+  }
+
+  // Use touchend (iOS Safari qualifying gesture) with pointerup fallback
+  // for non-touch devices. Both remove all listeners on first fire.
+  function removeSplashListeners(): void {
+    canvasArea.removeEventListener('pointerdown', splashDown);
+    canvasArea.removeEventListener('pointerup', splashUp);
+    canvasArea.removeEventListener('touchend', splashUp);
   }
 
   canvasArea.addEventListener('pointerdown', splashDown);
   canvasArea.addEventListener('pointerup', splashUp);
-  canvasArea.addEventListener('pointercancel', splashUp);
+  canvasArea.addEventListener('touchend', splashUp);
 }
 
 // ---- Auto-save to URL (debounced) ----
