@@ -1,13 +1,32 @@
 name: Deploy
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PUSH_TOKEN }}
+
+      - name: Bump CalVer version
+        run: |
+          CALVER=$(date -u +%Y.%m.%d)
+          CURRENT=$(sed -n 's/.*"version": "\(.*\)".*/\1/p' package.json)
+          if [ "$CURRENT" = "$CALVER" ]; then
+            echo "Version already $CALVER, skipping bump"
+          else
+            sed -i "s/\"version\": \".*\"/\"version\": \"$CALVER\"/" package.json
+            git config user.name "Gitea Actions"
+            git config user.email "actions@got.colonpipe.org"
+            git add package.json
+            git commit -m "v$CALVER [skip ci]"
+            git push
+          fi
+
       - run: curl -fsSL https://bun.sh/install | bash
       - name: Build and deploy
         run: |
