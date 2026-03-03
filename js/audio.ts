@@ -30,7 +30,7 @@ for (let octave = 0; octave < 3; octave++) {
 }
 PENTATONIC_SEMITONES.push(36); // top: 3 octaves above root
 
-const BASE_MIDI = 48; // C3
+const BASE_MIDI = 43; // G2
 
 function midiToFreq(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
@@ -135,7 +135,7 @@ export function waveformGain(waveform: WaveformType): number {
     case 'blend':
       return 0.85; // sawtooth RMS ~= 1.15x sine
     case 'sine':
-      return 1.4; // sine is single-partial; boost to match perceived loudness
+      return 1.6; // sine is single-partial; boost to match perceived loudness
   }
 }
 
@@ -206,6 +206,13 @@ export function hueToFormants(hue: number): { f1: number; f2: number } {
   return { f1: lo.f1, f2: hi.f2 };
 }
 
+// Lightness → lowpass cutoff: exponential mapping from dark (muffled) to light (open).
+// 300 Hz at black, ~2500 Hz at mid grey, 12000 Hz at white.
+export function lightnessToCutoff(lightness: number): number {
+  const t = lightness / 100; // 0–1
+  return 300 * Math.pow(12000 / 300, t); // exponential: 300 → 12000
+}
+
 function applyFormantFilter(
   f1Node: BiquadFilterNode,
   f2Node: BiquadFilterNode,
@@ -229,7 +236,7 @@ function applyFormantFilter(
   const formants = hueToFormants(h);
   // Sine has no harmonics — high Q kills the signal when the fundamental
   // is far from formant centers. Cap Q lower for sine (#82).
-  const maxQ = waveform === 'sine' ? 4 : 12;
+  const maxQ = waveform === 'sine' ? 4 : 8;
   const q = 1 + (s / 100) * maxQ;
 
   f1Node.frequency.value = formants.f1;
@@ -237,8 +244,8 @@ function applyFormantFilter(
   f2Node.frequency.value = formants.f2;
   f2Node.Q.value = q * 0.7;
 
-  // Lightness -> brightness shelf: dark = muffled, light = bright
-  brightnessNode.gain.value = (l / 100) * 14 - 7; // -7 to +7 dB
+  // Lightness -> lowpass cutoff: dark = muffled, light = open
+  brightnessNode.frequency.value = lightnessToCutoff(l);
 }
 
 // ---- Internal audio voice types ----
@@ -325,25 +332,6 @@ interface TextAudioVoice {
 
 type AnyAudioVoice = AudioVoice | TextAudioVoice;
 
-// ---- Auto EQ: spectral presence boost ----
-
-// How much EQ help each waveform needs to be audible in a mix.
-// Sine has no harmonics and gets easily masked; rich waveforms cut through.
-function spectralNeed(waveform: WaveformType): number {
-  switch (waveform) {
-    case 'sine':
-      return 1.0; // sine: single partial, easily masked
-    case 'blend':
-      return 0.3; // sawtooth blend: moderate harmonics
-    case 'pulse':
-      return 0.2; // pulse: rich harmonics, strong presence
-  }
-}
-
-// Maximum number of EQ bands in the pool. Voices beyond this count
-// don't get dedicated EQ presence bands (still audible via gain).
-const MAX_EQ_BANDS = 8;
-
 // ---- Audio Engine ----
 
 export class AudioEngine {
@@ -354,7 +342,6 @@ export class AudioEngine {
   compressor: DynamicsCompressorNode | null;
   isPlaying: boolean;
   _sessionId: number;
-  _autoEQ: BiquadFilterNode[];
   _analyser: AnalyserNode | null;
   _analyserBuf: Float32Array<ArrayBuffer> | null;
   _reverbConvolver: ConvolverNode | null;
@@ -371,7 +358,6 @@ export class AudioEngine {
     this.compressor = null;
     this.isPlaying = false;
     this._sessionId = 0;
-    this._autoEQ = [];
     this._analyser = null;
     this._analyserBuf = null;
     this._reverbConvolver = null;
@@ -441,30 +427,13 @@ export class AudioEngine {
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = 0.5;
 
-    // Auto EQ: pool of peaking filters between masterGain and envelopeGain.
-    const poolSize = Math.max(MAX_EQ_BANDS, sigilState.voices.length);
-    this._autoEQ = [];
-    for (let i = 0; i < poolSize; i++) {
-      const band = ctx.createBiquadFilter();
-      band.type = 'peaking';
-      band.Q.value = 2;
-      band.gain.value = 0;
-      band.frequency.value = 440;
-      this._autoEQ.push(band);
-    }
-
     // Analyser for level metering (drives play glow)
     this._analyser = ctx.createAnalyser();
     this._analyser.fftSize = 256;
     this._analyserBuf = new Float32Array(this._analyser.fftSize);
 
-    // Wire: masterGain -> [EQ bands] -> envelopeGain -> compressor -> analyser -> dest
-    let prev: AudioNode = this.masterGain;
-    for (const band of this._autoEQ) {
-      prev.connect(band);
-      prev = band;
-    }
-    prev.connect(this.envelopeGain);
+    // Wire: masterGain -> envelopeGain -> compressor -> analyser -> dest
+    this.masterGain.connect(this.envelopeGain);
     this.envelopeGain.connect(this.compressor);
     this.compressor.connect(this._analyser);
     // Actual audio output goes through ctx.destination as normal.
@@ -484,8 +453,6 @@ export class AudioEngine {
       this._reverbWet.connect(this.compressor);
       this._reverbStyle = sigilState.reverb.style;
     }
-
-    this._applyAutoEQ(sigilState.voices);
 
     // Apply ADSR envelope
     const now = ctx.currentTime;
@@ -680,9 +647,6 @@ export class AudioEngine {
       }
     }
 
-    // Update auto EQ for changed positions/sizes
-    this._applyAutoEQ(sigilState.voices);
-
     // Update blend overlap levels
     this._updateBlendOverlaps(sigilState.voices);
   }
@@ -741,30 +705,6 @@ export class AudioEngine {
     return Math.sqrt(sum / this._analyserBuf.length);
   }
 
-  _applyAutoEQ(voices: Voice[]): void {
-    if (!this.audioCtx || this._autoEQ.length === 0) return;
-    const now = this.audioCtx.currentTime;
-
-    for (let i = 0; i < this._autoEQ.length; i++) {
-      const band = this._autoEQ[i]!;
-      if (i < voices.length) {
-        const voice = voices[i]!;
-        const freq = yToFrequency(voice.y);
-        const area = shapeAreaFraction(voice.waveform, voice.size);
-        const need = spectralNeed(voice.waveform);
-
-        // Boost: 4-18 dB for sine, 1-5 dB for rich waveforms
-        const boostDb = need * (4 + area * 14);
-
-        band.frequency.setValueAtTime(freq, now);
-        band.gain.setValueAtTime(boostDb, now);
-      } else {
-        // Unused band -- passthrough
-        band.gain.setValueAtTime(0, now);
-      }
-    }
-  }
-
   _updateBlendOverlaps(voices: ReadonlyArray<Voice>): void {
     for (const audioVoice of this.activeVoices) {
       if ('isTextVoice' in audioVoice) continue;
@@ -807,10 +747,6 @@ export class AudioEngine {
       } catch {}
       this.envelopeGain = null;
     }
-    for (const band of this._autoEQ) {
-      safeDisconnect(band);
-    }
-    this._autoEQ = [];
     if (this.compressor) {
       try {
         this.compressor.disconnect();
@@ -867,8 +803,8 @@ export class AudioEngine {
     const formantMixer = ctx.createGain();
     formantMixer.gain.value = 0.7; // compensate for two-path sum
     const brightness = ctx.createBiquadFilter();
-    brightness.type = 'highshelf';
-    brightness.frequency.value = 2000;
+    brightness.type = 'lowpass';
+    brightness.Q.value = 0.707; // Butterworth — no resonant peak
 
     applyFormantFilter(formantF1, formantF2, brightness, voice.fill, voice.waveform);
 
@@ -1030,11 +966,23 @@ export class AudioEngine {
       };
     }
 
-    // Sine -- default
+    // Sine -- default, with subtle harmonic enrichment (analog impurity)
     const osc = ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.value = freq;
-    osc.connect(gain);
+
+    const sineWarm = ctx.createWaveShaper();
+    const warmSamples = 1024;
+    const warmCurve = new Float32Array(warmSamples);
+    for (let i = 0; i < warmSamples; i++) {
+      const x = (i * 2) / warmSamples - 1;
+      warmCurve[i] = Math.tanh(x * 1.5);
+    }
+    sineWarm.curve = warmCurve;
+    sineWarm.oversample = '2x';
+
+    osc.connect(sineWarm);
+    sineWarm.connect(gain);
 
     return {
       ...shared,

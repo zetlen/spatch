@@ -8,22 +8,22 @@ import {
   areaToGain,
   snapYToNote,
   hueToFormants,
+  lightnessToCutoff,
 } from '../../js/audio.ts';
 
 describe('yToFrequency', () => {
   test('y=0 (top) returns highest pentatonic note', () => {
     const freq = yToFrequency(0);
-    // y=0 → normalized=1 → index=16 (last in array of 16) → semitone 36 → MIDI 84 → C6
-    // PENTATONIC_SEMITONES has 16 entries (3 octaves × 5 + top note 36)
-    // 440 * 2^((84-69)/12) = 440 * 2^(15/12) ≈ 1046.50
-    expect(freq).toBeCloseTo(1046.5, 0);
+    // y=0 → normalized=1 → index=15 → semitone 36 → MIDI 79 → G5
+    // 440 * 2^((79-69)/12) ≈ 783.99
+    expect(freq).toBeCloseTo(783.99, 0);
   });
 
   test('y=1 (bottom) returns lowest pentatonic note', () => {
     const freq = yToFrequency(1);
-    // y=1 → normalized=0 → index=0 → semitone 0 → MIDI 48 → C3
-    // 440 * 2^((48-69)/12) ≈ 130.81
-    expect(freq).toBeCloseTo(130.81, 0);
+    // y=1 → normalized=0 → index=0 → semitone 0 → MIDI 43 → G2
+    // 440 * 2^((43-69)/12) ≈ 98.00
+    expect(freq).toBeCloseTo(98.0, 0);
   });
 
   test('exact note position has no micro-detuning', () => {
@@ -31,16 +31,17 @@ describe('yToFrequency', () => {
     // so they should be pure pentatonic pitches
     const freqTop = yToFrequency(0);
     const freqBottom = yToFrequency(1);
-    expect(freqTop).toBeCloseTo(1046.5, 0); // C6
-    expect(freqBottom).toBeCloseTo(130.81, 0); // C3
+    expect(freqTop).toBeCloseTo(783.99, 0); // G5
+    expect(freqBottom).toBeCloseTo(98.0, 0); // G2
   });
 
   test('between-note positions produce micro-detuned pitch', () => {
-    // y=0.5 → continuous=7.5, rounds to index 8 (G4=392Hz), offset=-0.5
-    // Detuning: 40 * tanh(-0.5 * 3) ≈ -36.2 cents → slightly flat G4
+    // y=0.5 → continuous=7.5, rounds to index 8 → semitone 19 (B3)
+    // MIDI 43+19=62 → 440 * 2^((62-69)/12) ≈ 293.66
+    // With detuning ~-36 cents: slightly flat
     const freq = yToFrequency(0.5);
-    expect(freq).toBeLessThan(392.0); // detuned flat
-    expect(freq).toBeGreaterThan(380.0); // but still recognizably G4
+    expect(freq).toBeLessThan(293.66);
+    expect(freq).toBeGreaterThan(284.0);
   });
 
   test('nearby y values produce distinct frequencies', () => {
@@ -62,7 +63,7 @@ describe('yToFrequency', () => {
       const semitones = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33, 36];
       const index = Math.round(normalized * (semitones.length - 1));
       const clamped = Math.max(0, Math.min(semitones.length - 1, index));
-      const baseFreq = 440 * Math.pow(2, (48 + semitones[clamped] - 69) / 12);
+      const baseFreq = 440 * Math.pow(2, (43 + semitones[clamped] - 69) / 12);
       // Detuning in cents: 1200 * log2(freq / baseFreq)
       const detuneCents = 1200 * Math.log2(freq / baseFreq);
       expect(Math.abs(detuneCents)).toBeLessThanOrEqual(40.01);
@@ -152,7 +153,7 @@ describe('rotationToTimbre', () => {
 
 describe('waveformGain', () => {
   test('sine is boosted for perceived loudness matching', () => {
-    expect(waveformGain('sine')).toBe(1.4);
+    expect(waveformGain('sine')).toBe(1.6);
   });
 
   test('pulse is attenuated below 1.0', () => {
@@ -272,6 +273,39 @@ describe('snapYToNote', () => {
       const snapped = snapYToNote(y);
       expect(snapped).toBeGreaterThanOrEqual(prev - 0.0001); // small epsilon for float
       prev = snapped;
+    }
+  });
+});
+
+describe('lightnessToCutoff', () => {
+  test('lightness 0 (black) returns ~300 Hz', () => {
+    const freq = lightnessToCutoff(0);
+    expect(freq).toBeCloseTo(300, -1); // within 10 Hz
+  });
+
+  test('lightness 50 (mid) returns ~1900 Hz', () => {
+    const freq = lightnessToCutoff(50);
+    // Geometric midpoint of 300–12000: 300 * sqrt(40) ≈ 1897
+    expect(freq).toBeCloseTo(1897, -2); // within 100 Hz
+  });
+
+  test('lightness 100 (white) returns ~12000 Hz', () => {
+    const freq = lightnessToCutoff(100);
+    expect(freq).toBeCloseTo(12000, -2); // within 100 Hz
+  });
+
+  test('monotonically increasing', () => {
+    let prev = lightnessToCutoff(0);
+    for (let l = 1; l <= 100; l++) {
+      const freq = lightnessToCutoff(l);
+      expect(freq).toBeGreaterThan(prev);
+      prev = freq;
+    }
+  });
+
+  test('always returns positive frequency', () => {
+    for (let l = 0; l <= 100; l++) {
+      expect(lightnessToCutoff(l)).toBeGreaterThan(0);
     }
   });
 });
