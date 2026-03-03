@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { hitTestADSRCorner, calcResize, calcRotation } from '../../js/shapes.ts';
+import { hitTestADSRCorner, calcResize, calcRotation, voiceRotation } from '../../js/shapes.ts';
 
 const CANVAS_SIZE = 800;
 
@@ -102,5 +102,37 @@ describe('calcRotation', () => {
     const voice = makeVoice({ x: 0.5, y: 0.5 });
     const deg = calcRotation(voice, 300, 400, CANVAS_SIZE);
     expect(deg).toBeCloseTo(270, 0);
+  });
+});
+
+describe('voiceRotation', () => {
+  test('sine voice always returns 0', () => {
+    const voice = makeVoice({ waveform: 'sine' });
+    expect(voiceRotation(voice)).toBe(0);
+  });
+
+  test('pulse voice with timbre 0 returns 0', () => {
+    const voice = makeVoice({ waveform: 'pulse', timbre: 0 });
+    expect(voiceRotation(voice)).toBe(0);
+  });
+
+  test('pulse voice with timbre 1 returns 90 (full period)', () => {
+    const voice = makeVoice({ waveform: 'pulse', timbre: 1 });
+    expect(voiceRotation(voice)).toBe(90);
+  });
+
+  test('pulse voice with timbre 0.5 returns 45', () => {
+    const voice = makeVoice({ waveform: 'pulse', timbre: 0.5 });
+    expect(voiceRotation(voice)).toBe(45);
+  });
+
+  test('blend voice with timbre 1 returns 120 (full period)', () => {
+    const voice = makeVoice({ waveform: 'blend', timbre: 1 });
+    expect(voiceRotation(voice)).toBe(120);
+  });
+
+  test('blend voice with timbre 0.5 returns 60', () => {
+    const voice = makeVoice({ waveform: 'blend', timbre: 0.5 });
+    expect(voiceRotation(voice)).toBe(60);
   });
 });

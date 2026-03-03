@@ -8,6 +8,7 @@ import {
   calcResize,
   calcRotation,
   clampSize,
+  voiceRotation,
 } from './shapes.ts';
 import { Toolbar } from './toolbar.ts';
 import { AudioEngine, snapYToNote, rotationToTimbre } from './audio.ts';
@@ -252,16 +253,6 @@ toolbar.onToolChange = (tool: string) => {
     needsRender = true;
   }
 };
-
-// ---- Helper: get visual rotation for a voice (for resize local coords) ----
-
-function voiceRotation(voice: Voice): number {
-  if ('timbre' in voice) {
-    const period = voice.waveform === 'pulse' ? 90 : 120;
-    return Math.min(1, Math.max(0, voice.timbre)) * period;
-  }
-  return 0;
-}
 
 // ---- Pinch helpers ----
 

@@ -5,6 +5,7 @@
 
 import { getSolidFillColor, ensureLinearGradient } from './colors.ts';
 import { ensurePatternDefs, getPatternOverlay } from './patterns.ts';
+import { voiceRotation } from './shapes.ts';
 import type { Voice, TextDecoration, SigilData, WaveformType, HandleType } from './types.ts';
 import { waveformShape } from './types.ts';
 
@@ -24,27 +25,6 @@ window.addEventListener(
   },
   true,
 );
-
-export function isLastInputTouch(): boolean {
-  return lastInputWasTouch;
-}
-
-// ---- Rotation helpers ----
-
-/** Convert a voice's timbre to a visual rotation angle for rendering. */
-function timbreToRotation(timbre: number, waveform: WaveformType): number {
-  if (waveform === 'sine') return 0;
-  const period = waveform === 'pulse' ? 90 : 120;
-  return Math.min(1, Math.max(0, timbre)) * period;
-}
-
-/** Get the visual rotation angle for a voice (in degrees). */
-function voiceRotation(voice: Voice): number {
-  if ('timbre' in voice) {
-    return timbreToRotation(voice.timbre, voice.waveform);
-  }
-  return 0;
-}
 
 // ---- Reconciler state ----
 
