@@ -1,6 +1,6 @@
 // patterns.ts — Visual pattern tile generators
 
-import { waveformShape, type Voice, type PatternType } from './types.ts';
+import { type Voice, type PatternType } from './types.ts';
 
 const cache = new Map<PatternType, HTMLCanvasElement>();
 
@@ -99,28 +99,4 @@ export function applyPattern(
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
   ctx.restore();
-}
-
-function buildShapePath(ctx: CanvasRenderingContext2D, voice: Voice, canvasSize: number): void {
-  const r = (voice.size / 2) * canvasSize;
-  const shape = waveformShape(voice.waveform);
-  ctx.beginPath();
-  switch (shape) {
-    case 'circle':
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      break;
-    case 'square':
-      ctx.rect(-r, -r, r * 2, r * 2);
-      break;
-    case 'triangle':
-      for (let i = 0; i < 3; i++) {
-        const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
-        const px = Math.cos(angle) * r;
-        const py = Math.sin(angle) * r;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-      break;
-  }
 }
