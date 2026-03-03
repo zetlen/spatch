@@ -1,7 +1,8 @@
 // canvas.ts — Canvas rendering pipeline
 
 import { getSolidFillColor, hslToString } from './colors.ts';
-import { applyPattern } from './patterns.ts';
+// TODO: canvas.ts is being fully rewritten in Task 6 (SVG DOM reconciler)
+// import { applyPattern } from './patterns.ts';
 import { getDecoBounds } from './shapes.ts';
 import type { Voice, TextDecoration, SigilData, WaveformType } from './types.ts';
 import { waveformShape } from './types.ts';
@@ -130,9 +131,10 @@ function drawVoice(ctx: CanvasRenderingContext2D, voice: Voice, canvasSize: numb
   buildShapePath(ctx, voice, canvasSize);
   ctx.fill();
 
-  if (voice.effect) {
-    applyPattern(ctx, voice, canvasSize);
-  }
+  // TODO: pattern overlay handled in SVG rewrite (Task 6)
+  // if (voice.effect) {
+  //   applyPattern(ctx, voice, canvasSize);
+  // }
 
   // Draw border inside the clipped shape (clip shows only the inner half
   // of edge strokes, creating a natural inset effect)
