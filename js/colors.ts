@@ -1,33 +1,51 @@
 // colors.ts — Color conversions (HSL, RGB) and color picker logic
 
-import type { Fill } from './types.ts';
+import type { Fill, LinearFill } from './types.ts';
 
 export function hslToString(h: number, s: number, l: number): string {
   return `hsl(${h}, ${s}%, ${l}%)`;
 }
 
-// ---- Get fill CSS string for a shape ----
+// ---- SVG-compatible fill helpers ----
 
-export function getFillStyle(
-  ctx: CanvasRenderingContext2D,
-  fill: Fill,
-  radius: number,
-  shapeRotation = 0,
-): string | CanvasGradient {
-  switch (fill.mode) {
-    case 'solid':
-      return hslToString(fill.h, fill.s, fill.l);
+/** Get the primary solid color for any fill (used for SVG fill attr on solid fills). */
+export function getSolidFillColor(fill: Fill): string {
+  return hslToString(fill.h, fill.s, fill.l);
+}
 
-    case 'linear': {
-      const angle = ((fill.gradAngle - shapeRotation) * Math.PI) / 180;
-      const dx = Math.cos(angle) * radius;
-      const dy = Math.sin(angle) * radius;
-      const grad = ctx.createLinearGradient(-dx, -dy, dx, dy);
-      grad.addColorStop(0, hslToString(fill.h, fill.s, fill.l));
-      grad.addColorStop(1, hslToString(fill.h2, fill.s2, fill.l2));
-      return grad;
-    }
+/** Create or update an SVG <linearGradient> element for a linear fill. */
+export function ensureLinearGradient(
+  defs: SVGDefsElement,
+  id: string,
+  fill: LinearFill,
+  shapeRotationDeg: number,
+): void {
+  let grad = defs.querySelector(`#${id}`) as SVGLinearGradientElement | null;
+  if (!grad) {
+    grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    grad.id = id;
+    grad.setAttribute('gradientUnits', 'objectBoundingBox');
+    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop1.setAttribute('offset', '0%');
+    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop2.setAttribute('offset', '100%');
+    grad.appendChild(stop1);
+    grad.appendChild(stop2);
+    defs.appendChild(grad);
   }
+
+  const angle = ((fill.gradAngle - shapeRotationDeg) * Math.PI) / 180;
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  // Map unit-circle direction to 0-1 gradient coords
+  grad.setAttribute('x1', String(0.5 - dx * 0.5));
+  grad.setAttribute('y1', String(0.5 - dy * 0.5));
+  grad.setAttribute('x2', String(0.5 + dx * 0.5));
+  grad.setAttribute('y2', String(0.5 + dy * 0.5));
+
+  const stops = grad.querySelectorAll('stop');
+  stops[0]!.setAttribute('stop-color', hslToString(fill.h, fill.s, fill.l));
+  stops[1]!.setAttribute('stop-color', hslToString(fill.h2, fill.s2, fill.l2));
 }
 
 // ---- Get swatch display color for toolbar ----

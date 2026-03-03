@@ -1,6 +1,6 @@
 // canvas.ts — Canvas rendering pipeline
 
-import { getFillStyle } from './colors.ts';
+import { getSolidFillColor, hslToString } from './colors.ts';
 import { applyPattern } from './patterns.ts';
 import { getDecoBounds } from './shapes.ts';
 import type { Voice, TextDecoration, SigilData, WaveformType } from './types.ts';
@@ -114,7 +114,18 @@ function drawVoice(ctx: CanvasRenderingContext2D, voice: Voice, canvasSize: numb
   ctx.save();
   ctx.clip();
 
-  const fillStyle = getFillStyle(ctx, voice.fill, r, rotDeg);
+  let fillStyle: string | CanvasGradient;
+  if (voice.fill.mode === 'linear') {
+    const angle = ((voice.fill.gradAngle - rotDeg) * Math.PI) / 180;
+    const dx = Math.cos(angle) * r;
+    const dy = Math.sin(angle) * r;
+    const grad = ctx.createLinearGradient(-dx, -dy, dx, dy);
+    grad.addColorStop(0, hslToString(voice.fill.h, voice.fill.s, voice.fill.l));
+    grad.addColorStop(1, hslToString(voice.fill.h2, voice.fill.s2, voice.fill.l2));
+    fillStyle = grad;
+  } else {
+    fillStyle = getSolidFillColor(voice.fill);
+  }
   ctx.fillStyle = fillStyle;
   buildShapePath(ctx, voice, canvasSize);
   ctx.fill();

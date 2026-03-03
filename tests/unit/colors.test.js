@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { hslToString, getSwatchColor } from '../../js/colors.ts';
+import { hslToString, getSwatchColor, getSolidFillColor } from '../../js/colors.ts';
 
 describe('hslToString', () => {
   test('formats HSL values correctly', () => {
@@ -39,4 +39,16 @@ describe('getSwatchColor', () => {
 
   // Unknown fill mode test removed: Fill is now a discriminated union,
   // so only valid modes can be constructed.
+});
+
+describe('getSolidFillColor', () => {
+  test('returns hsl string for solid fill', () => {
+    const fill = { mode: 'solid', h: 200, s: 80, l: 50 };
+    expect(getSolidFillColor(fill)).toBe('hsl(200, 80%, 50%)');
+  });
+
+  test('returns first color hsl for linear fill', () => {
+    const fill = { mode: 'linear', h: 320, s: 90, l: 55, h2: 180, s2: 70, l2: 40, gradAngle: 45 };
+    expect(getSolidFillColor(fill)).toBe('hsl(320, 90%, 55%)');
+  });
 });
