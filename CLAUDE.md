@@ -238,6 +238,46 @@ design rationale and enumeration of past violations.
 throwaway work, use `tmp/` at the project root. It is gitignored. Do NOT create temp
 files anywhere else.**
 
+## Browser / Device Compatibility
+
+### iOS Safari Audio Unlock
+
+iOS Safari (and macOS Safari to a lesser extent) only allows `AudioContext`
+creation and `resume()` from **qualifying user gestures**: `touchend`, `click`,
+`doubleclick`, `keydown`. Notably, `pointerdown`, `pointerup`, and `mousedown`
+are **not** qualifying gestures.
+
+Additionally, iOS Safari revokes user-gesture privileges after any microtask
+boundary (including `await`). This means:
+
+- `_init()` and `warmUp()` **must be fully synchronous** — no `async`, no
+  `await`, no promises in the path from gesture handler to `AudioContext`
+  creation and `resume()`.
+- `play()` must not `await ctx.resume()`. Call it fire-and-forget; `warmUp()`
+  already called it from the gesture handler.
+- The splash handler must fire from `touchend` or `click` — **never**
+  `pointerup`, which fires before `touchend` on iOS and races the audio unlock.
+
+The current unlock strategy (in `audio.ts:_init()`) uses three layers:
+1. **Silent buffer trick**: Play a 1-sample silent buffer through
+   `ctx.destination` to "warm" the context.
+2. **Synchronous `resume()`**: Call `ctx.resume()` without awaiting — the
+   promise resolves asynchronously but the gesture privilege is consumed
+   synchronously.
+3. **MediaStreamDestination keep-alive**: Route audio to both `ctx.destination`
+   (actual sound) and a `MediaStreamAudioDestinationNode` → hidden `<audio>`
+   element. Safari treats `<audio> srcObject` streams as "real" media, preventing
+   the context from being suspended during playback. The `<audio>` element does
+   **not** produce audible output — it only signals to the OS that media is
+   active.
+
+**Event wiring rules:**
+- Global warmup: `touchend`, `click`, `keydown` on `document`.
+- Splash dismiss: `touchend` + `click` on `canvasArea`. Do NOT use `pointerup`.
+- Play button: `pointerdown` for eager `warmUp()` (creates the context early,
+  even though the gesture doesn't qualify — so it's ready when a qualifying
+  event fires). Actual playback starts in the same handler.
+
 ## When Making Changes
 
 - The render loop is driven by `needsRender` flag + `requestAnimationFrame`. Set
