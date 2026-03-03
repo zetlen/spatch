@@ -1,0 +1,4 @@
+[tools]
+bun = "1.3.10"
+"pipx:fb-idb" = "latest"
+python = "3.9"
