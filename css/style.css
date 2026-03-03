@@ -279,18 +279,16 @@ body {
   justify-content: center;
   border: none;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.45);
-  color: var(--text-muted);
+  background: none;
+  color: #fff;
   cursor: pointer;
-  opacity: 0.6;
-  transition:
-    opacity 0.2s,
-    background 0.2s;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+  opacity: 0.8;
+  transition: opacity 0.2s;
 }
 
 .stage-btn:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.7);
 }
 
 #canvas-area::before,
