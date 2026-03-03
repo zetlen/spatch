@@ -90,6 +90,11 @@ async function generateTablerSprite() {
 async function build() {
   await Bun.$`rm -rf dist`;
 
+  // Scan scene images so we can inject the list as a build-time constant
+  const sceneDir = 'img/scene';
+  const sceneGlob = new Bun.Glob('*.jpg');
+  const sceneFiles = [...sceneGlob.scanSync(sceneDir)].sort();
+
   // Build HTML entry points — Bun's HTML loader handles script tag rewriting,
   // asset hashing, CSS bundling, and copying automatically.
   const htmlResult = await Bun.build({
@@ -102,6 +107,9 @@ async function build() {
       entry: '[name].[ext]',
       chunk: '[name]-[hash].[ext]',
       asset: '[name]-[hash].[ext]',
+    },
+    define: {
+      __SCENE_IMAGES__: JSON.stringify(sceneFiles.map((f) => `img/scene/${f}`)),
     },
   });
 
@@ -127,15 +135,13 @@ async function build() {
   // containing only the icons actually used.
   await generateTablerSprite();
 
-  // Copy stage background images
-  const stageDir = 'spatch-bgs';
-  const stageOut = 'dist/stage';
-  await Bun.$`mkdir -p ${stageOut}`;
-  const stageGlob = new Bun.Glob('*.jpg');
-  for (const file of stageGlob.scanSync(stageDir)) {
-    await Bun.$`cp ${stageDir}/${file} ${stageOut}/${file}`;
+  // Copy scene images to dist
+  const sceneOut = 'dist/img/scene';
+  await Bun.$`mkdir -p ${sceneOut}`;
+  for (const file of sceneFiles) {
+    await Bun.$`cp ${sceneDir}/${file} ${sceneOut}/${file}`;
   }
-  console.log(`  Copied stage backgrounds to ${stageOut}/`);
+  console.log(`  Copied ${sceneFiles.length} scene images to ${sceneOut}/`);
 
   const totalOutputs = htmlResult.outputs.length;
   console.log(`Build complete: ${totalOutputs} files written to dist/`);

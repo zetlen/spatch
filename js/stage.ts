@@ -1,12 +1,5 @@
-const IMAGES = [
-  'stage/blue-hall.jpg',
-  'stage/cloud-carpet.jpg',
-  'stage/excel-flyer.jpg',
-  'stage/g-block.jpg',
-  'stage/parking-elevator.jpg',
-  'stage/shoe-dept.jpg',
-  'stage/tile-towers.jpg',
-];
+declare const __SCENE_IMAGES__: string[];
+const IMAGES: string[] = __SCENE_IMAGES__;
 
 const MODES = ['stage-minimal', 'stage-subtle', 'stage-florid'] as const;
 type StageMode = (typeof MODES)[number];
