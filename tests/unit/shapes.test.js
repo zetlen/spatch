@@ -1,11 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import {
-  hitTestShapes,
-  hitTestHandles,
-  hitTestADSRCorner,
-  calcResize,
-  calcRotation,
-} from '../../js/shapes.ts';
+import { hitTestADSRCorner, calcResize, calcRotation, voiceRotation } from '../../js/shapes.ts';
 
 const CANVAS_SIZE = 800;
 
@@ -21,115 +15,6 @@ function makeVoice(overrides = {}) {
     ...overrides,
   };
 }
-
-describe('hitTestShapes', () => {
-  test('returns shape id when clicking inside a circle', () => {
-    const state = {
-      voices: [makeVoice({ id: 'c1', waveform: 'sine', x: 0.5, y: 0.5, size: 0.12 })],
-      texts: [],
-      envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
-      reverb: null,
-    };
-    // Center of shape at (400, 400), radius = 0.06 * 800 = 48px
-    const result = hitTestShapes(state, 400, 400, CANVAS_SIZE);
-    expect(result).toBe('c1');
-  });
-
-  test('returns null when clicking outside all shapes', () => {
-    const state = {
-      voices: [makeVoice({ id: 'c1', x: 0.5, y: 0.5, size: 0.12 })],
-      texts: [],
-      envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
-      reverb: null,
-    };
-    // Click far from shape
-    const result = hitTestShapes(state, 10, 10, CANVAS_SIZE);
-    expect(result).toBeNull();
-  });
-
-  test('returns topmost (last) shape when overlapping', () => {
-    const state = {
-      voices: [
-        makeVoice({ id: 'bottom', x: 0.5, y: 0.5, size: 0.2 }),
-        makeVoice({ id: 'top', x: 0.5, y: 0.5, size: 0.2 }),
-      ],
-      texts: [],
-      envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
-      reverb: null,
-    };
-    const result = hitTestShapes(state, 400, 400, CANVAS_SIZE);
-    expect(result).toBe('top');
-  });
-
-  test('hits a square shape', () => {
-    const state = {
-      voices: [makeVoice({ id: 'sq1', waveform: 'pulse', x: 0.5, y: 0.5, size: 0.2, timbre: 0 })],
-      texts: [],
-      envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
-      reverb: null,
-    };
-    const result = hitTestShapes(state, 400, 400, CANVAS_SIZE);
-    expect(result).toBe('sq1');
-  });
-
-  test('hits a triangle shape at center', () => {
-    const state = {
-      voices: [makeVoice({ id: 'tri1', waveform: 'blend', x: 0.5, y: 0.5, size: 0.3, timbre: 0 })],
-      texts: [],
-      envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
-      reverb: null,
-    };
-    const result = hitTestShapes(state, 400, 400, CANVAS_SIZE);
-    expect(result).toBe('tri1');
-  });
-
-  test('returns null for empty state', () => {
-    const result = hitTestShapes(
-      { voices: [], texts: [], envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 } },
-      400,
-      400,
-      CANVAS_SIZE,
-    );
-    expect(result).toBeNull();
-  });
-});
-
-describe('hitTestHandles', () => {
-  test('returns null when no shape provided', () => {
-    expect(hitTestHandles(null, 400, 400, CANVAS_SIZE)).toBeNull();
-  });
-
-  test('detects rotation handle above shape', () => {
-    const voice = makeVoice({ x: 0.5, y: 0.5, size: 0.12, waveform: 'pulse', timbre: 0 });
-    // Rotation handle is at (cx, cy - r - 25) = (400, 400 - 48 - 25) = (400, 327)
-    const result = hitTestHandles(voice, 400, 327, CANVAS_SIZE);
-    expect(result).toBe('rotate');
-  });
-
-  test('detects corner resize handles', () => {
-    const voice = makeVoice({ x: 0.5, y: 0.5, size: 0.12 });
-    const r = (0.12 / 2) * CANVAS_SIZE; // 48
-    const cx = 0.5 * CANVAS_SIZE; // 400
-    const cy = 0.5 * CANVAS_SIZE; // 400
-
-    // SE corner: (cx + r, cy + r) = (448, 448)
-    expect(hitTestHandles(voice, cx + r, cy + r, CANVAS_SIZE)).toBe('se');
-    // NW corner: (cx - r, cy - r) = (352, 352)
-    expect(hitTestHandles(voice, cx - r, cy - r, CANVAS_SIZE)).toBe('nw');
-  });
-
-  test('detects midpoint handles', () => {
-    const voice = makeVoice({ x: 0.5, y: 0.5, size: 0.12 });
-    // East midpoint: (448, 400)
-    expect(hitTestHandles(voice, 448, 400, CANVAS_SIZE)).toBe('e');
-  });
-
-  test('returns null when not near any handle', () => {
-    const voice = makeVoice({ x: 0.5, y: 0.5, size: 0.12 });
-    // Click at center of shape (not on any handle)
-    expect(hitTestHandles(voice, 400, 400, CANVAS_SIZE)).toBeNull();
-  });
-});
 
 describe('hitTestADSRCorner', () => {
   const envelope = { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 };
@@ -217,5 +102,37 @@ describe('calcRotation', () => {
     const voice = makeVoice({ x: 0.5, y: 0.5 });
     const deg = calcRotation(voice, 300, 400, CANVAS_SIZE);
     expect(deg).toBeCloseTo(270, 0);
+  });
+});
+
+describe('voiceRotation', () => {
+  test('sine voice always returns 0', () => {
+    const voice = makeVoice({ waveform: 'sine' });
+    expect(voiceRotation(voice)).toBe(0);
+  });
+
+  test('pulse voice with timbre 0 returns 0', () => {
+    const voice = makeVoice({ waveform: 'pulse', timbre: 0 });
+    expect(voiceRotation(voice)).toBe(0);
+  });
+
+  test('pulse voice with timbre 1 returns 90 (full period)', () => {
+    const voice = makeVoice({ waveform: 'pulse', timbre: 1 });
+    expect(voiceRotation(voice)).toBe(90);
+  });
+
+  test('pulse voice with timbre 0.5 returns 45', () => {
+    const voice = makeVoice({ waveform: 'pulse', timbre: 0.5 });
+    expect(voiceRotation(voice)).toBe(45);
+  });
+
+  test('blend voice with timbre 1 returns 120 (full period)', () => {
+    const voice = makeVoice({ waveform: 'blend', timbre: 1 });
+    expect(voiceRotation(voice)).toBe(120);
+  });
+
+  test('blend voice with timbre 0.5 returns 60', () => {
+    const voice = makeVoice({ waveform: 'blend', timbre: 0.5 });
+    expect(voiceRotation(voice)).toBe(60);
   });
 });

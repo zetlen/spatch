@@ -36,6 +36,9 @@ test.describe('Serialization round-trip', () => {
     const box = await canvas.boundingBox();
     await canvas.click({ position: { x: box.width * 0.3, y: box.height * 0.3 } });
 
+    // Deselect so tool buttons become visible again
+    await page.keyboard.press('Escape');
+
     await page.click('[data-tool="square"]');
     await canvas.click({ position: { x: box.width * 0.7, y: box.height * 0.7 } });
 

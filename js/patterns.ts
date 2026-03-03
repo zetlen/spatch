@@ -1,147 +1,90 @@
-// patterns.ts — Visual pattern tile generators
+// patterns.ts — SVG pattern definitions for visual overlays
 
-import { waveformShape, type Voice, type PatternType } from './types.ts';
+import type { PatternType } from './types.ts';
 
-const cache = new Map<PatternType, HTMLCanvasElement>();
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
-function getPatternTile(patternType: PatternType): HTMLCanvasElement | null {
-  if (cache.has(patternType)) return cache.get(patternType)!;
-  let tile: HTMLCanvasElement | null = null;
-  switch (patternType) {
+/** Ensure all pattern definitions exist in the given <defs> element. */
+export function ensurePatternDefs(defs: SVGDefsElement): void {
+  if (defs.querySelector('#pat-stripes')) return; // already defined
+
+  // Stripes: repeating horizontal band
+  const stripes = createPattern('pat-stripes', 0.0075, 0.0075);
+  const stripesRect = document.createElementNS(SVG_NS, 'rect');
+  stripesRect.setAttribute('width', '0.0075');
+  stripesRect.setAttribute('height', '0.00375');
+  stripesRect.setAttribute('fill', 'rgba(0,0,0,0.45)');
+  stripes.appendChild(stripesRect);
+  defs.appendChild(stripes);
+
+  // Checker: 2x2 alternating squares
+  const checker = createPattern('pat-checker', 0.01, 0.01);
+  const cRect1 = document.createElementNS(SVG_NS, 'rect');
+  cRect1.setAttribute('width', '0.005');
+  cRect1.setAttribute('height', '0.005');
+  cRect1.setAttribute('fill', 'rgba(0,0,0,0.35)');
+  checker.appendChild(cRect1);
+  const cRect2 = document.createElementNS(SVG_NS, 'rect');
+  cRect2.setAttribute('x', '0.005');
+  cRect2.setAttribute('y', '0.005');
+  cRect2.setAttribute('width', '0.005');
+  cRect2.setAttribute('height', '0.005');
+  cRect2.setAttribute('fill', 'rgba(0,0,0,0.35)');
+  checker.appendChild(cRect2);
+  defs.appendChild(checker);
+
+  // Noise: feTurbulence filter
+  const noiseFilter = document.createElementNS(SVG_NS, 'filter');
+  noiseFilter.id = 'pat-noise';
+  noiseFilter.setAttribute('x', '0');
+  noiseFilter.setAttribute('y', '0');
+  noiseFilter.setAttribute('width', '100%');
+  noiseFilter.setAttribute('height', '100%');
+  const turb = document.createElementNS(SVG_NS, 'feTurbulence');
+  turb.setAttribute('type', 'fractalNoise');
+  turb.setAttribute('baseFrequency', '0.9');
+  turb.setAttribute('numOctaves', '4');
+  turb.setAttribute('seed', '1');
+  turb.setAttribute('result', 'noise');
+  noiseFilter.appendChild(turb);
+  const colorMatrix = document.createElementNS(SVG_NS, 'feColorMatrix');
+  colorMatrix.setAttribute('in', 'noise');
+  colorMatrix.setAttribute('type', 'matrix');
+  // Convert noise to black with variable alpha
+  colorMatrix.setAttribute('values', '0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.3 0');
+  colorMatrix.setAttribute('result', 'darkNoise');
+  noiseFilter.appendChild(colorMatrix);
+  const composite = document.createElementNS(SVG_NS, 'feComposite');
+  composite.setAttribute('in', 'darkNoise');
+  composite.setAttribute('in2', 'SourceGraphic');
+  composite.setAttribute('operator', 'atop');
+  noiseFilter.appendChild(composite);
+  defs.appendChild(noiseFilter);
+}
+
+function createPattern(id: string, width: number, height: number): SVGPatternElement {
+  const pat = document.createElementNS(SVG_NS, 'pattern');
+  pat.id = id;
+  pat.setAttribute('patternUnits', 'userSpaceOnUse');
+  pat.setAttribute('width', String(width));
+  pat.setAttribute('height', String(height));
+  return pat;
+}
+
+/**
+ * Get the SVG attribute for applying a pattern to a shape.
+ * Returns { attr, value } where attr is 'fill' or 'filter' depending on type.
+ */
+export function getPatternOverlay(pattern: PatternType): { attr: string; value: string } {
+  switch (pattern) {
     case 'stripes':
-      tile = createStripesTile();
-      break;
+      return { attr: 'fill', value: 'url(#pat-stripes)' };
     case 'checker':
-      tile = createCheckerTile();
-      break;
+      return { attr: 'fill', value: 'url(#pat-checker)' };
     case 'noise':
-      tile = createNoiseTile();
-      break;
-    default:
-      return null; // gradient and rough are procedural
-  }
-  if (tile) cache.set(patternType, tile);
-  return tile;
-}
-
-function createStripesTile(): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = 6;
-  c.height = 6;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(0, 0, 6, 3);
-  return c;
-}
-
-function createCheckerTile(): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = 8;
-  c.height = 8;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.fillRect(0, 0, 4, 4);
-  ctx.fillRect(4, 4, 4, 4);
-  return c;
-}
-
-function createNoiseTile(): HTMLCanvasElement {
-  const size = 16;
-  const c = document.createElement('canvas');
-  c.width = size;
-  c.height = size;
-  const ctx = c.getContext('2d')!;
-  const img = ctx.createImageData(size, size);
-  for (let i = 0; i < img.data.length; i += 4) {
-    img.data[i] = 0;
-    img.data[i + 1] = 0;
-    img.data[i + 2] = 0;
-    img.data[i + 3] = Math.random() > 0.5 ? 76 : 0;
-  }
-  ctx.putImageData(img, 0, 0);
-  return c;
-}
-
-// Apply a pattern overlay to the current clipped region
-export function applyPattern(
-  ctx: CanvasRenderingContext2D,
-  voice: Voice,
-  canvasSize: number,
-): void {
-  const r = (voice.size / 2) * canvasSize;
-  const pattern = voice.effect;
-
-  if (pattern === 'gradient') {
-    ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.globalAlpha = 0.35;
-    const grad = ctx.createLinearGradient(-r, -r, r, r);
-    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.7)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(-r, -r, r * 2, r * 2);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
-    return;
-  }
-
-  if (pattern === 'rough') {
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.globalAlpha = 0.5;
-    // Derive a stable pseudo-random value from voice ID to avoid per-frame flicker
-    let hash = 0;
-    for (let i = 0; i < voice.id.length; i++)
-      hash = ((hash << 5) - hash + voice.id.charCodeAt(i)) | 0;
-    const dashLen = 3 + ((hash & 0xffff) / 0xffff) * 5;
-    ctx.setLineDash([dashLen, dashLen * 0.8, dashLen * 1.5, dashLen * 0.5]);
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'black';
-    buildShapePath(ctx, voice, canvasSize);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
-    return;
-  }
-
-  // Tile-based patterns
-  const tile = getPatternTile(pattern!);
-  if (!tile) return;
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'source-atop';
-  ctx.globalAlpha = 0.5;
-  const pat = ctx.createPattern(tile, 'repeat')!;
-  ctx.fillStyle = pat;
-  ctx.fillRect(-r, -r, r * 2, r * 2);
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.restore();
-}
-
-function buildShapePath(ctx: CanvasRenderingContext2D, voice: Voice, canvasSize: number): void {
-  const r = (voice.size / 2) * canvasSize;
-  const shape = waveformShape(voice.waveform);
-  ctx.beginPath();
-  switch (shape) {
-    case 'circle':
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      break;
-    case 'square':
-      ctx.rect(-r, -r, r * 2, r * 2);
-      break;
-    case 'triangle':
-      for (let i = 0; i < 3; i++) {
-        const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
-        const px = Math.cos(angle) * r;
-        const py = Math.sin(angle) * r;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-      break;
+      return { attr: 'filter', value: 'url(#pat-noise)' };
+    case 'gradient':
+      // Gradient overlay is handled per-voice with a dedicated gradient def
+      return { attr: 'fill', value: '' };
   }
 }

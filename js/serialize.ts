@@ -14,7 +14,7 @@
 //   fill (solid)   = ["s", h, s, l]
 //   fill (linear)  = ["l", gradAngle, h, s, l, h2, s2, l2]
 //
-//   effect = "s"|"c"|"n"|"g"|"r" | 0
+//   effect = "s"|"c"|"n"|"g" | 0
 //
 //   text = [text, x, y, size]
 //
@@ -130,7 +130,6 @@ const effectMap: Record<string, PatternType> = {
   c: 'checker',
   n: 'noise',
   g: 'gradient',
-  r: 'rough',
 };
 
 function unpack(packed: PackedState): SigilData {

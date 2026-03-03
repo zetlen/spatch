@@ -42,7 +42,7 @@ test.describe('Playback', () => {
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
     const playBtn = page.locator('#btn-play');
-    const useEl = playBtn.locator('use');
+    const useEl = playBtn.locator('.play-icon use');
 
     // Before playing — play icon
     await expect(useEl).toHaveAttribute('href', /player-play-filled/);

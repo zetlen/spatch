@@ -17,8 +17,7 @@ if (!hash) {
       '<p style="color:#2a2a2a;text-align:center;padding:2em;">Invalid sigil data.</p>';
   } else {
     const sigil = state; // narrow for closures
-    const canvas = document.getElementById('c') as HTMLCanvasElement;
-    const ctx = canvas.getContext('2d')!;
+    const svgEl = document.getElementById('c') as unknown as SVGSVGElement;
     const frame = document.getElementById('canvas-frame')!;
     const audio = new AudioEngine();
 
@@ -39,7 +38,7 @@ if (!hash) {
 
     // Render loop: continuously re-render so playback glow effects animate
     function renderLoop(): void {
-      render(ctx, sigil, 800, null);
+      render(svgEl, sigil, null);
       requestAnimationFrame(renderLoop);
     }
     renderLoop();

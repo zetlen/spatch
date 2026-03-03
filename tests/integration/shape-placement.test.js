@@ -55,6 +55,9 @@ test.describe('Shape placement', () => {
     await page.click('[data-tool="triangle"]');
     await canvas.click({ position: { x: box.width * 0.3, y: box.height * 0.3 } });
 
+    // Deselect so tool buttons become visible again
+    await page.keyboard.press('Escape');
+
     // Place circle
     await page.click('[data-tool="circle"]');
     await canvas.click({ position: { x: box.width * 0.7, y: box.height * 0.7 } });

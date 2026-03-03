@@ -353,7 +353,6 @@ export class AudioEngine {
   envelopeGain: GainNode | null;
   compressor: DynamicsCompressorNode | null;
   isPlaying: boolean;
-  _workletReady: boolean;
   _sessionId: number;
   _autoEQ: BiquadFilterNode[];
   _analyser: AnalyserNode | null;
@@ -369,7 +368,6 @@ export class AudioEngine {
     this.envelopeGain = null;
     this.compressor = null;
     this.isPlaying = false;
-    this._workletReady = false;
     this._sessionId = 0;
     this._autoEQ = [];
     this._analyser = null;
@@ -382,16 +380,6 @@ export class AudioEngine {
   async _init(): Promise<void> {
     if (this.audioCtx) return;
     this.audioCtx = new AudioContext();
-
-    // Try to register bitcrusher worklet
-    if (this.audioCtx.audioWorklet) {
-      try {
-        await this.audioCtx.audioWorklet.addModule('worklets/bitcrusher.js');
-        this._workletReady = true;
-      } catch {
-        console.warn('AudioWorklet not available, using WaveShaper fallback');
-      }
-    }
   }
 
   async play(sigilState: SigilData, envelope: Envelope): Promise<void> {
@@ -850,7 +838,7 @@ export class AudioEngine {
     let effectDispose: (() => void) | null = null;
 
     if (voice.effect) {
-      const effect = createEffect(ctx, voice.effect, this._workletReady);
+      const effect = createEffect(ctx, voice.effect);
       if (effect) {
         lastNode.connect(effect.input);
         lastNode = effect.output;

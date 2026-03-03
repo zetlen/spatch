@@ -25,12 +25,12 @@ js/
                      resizing, rotating, adsr, deco-*, pinch-rotate)
   app.ts             Entry point: init, event wiring, render loop, selection
   embed-entry.ts     Entry point for embed.html viewer
-  canvas.ts          Canvas 2D rendering (voices, text decorations, selection UI)
-  shapes.ts          Hit testing, resize/rotate math
-  colors.ts          Color conversions (HSL↔RGB), gradient renderers, picker UI
-  patterns.ts        Visual pattern tiles (stripes, checker, noise) + procedural
+  canvas.ts          SVG DOM reconciler (voices, text decorations, selection UI)
+  shapes.ts          Resize/rotate math, ADSR corner testing
+  colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
+  patterns.ts        SVG pattern definitions (stripes, checker, noise, gradient)
   effects.ts         Audio effect builders: pattern effects (chorus, tremolo,
-                     flanger, phaser, bitcrusher) and blend effects (saturation,
+                     flanger, phaser) and blend effects (saturation,
                      compression, exciter, gating, comb filter, flanger) +
                      overlap computation
   audio.ts           Web Audio engine: AudioEngine class, mapping functions
@@ -41,8 +41,6 @@ js/
   vocoder.ts         Formant synthesis for text decorations (bandpass filter bank)
   embed.ts           Embed snippet generator + modal UI
   serialize.ts       LZ-string URL serialization (positional arrays, no keys)
-  worklets/
-    bitcrusher.js    AudioWorkletProcessor for the "rough" pattern effect
 dist/                Build output (gitignored)
 docs/plans/              Design docs and implementation plans
                          Convention: YYYY-MM-DD-{topic}-{design|plan}.md
@@ -101,7 +99,7 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
             │            │            │
             ▼            ▼            ▼
      ┌─────────┐  ┌─────────────┐  ┌───────┐
-     │  Canvas │  │  Serializer │  │ Audio │
+     │   SVG   │  │  Serializer │  │ Audio │
      │ (bijec) │  │   (bijec)   │  │ (one  │
      │ data ↔  │  │  data ↔     │  │  way) │
      │ geometry│  │  string     │  │ data →│
@@ -109,9 +107,9 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
      └─────────┘  └─────────────┘  └───────┘
 ```
 
-**Canvas** and **Serializer** are bijective transforms — they must go both
-directions without information loss. The canvas maps state to geometry and
-geometry back to state (hit testing, resize handles, rotation gestures). The
+**SVG** and **Serializer** are bijective transforms — they must go both
+directions without information loss. The SVG reconciler maps state to geometry
+and geometry back to state (hit testing, resize handles, rotation gestures). The
 serializer maps state to a URL string and back. If either direction is lossy or
 ambiguous, tools or sharing break.
 
@@ -126,7 +124,7 @@ data↔geometry — but they share the same **constraint**: every field in
 
 ### The Bijection Principle
 
-**STRICT INVARIANT.** Every field in SigilData must affect both canvas rendering
+**STRICT INVARIANT.** Every field in SigilData must affect both SVG rendering
 and audio synthesis. No visual-only state. No hidden audio parameters.
 
 - Two states that look identical MUST sound identical.
@@ -136,7 +134,7 @@ and audio synthesis. No visual-only state. No hidden audio parameters.
 
 Violations of this principle must be **unrepresentable in the type system**, not
 merely discouraged by convention. If you add a visual field, it must have an
-audio mapping. If you add an audio parameter, it must be visible on the canvas.
+audio mapping. If you add an audio parameter, it must be visible in the SVG.
 No exceptions.
 
 See `docs/plans/2026-03-01-bijective-audio-visual-design.md` for the full
@@ -156,7 +154,7 @@ design rationale and enumeration of past violations.
     ramp, periodic per vertex count (90° for square, 120° for triangle). Every
     angle within the period maps to a unique timbre. Circles have no timbre and
     no rotation.
-  - `blend` → canvas `globalCompositeOperation` + overlap-driven audio effect.
+  - `blend` → CSS `mix-blend-mode` + overlap-driven audio effect.
     Default is `soft-light`. Seven modes, each mapping to an audio chain:
     soft-light (tape saturation), multiply (heavy saturation), screen (compression),
     overlay (harmonic exciter), color-burn (gating), difference (comb filter),
@@ -178,13 +176,14 @@ design rationale and enumeration of past violations.
   bright IR, white shadow) or `dim` (long dark IR, black shadow).
 
 - **Canvas frame**: The canvas is split into `#canvas-frame` (div) and
-  `#sigil-canvas` (canvas). The frame div owns the dark background,
-  border-radius (ADSR corners), bevel border, inset shadow (reverb), and
-  audio-reactive elevation shadow (play indicator). The canvas is transparent
-  and draws shapes and touch selection indicators only, ensuring they appear
-  above the shadow. During playback, `updateFrameShadow` in app.ts composes
-  both the reverb inset shadow and a cool dark outer shadow whose intensity
-  tracks real-time RMS audio level via an AnalyserNode in the audio engine.
+  `#sigil-canvas` (SVG, `viewBox="0 0 1 1"`). The frame div owns the dark
+  background, border-radius (ADSR corners), bevel border, inset shadow
+  (reverb), and audio-reactive elevation shadow (play indicator). The SVG is
+  transparent and renders shapes and touch selection indicators only, ensuring
+  they appear above the shadow. During playback, `updateFrameShadow` in app.ts
+  composes both the reverb inset shadow and a cool dark outer shadow whose
+  intensity tracks real-time RMS audio level via an AnalyserNode in the audio
+  engine.
 
 - **ADSR envelope** is encoded as the canvas frame corner radii. Drag
   corners to adjust. Bottom-left = attack, top-left = decay, top-right =
@@ -209,8 +208,8 @@ design rationale and enumeration of past violations.
   compilation at build time and in tests.
 - Coordinates are normalized 0–1 (shape positions, sizes), branded as `NormalizedCoord`.
   Use `normalizedCoord()`, `degrees()`, `cents()` from `types.ts` at module boundaries
-  instead of raw `as` casts. Canvas renders at 800×800 internal resolution, CSS-scaled
-  to fit viewport.
+  instead of raw `as` casts. SVG uses `viewBox="0 0 1 1"` so all coordinates map
+  directly to normalized space. Display size is CSS-scaled to fit viewport (max 800px).
 - Shape IDs are generated with a counter + random suffix (e.g., `s1a3f`).
 - **Fill** is a discriminated union (`SolidFill | RadialFill | LinearFill`). The
   toolbar uses a flat `FillDraft` bag internally for mode-switching without data loss,
@@ -221,10 +220,10 @@ design rationale and enumeration of past violations.
   squiggles, no curlicues.
 - **InteractionState** is a discriminated union for the canvas interaction state
   machine (idle, dragging, resizing, rotating, etc.), replacing scattered variables.
-- **BlendMode** is a string union of the 7 supported canvas composite operations.
-  Each voice has a `blend` field (default `soft-light`). Canvas renders each voice
-  with `globalCompositeOperation = voice.blend`. Audio routes each voice through
-  a blend effect whose wet/dry is computed from geometric overlap with other voices.
+- **BlendMode** is a string union of the 7 supported blend modes.
+  Each voice has a `blend` field (default `soft-light`). SVG renders each voice
+  group with CSS `mix-blend-mode` inside an isolation container. Audio routes each
+  voice through a blend effect whose wet/dry is computed from geometric overlap.
 - **Border** is `{ color: BorderColor, double: boolean, thickness: NormalizedCoord } | null`.
   Visual: inset stroke(s) drawn inside the clipped shape. Audio: adds a sine
   oscillator at an octave-shifted frequency. Border changes trigger full voice
@@ -244,9 +243,10 @@ files anywhere else.**
 - The render loop is driven by `needsRender` flag + `requestAnimationFrame`. Set
   `needsRender = true` or call `store._notify()` to trigger a redraw.
 - To add a new waveform/shape: add a variant to the Voice union in `types.ts`,
-  update `state.ts:createVoice`, `canvas.ts:buildShapePath`,
-  `shapes.ts:isPointInShape`, `audio.ts` voice builder, and `serialize.ts`.
-  The new variant MUST map every field to both a visual and audio interpretation.
+  update `state.ts:createVoice`, `canvas.ts` SVG element creation,
+  `audio.ts` voice builder, and `serialize.ts`. Hit testing is handled natively
+  by SVG pointer events. The new variant MUST map every field to both a visual
+  and audio interpretation.
 - To add a new pattern/effect: update `patterns.ts` (visual), `effects.ts`
   (audio), and add a button in `index.html`. Both sides are required.
 - To add a new blend mode: add to the `BlendMode` union in `types.ts`,
@@ -254,7 +254,7 @@ files anywhere else.**
   in `serialize.ts`, and add an `<option>` in `index.html`. The mode must
   produce a visible difference when shapes overlap and map to an audio effect.
 - To modify border behavior: update `Border` type in `types.ts`, update
-  `canvas.ts:drawVoice` (visual rendering), `audio.ts:_buildVoice` (octave
+  `canvas.ts` voice reconciliation (visual rendering), `audio.ts:_buildVoice` (octave
   oscillator), `serialize.ts` (pack/unpack), and `toolbar.ts` (border panel
   bindings). Border changes trigger full voice rebuild via `currentBorder`
   string comparison in `updateVoices`.
@@ -271,4 +271,4 @@ files anywhere else.**
   `toolbar.ts` (reverb panel bindings). Reverb is global — not per-voice.
 - The `embed.html` page imports the same modules as the main app but only uses
   `canvas.ts`, `audio.ts`, `serialize.ts`, and `envelope.ts`. Both pages
-  use the same frame div + transparent canvas architecture.
+  use the same frame div + transparent SVG architecture.
