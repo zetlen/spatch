@@ -373,9 +373,6 @@ body {
 .pattern-preview-gradient {
   background: linear-gradient(90deg, var(--text-primary), transparent);
 }
-.pattern-preview-rough {
-  background: repeating-linear-gradient(90deg, var(--text-primary) 0 2px, transparent 2px 5px);
-}
 
 /* ---- Expansion row controls ---- */
 

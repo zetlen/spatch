@@ -37,7 +37,7 @@ export function cents(n: number): Cents {
 
 export type WaveformType = 'sine' | 'pulse' | 'blend';
 
-export type PatternType = 'stripes' | 'checker' | 'noise' | 'gradient' | 'rough';
+export type PatternType = 'stripes' | 'checker' | 'noise' | 'gradient';
 
 export type BlendMode =
   | 'soft-light'

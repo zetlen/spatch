@@ -18,7 +18,7 @@ function getPatternTile(patternType: PatternType): HTMLCanvasElement | null {
       tile = createNoiseTile();
       break;
     default:
-      return null; // gradient and rough are procedural
+      return null; // gradient is procedural
   }
   if (tile) cache.set(patternType, tile);
   return tile;
@@ -80,27 +80,6 @@ export function applyPattern(
     grad.addColorStop(1, 'rgba(0,0,0,0.7)');
     ctx.fillStyle = grad;
     ctx.fillRect(-r, -r, r * 2, r * 2);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
-    return;
-  }
-
-  if (pattern === 'rough') {
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.globalAlpha = 0.5;
-    // Derive a stable pseudo-random value from voice ID to avoid per-frame flicker
-    let hash = 0;
-    for (let i = 0; i < voice.id.length; i++)
-      hash = ((hash << 5) - hash + voice.id.charCodeAt(i)) | 0;
-    const dashLen = 3 + ((hash & 0xffff) / 0xffff) * 5;
-    ctx.setLineDash([dashLen, dashLen * 0.8, dashLen * 1.5, dashLen * 0.5]);
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'black';
-    buildShapePath(ctx, voice, canvasSize);
-    ctx.stroke();
-    ctx.setLineDash([]);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.restore();

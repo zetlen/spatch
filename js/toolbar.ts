@@ -107,7 +107,6 @@ export class Toolbar {
       { value: 'checker', title: 'Checker' },
       { value: 'noise', title: 'Noise' },
       { value: 'gradient', title: 'Gradient' },
-      { value: 'rough', title: 'Rough' },
     ];
     for (const p of patterns) {
       const btn = document.createElement('button');

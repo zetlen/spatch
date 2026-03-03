@@ -2,11 +2,7 @@
 
 import type { PatternType, BlendMode, AudioEffect } from './types.ts';
 
-export function createEffect(
-  audioCtx: AudioContext,
-  pattern: PatternType,
-  workletReady: boolean,
-): AudioEffect | null {
+export function createEffect(audioCtx: AudioContext, pattern: PatternType): AudioEffect | null {
   switch (pattern) {
     case 'stripes':
       return createChorus(audioCtx);
@@ -16,8 +12,6 @@ export function createEffect(
       return createFlanger(audioCtx);
     case 'gradient':
       return createPhaser(audioCtx);
-    case 'rough':
-      return createBitcrusher(audioCtx, workletReady);
     default:
       return null;
   }
@@ -158,34 +152,6 @@ function createPhaser(ctx: AudioContext): AudioEffect {
   wet.connect(output);
 
   return { input, output, dispose: () => lfo.stop() };
-}
-
-// Rough/distressed → Bitcrusher
-function createBitcrusher(ctx: AudioContext, workletReady: boolean): AudioEffect {
-  if (workletReady) {
-    try {
-      const node = new AudioWorkletNode(ctx, 'bitcrusher-processor');
-      node.parameters.get('bitDepth')!.value = 6;
-      node.parameters.get('frequencyReduction')!.value = 0.3;
-      return { input: node, output: node, dispose: () => {} };
-    } catch {
-      // fall through to waveshaper
-    }
-  }
-
-  // Fallback: WaveShaper distortion
-  const ws = ctx.createWaveShaper();
-  const samples = 4096;
-  const curve = new Float32Array(samples);
-  for (let i = 0; i < samples; i++) {
-    const x = (i * 2) / samples - 1;
-    // Hard clipping with some staircasing
-    const quantized = Math.round(x * 8) / 8;
-    curve[i] = quantized;
-  }
-  ws.curve = curve;
-  ws.oversample = '2x';
-  return { input: ws, output: ws, dispose: () => {} };
 }
 
 // ---- Blend mode audio effects ----
