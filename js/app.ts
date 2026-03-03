@@ -3,16 +3,11 @@
 import { SigilStore, UndoManager } from './state.ts';
 import { render } from './canvas.ts';
 import {
-  hitTestShapes,
-  hitTestHandles,
   hitTestADSRCorner,
   isInClippedCorner,
   calcResize,
   calcRotation,
   clampSize,
-  hitTestDecorations,
-  hitTestDecoHandles,
-  getDecoBounds,
 } from './shapes.ts';
 import { Toolbar } from './toolbar.ts';
 import { AudioEngine, snapYToNote, rotationToTimbre } from './audio.ts';
@@ -26,15 +21,14 @@ import {
   type TextDecoration,
   type WaveformType,
   type ADSRCorner,
+  type HandleType,
   type Reverb,
 } from './types.ts';
 
 // ---- Init ----
 
-const canvas = document.getElementById('sigil-canvas') as HTMLCanvasElement;
+const svg = document.getElementById('sigil-canvas') as unknown as SVGSVGElement;
 const canvasFrame = document.getElementById('canvas-frame')!;
-const ctx = canvas.getContext('2d')!;
-const CANVAS_SIZE = 800;
 
 const store = new SigilStore();
 const undo = new UndoManager(store);
@@ -124,12 +118,6 @@ function resizeCanvas(): void {
   wrap.style.width = size + 'px';
   wrap.style.height = size + 'px';
 
-  canvas.style.width = size + 'px';
-  canvas.style.height = size + 'px';
-  // Keep internal resolution at 800 for crisp rendering
-  canvas.width = CANVAS_SIZE;
-  canvas.height = CANVAS_SIZE;
-
   updateCanvasBorderRadius(canvasFrame, store.data.envelope, size);
   updateFrameShadow(canvasFrame, store.data.reverb, size, audio.getLevel());
   needsRender = true;
@@ -153,19 +141,12 @@ store.onChange(() => {
 
 function renderLoop(): void {
   if (needsRender || audio.isPlaying) {
-    render(ctx, store.data, CANVAS_SIZE, selectedId, selectedDecoId);
+    render(svg, store.data, selectedId, selectedDecoId);
 
-    updateCanvasBorderRadius(
-      canvasFrame,
-      store.data.envelope,
-      parseInt(canvas.style.width) || CANVAS_SIZE,
-    );
-    updateFrameShadow(
-      canvasFrame,
-      store.data.reverb,
-      parseInt(canvas.style.width) || CANVAS_SIZE,
-      audio.getLevel(),
-    );
+    const wrap = document.getElementById('canvas-wrap')!;
+    const displaySize = parseInt(wrap.style.width) || 800;
+    updateCanvasBorderRadius(canvasFrame, store.data.envelope, displaySize);
+    updateFrameShadow(canvasFrame, store.data.reverb, displaySize, audio.getLevel());
 
     needsRender = false;
   }
@@ -180,29 +161,26 @@ function renderLoop(): void {
 }
 renderLoop();
 
-// ---- Mouse -> canvas coordinate transform ----
+// ---- Mouse -> SVG coordinate transform ----
+// SVG viewBox is "0 0 1 1", so SVG coords ARE normalized 0-1.
 
-interface CanvasCoords {
-  px: number;
-  py: number;
+interface NormCoords {
   nx: number;
   ny: number;
 }
 
-function canvasCoordsFromClient(clientX: number, clientY: number): CanvasCoords {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = CANVAS_SIZE / rect.width;
-  const scaleY = CANVAS_SIZE / rect.height;
-  return {
-    px: (clientX - rect.left) * scaleX,
-    py: (clientY - rect.top) * scaleY,
-    nx: ((clientX - rect.left) * scaleX) / CANVAS_SIZE,
-    ny: ((clientY - rect.top) * scaleY) / CANVAS_SIZE,
-  };
+function svgCoordsFromClient(clientX: number, clientY: number): NormCoords {
+  const pt = svg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return { nx: 0, ny: 0 };
+  const svgPt = pt.matrixTransform(ctm.inverse());
+  return { nx: svgPt.x, ny: svgPt.y };
 }
 
-function canvasCoords(e: PointerEvent): CanvasCoords {
-  return canvasCoordsFromClient(e.clientX, e.clientY);
+function svgCoords(e: PointerEvent): NormCoords {
+  return svgCoordsFromClient(e.clientX, e.clientY);
 }
 
 // ---- Map tool names to waveform types ----
@@ -250,19 +228,19 @@ function envelopeValueToDist(corner: ADSRCorner, val: number, canvasSize: number
   }
 }
 
-function handleADSRDrag(px: number, py: number): void {
+function handleADSRDrag(nx: number, ny: number): void {
   if (interaction.mode !== 'adsr') return;
   const diag = cornerDiagonal(interaction.corner);
-  const moveDx = px - interaction.startPx;
-  const moveDy = py - interaction.startPy;
+  const moveDx = nx - interaction.startPx;
+  const moveDy = ny - interaction.startPy;
   const projectedDelta = (moveDx * diag.dx + moveDy * diag.dy) * INV_SQRT2;
   const originDist = envelopeValueToDist(
     interaction.corner,
     interaction.origin[interaction.corner],
-    CANVAS_SIZE,
+    1,
   );
   const newDist = Math.max(0, originDist + projectedDelta);
-  const val = dragToEnvelopeValue(interaction.corner, newDist, CANVAS_SIZE);
+  const val = dragToEnvelopeValue(interaction.corner, newDist, 1);
   store.updateEnvelope({ [interaction.corner]: val });
 }
 
@@ -303,7 +281,7 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
   if (splashActive) return;
   e.preventDefault();
 
-  const { px, py, nx, ny } = canvasCoords(e);
+  const { nx, ny } = svgCoords(e);
   activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
   // Two touch pointers → pinch-rotate
@@ -315,11 +293,9 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
 
     const [idA, posA] = [...activePointers.entries()][0]!;
     const [idB, posB] = [...activePointers.entries()][1]!;
-    const midX = (posA.x + posB.x) / 2;
-    const midY = (posA.y + posB.y) / 2;
-    const { px: midPx, py: midPy } = canvasCoordsFromClient(midX, midY);
 
-    const shapeId = hitTestShapes(store.data, midPx, midPy, CANVAS_SIZE) || selectedId;
+    // For pinch, use the currently selected voice as target
+    const shapeId = selectedId;
     if (!shapeId) return;
 
     const voice = store.getVoice(shapeId);
@@ -362,36 +338,70 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
   }
 
   // Select mode — skip shape hit testing in clipped corner regions
-  const inClippedCorner = isInClippedCorner(store.data.envelope, px, py, CANVAS_SIZE);
+  const inClippedCorner = isInClippedCorner(store.data.envelope, nx, ny, 1);
 
   if (!inClippedCorner) {
-    // 1. Check handles on selected voice
-    const selVoice = getSelected();
-    if (selVoice) {
-      const handle = hitTestHandles(selVoice, px, py, CANVAS_SIZE);
-      if (handle === 'rotate') {
-        undo.snapshot();
-        interaction = { mode: 'rotating', pointerId: e.pointerId };
-        canvasWrap.setPointerCapture(e.pointerId);
-        return;
-      }
-      if (handle) {
+    // 1. Check handles on selected voice (SVG native hit testing)
+    const handleEl = (e.target as Element).closest?.('[data-handle]');
+    const handle = handleEl
+      ? (((handleEl as HTMLElement).dataset.handle as HandleType) ?? null)
+      : null;
+
+    if (handle) {
+      const selVoice = getSelected();
+      if (selVoice) {
+        if (handle === 'rotate') {
+          undo.snapshot();
+          interaction = { mode: 'rotating', pointerId: e.pointerId };
+          canvasWrap.setPointerCapture(e.pointerId);
+          return;
+        }
         undo.snapshot();
         interaction = {
           mode: 'resizing',
           pointerId: e.pointerId,
           handle,
           origin: { size: selVoice.size },
-          startPx: px,
-          startPy: py,
+          startPx: nx,
+          startPy: ny,
         };
         canvasWrap.setPointerCapture(e.pointerId);
         return;
       }
+
+      // Handle might be on a deco element
+      const selDeco = getSelectedDeco();
+      if (selDeco) {
+        undo.snapshot();
+        const textEl = svg.querySelector(`text[data-deco-id="${selDeco.id}"]`);
+        let bounds;
+        if (textEl) {
+          try {
+            const bbox = (textEl as SVGTextElement).getBBox();
+            bounds = { x: bbox.x, y: bbox.y, w: bbox.width, h: bbox.height };
+          } catch {
+            bounds = null;
+          }
+        }
+        if (bounds) {
+          interaction = {
+            mode: 'deco-resizing',
+            pointerId: e.pointerId,
+            handle,
+            origin: {
+              size: selDeco.size,
+              bounds,
+            },
+          };
+          canvasWrap.setPointerCapture(e.pointerId);
+          return;
+        }
+      }
     }
 
-    // 2. Hit test voices
-    const hitId = hitTestShapes(store.data, px, py, CANVAS_SIZE);
+    // 2. Hit test voices (SVG native)
+    const voiceEl = (e.target as Element).closest?.('[data-voice-id]');
+    const hitId = voiceEl ? ((voiceEl as HTMLElement).dataset.voiceId ?? null) : null;
     if (hitId) {
       setSelection(hitId);
       toolbar.syncToSelectedShape();
@@ -409,28 +419,9 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
       return;
     }
 
-    // 3. Check resize handles on selected text decoration
-    const selDeco = getSelectedDeco();
-    if (selDeco) {
-      const decoHandle = hitTestDecoHandles(selDeco, px, py, CANVAS_SIZE);
-      if (decoHandle) {
-        undo.snapshot();
-        interaction = {
-          mode: 'deco-resizing',
-          pointerId: e.pointerId,
-          handle: decoHandle,
-          origin: {
-            size: selDeco.size,
-            bounds: getDecoBounds(selDeco, CANVAS_SIZE)!,
-          },
-        };
-        canvasWrap.setPointerCapture(e.pointerId);
-        return;
-      }
-    }
-
-    // 4. Hit test text decorations
-    const hitDecoId = hitTestDecorations(store.data, px, py, CANVAS_SIZE);
+    // 3. Hit test text decorations (SVG native)
+    const decoEl = (e.target as Element).closest?.('[data-deco-id]');
+    const hitDecoId = decoEl ? ((decoEl as HTMLElement).dataset.decoId ?? null) : null;
     if (hitDecoId) {
       setSelection(null, hitDecoId);
       undo.snapshot();
@@ -449,7 +440,7 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
   }
 
   // 5. Check ADSR corners
-  const adsrCorner = hitTestADSRCorner(store.data.envelope, px, py, CANVAS_SIZE);
+  const adsrCorner = hitTestADSRCorner(store.data.envelope, nx, ny, 1);
   if (adsrCorner) {
     undo.snapshot();
     interaction = {
@@ -457,8 +448,8 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
       pointerId: e.pointerId,
       corner: adsrCorner,
       origin: { ...store.data.envelope },
-      startPx: px,
-      startPy: py,
+      startPx: nx,
+      startPy: ny,
     };
     canvasWrap.setPointerCapture(e.pointerId);
     return;
@@ -511,7 +502,7 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
   )
     return;
 
-  const { px, py, nx, ny } = canvasCoords(e);
+  const { nx, ny } = svgCoords(e);
 
   if (interaction.mode === 'dragging') {
     const voice = getSelected();
@@ -530,18 +521,18 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
     if (!voice) return;
     const rotDeg = voiceRotation(voice);
     const rotRad = (rotDeg * Math.PI) / 180;
-    const dpx = px - interaction.startPx;
-    const dpy = py - interaction.startPy;
+    const dnx = nx - interaction.startPx;
+    const dny = ny - interaction.startPy;
     const cos = Math.cos(-rotRad);
     const sin = Math.sin(-rotRad);
-    const localDx = dpx * cos - dpy * sin;
-    const localDy = dpx * sin + dpy * cos;
+    const localDx = dnx * cos - dny * sin;
+    const localDy = dnx * sin + dny * cos;
     const newSize = calcResize(
       { ...voice, size: normalizedCoord(interaction.origin.size) },
       interaction.handle,
       localDx,
       localDy,
-      CANVAS_SIZE,
+      1,
     );
     store.updateVoice(voice.id, { size: newSize });
     return;
@@ -551,14 +542,14 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
     const voice = getSelected();
     if (!voice) return;
     if (voice.waveform === 'sine') return;
-    const rotation = calcRotation(voice, px, py, CANVAS_SIZE);
+    const rotation = calcRotation(voice, nx, ny, 1);
     const timbre = rotationToTimbre(rotation, voice.waveform);
     store.updateVoice(voice.id, { timbre: normalizedCoord(timbre) });
     return;
   }
 
   if (interaction.mode === 'adsr') {
-    handleADSRDrag(px, py);
+    handleADSRDrag(nx, ny);
     return;
   }
 
@@ -581,7 +572,7 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
     const cx = bounds.x + bounds.w / 2;
     const cy = bounds.y + bounds.h / 2;
     const initDist = Math.hypot(bounds.w / 2, bounds.h / 2);
-    const currDist = Math.hypot(px - cx, py - cy);
+    const currDist = Math.hypot(nx - cx, ny - cy);
     const ratio = currDist / initDist;
     const newSize = normalizedCoord(Math.max(0.02, Math.min(0.5, size * ratio)));
     store.updateText(deco.id, { size: newSize });
