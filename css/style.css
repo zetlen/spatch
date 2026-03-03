@@ -267,6 +267,32 @@ body {
 
 /* ---- Stage Themes ---- */
 
+.stage-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.6;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
+}
+
+.stage-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.7);
+}
+
 #canvas-area::before,
 #canvas-area::after {
   content: '';
