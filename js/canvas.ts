@@ -11,8 +11,8 @@ import { waveformShape } from './types.ts';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // SVG viewBox units (0-1 space)
-const HANDLE_SIZE = 0.012;
-const ROT_HANDLE_OFFSET = 0.035;
+const HANDLE_SIZE = 0.00625;
+const ROT_HANDLE_OFFSET = 0.03125;
 
 // ---- Touch tracking ----
 
@@ -546,7 +546,7 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
     setAttrs(circle, {
       cx: String(voice.x),
       cy: String(rotHandleY),
-      r: String(HANDLE_SIZE * 0.8),
+      r: String(HANDLE_SIZE * 1.2),
       fill: '#888888',
       stroke: '#2a2a2a',
       'stroke-width': '0.001',
