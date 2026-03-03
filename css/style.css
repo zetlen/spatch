@@ -47,22 +47,49 @@ body {
 
 /* ---- Toolbars ---- */
 
-#toolbar-top,
-#toolbar-bottom {
+#toolbar-top {
+  position: relative;
   background: var(--bg-toolbar);
   border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+
+.toolbar-row {
   display: flex;
   align-items: center;
   padding: 6px 12px;
   gap: 8px;
-  flex-wrap: wrap;
-  z-index: 10;
+}
+
+.toolbar-expansion {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  background: var(--bg-toolbar);
+  border-bottom: 1px solid var(--border);
+  justify-content: center;
+  z-index: 9;
+}
+.toolbar-expansion.hidden {
+  display: none !important;
+}
+
+#toolbar-bottom .toolbar-expansion {
+  top: auto;
+  bottom: 100%;
+  border-bottom: none;
+  border-top: 1px solid var(--border);
 }
 
 #toolbar-bottom {
-  border-bottom: none;
+  position: relative;
+  background: var(--bg-toolbar);
   border-top: 1px solid var(--border);
-  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column-reverse;
+  z-index: 10;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .toolbar-group {
@@ -71,11 +98,22 @@ body {
   gap: 4px;
 }
 
+.toolbar-context {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  gap: 8px;
+}
+.toolbar-context.hidden {
+  display: none !important;
+}
+
 .separator {
   width: 1px;
   height: 24px;
   background: var(--border);
-  margin: 0 6px;
+  margin: 0 2px;
 }
 
 .logo {
@@ -91,14 +129,15 @@ body {
 
 .tool-btn,
 .action-btn,
-.pattern-btn {
+.play-btn {
+  position: relative;
   background: var(--bg-toolbar);
   border-width: 1px;
   border-style: solid;
   border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
   color: var(--text-primary);
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 2px;
   cursor: pointer;
   display: flex;
@@ -108,14 +147,29 @@ body {
   transition: background 0.15s;
 }
 
+/* LED dot — property-active indicator */
+.has-border::before,
+.has-reverb::before,
+.has-pattern::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  box-shadow: 0 0 3px var(--text-muted);
+}
+
 .tool-btn:hover,
 .action-btn:hover,
-.pattern-btn:hover {
+.play-btn:hover {
   background: var(--hover-bg);
 }
 
 .tool-btn.active,
-.pattern-btn.active {
+.action-btn.active {
   background: var(--active-bg);
   border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
 }
@@ -129,28 +183,29 @@ body {
 }
 
 .play-btn {
-  background: var(--bg-toolbar);
-  border-width: 1px;
-  border-style: solid;
-  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
-  color: var(--text-primary);
-  font-family: 'Orbitron', sans-serif;
-  font-weight: 700;
-  font-size: 13px;
-  padding: 8px 20px;
-  border-radius: 2px;
-  cursor: pointer;
-  letter-spacing: 2px;
-  transition: background 0.15s;
-}
-
-.play-btn:hover {
-  background: var(--hover-bg);
+  width: 64px;
+  gap: 4px;
 }
 
 .play-btn.playing {
   background: var(--active-bg);
   border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+}
+
+.play-btn.looping {
+  --loop-progress: 0%;
+  background: linear-gradient(
+    to right,
+    var(--active-bg) var(--loop-progress),
+    var(--bg-toolbar) var(--loop-progress)
+  );
+}
+
+.play-mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
 }
 
 /* ---- Swatch ---- */
@@ -169,39 +224,6 @@ body {
 
 .swatch:hover {
   border-color: var(--text-muted);
-}
-
-/* ---- Select ---- */
-
-select {
-  background: var(--bg-toolbar);
-  color: var(--text-primary);
-  border-width: 1px;
-  border-style: solid;
-  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
-  border-radius: 2px;
-  padding: 4px 8px;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-/* ---- Text input ---- */
-
-.text-input {
-  background: var(--bg-body);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  padding: 4px 8px;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 12px;
-  width: 140px;
-}
-
-.text-input:focus {
-  border-color: var(--text-muted);
-  outline: none;
 }
 
 /* ---- Canvas Area ---- */
@@ -245,7 +267,7 @@ select {
 
 .play-fan {
   position: absolute;
-  bottom: calc(100% + 6px);
+  top: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -262,9 +284,9 @@ select {
 }
 
 .fan-option {
-  width: 36px;
+  width: 120px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: 18px;
   background: var(--bg-toolbar);
   border-width: 1px;
   border-style: solid;
@@ -297,67 +319,70 @@ select {
     background 0.15s;
 }
 
-/* ---- Color Picker Panel ---- */
+/* ---- Dropdown items (inside toolbar-expansion rows) ---- */
 
-.panel {
-  position: fixed;
-  top: 50px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  padding: 12px;
-  z-index: 100;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.panel.hidden {
-  display: none;
-}
-
-.panel-tabs {
+.dropdown-item {
   display: flex;
-  gap: 4px;
-  margin-bottom: 10px;
-}
-
-.panel-tab {
-  background: var(--bg-toolbar);
-  border-width: 1px;
-  border-style: solid;
-  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
-  color: var(--text-muted);
-  padding: 4px 12px;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  padding: 4px;
   border-radius: 2px;
   cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  transition: background 0.15s;
 }
-
-.panel-tab.active {
-  color: var(--text-primary);
-  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+.dropdown-item:hover {
+  background: var(--hover-bg);
+}
+.dropdown-item.active {
   background: var(--active-bg);
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
 }
 
-.tab-content {
-  display: none;
-}
+/* ---- Pattern band previews ---- */
 
-.tab-content.active {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  min-width: 180px;
-}
-
-.panel-swatch {
+.pattern-band {
   width: 100%;
-  height: 48px;
+  height: 100%;
+  border-radius: 2px;
+}
+.pattern-preview-stripes {
+  background: repeating-linear-gradient(45deg, var(--text-primary) 0 3px, transparent 3px 6px);
+}
+.pattern-preview-checker {
+  background-image:
+    linear-gradient(45deg, var(--text-primary) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--text-primary) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--text-primary) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--text-primary) 75%);
+  background-size: 8px 8px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0;
+}
+.pattern-preview-noise {
+  background-image: radial-gradient(var(--text-primary) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+.pattern-preview-gradient {
+  background: linear-gradient(90deg, var(--text-primary), transparent);
+}
+.pattern-preview-rough {
+  background: repeating-linear-gradient(90deg, var(--text-primary) 0 2px, transparent 2px 5px);
+}
+
+/* ---- Expansion row controls ---- */
+
+/* Color input in expansion row — small swatch */
+.expansion-color-input {
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 2px;
@@ -365,76 +390,14 @@ select {
   background: none;
 }
 
-.color-stops {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-}
-
-.color-stop-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+/* Slider in expansion row */
+.expansion-slider {
   flex: 1;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
+  min-width: 60px;
+  height: 4px;
 }
 
-.color-stop-label .panel-swatch {
-  width: 100%;
-}
-
-.angle-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-}
-
-.angle-label input[type='range'] {
-  flex: 1;
-}
-
-/* ---- Border Panel ---- */
-
-#border-panel {
-  position: fixed;
-  bottom: 50px;
-  left: 12px;
-  top: auto;
-  transform: none;
-}
-
-.border-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 180px;
-}
-
-.border-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.border-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-  width: 64px;
-  flex-shrink: 0;
-}
+/* ---- Border Controls ---- */
 
 .border-color-btn,
 .border-style-btn {
@@ -442,14 +405,15 @@ select {
   border-width: 1px;
   border-style: solid;
   border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
-  color: var(--text-muted);
-  padding: 2px 10px;
+  color: var(--text-primary);
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border-radius: 2px;
   cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .border-color-btn.active,
@@ -465,18 +429,19 @@ select {
 }
 
 .border-remove-btn {
-  background: transparent;
-  border: 1px solid rgba(204, 51, 68, 0.3);
+  background: var(--bg-toolbar);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
   color: var(--danger);
-  padding: 3px 10px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border-radius: 2px;
   cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 4px;
-  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .border-remove-btn:hover {
@@ -484,42 +449,7 @@ select {
   border-color: var(--danger);
 }
 
-#btn-border.has-border {
-  background: var(--active-bg);
-  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
-}
-
-/* ---- Reverb Panel ---- */
-
-#reverb-panel {
-  position: fixed;
-  bottom: 50px;
-  left: 12px;
-  top: auto;
-  transform: none;
-}
-
-.reverb-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 180px;
-}
-
-.reverb-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.reverb-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-  width: 64px;
-  flex-shrink: 0;
-}
+/* ---- Reverb Controls ---- */
 
 .reverb-style-btn {
   background: var(--bg-toolbar);
@@ -527,13 +457,14 @@ select {
   border-style: solid;
   border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
   color: var(--text-muted);
-  padding: 2px 10px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border-radius: 2px;
   cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .reverb-style-btn.active {
@@ -547,90 +478,17 @@ select {
   height: 4px;
 }
 
-.reverb-remove-btn {
-  background: transparent;
-  border: 1px solid rgba(204, 51, 68, 0.3);
-  color: var(--danger);
-  padding: 3px 10px;
-  border-radius: 2px;
-  cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 4px;
-  align-self: flex-end;
-}
-
-.reverb-remove-btn:hover {
-  background: rgba(204, 51, 68, 0.12);
-  border-color: var(--danger);
-}
-
-#btn-reverb.has-reverb {
-  background: var(--active-bg);
-  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
-}
-
 /* ---- Hidden utility ---- */
 
 .hidden {
   display: none !important;
 }
 
-/* ---- Share Menu ---- */
-
-.share-group {
-  position: relative;
-  margin-left: auto;
-}
-
-.share-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 6px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  padding: 4px;
-  z-index: 100;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  min-width: 160px;
-}
-
-.share-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  padding: 8px 12px;
-  border-radius: 2px;
-  cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 12px;
-  text-align: left;
-  transition: background 0.15s;
-  white-space: nowrap;
-}
-
-.share-menu-item:hover {
-  background: var(--hover-bg);
-}
-
-.share-menu-item svg {
-  flex-shrink: 0;
-  opacity: 0.7;
-}
-
 /* ---- Responsive ---- */
 
 @media (max-width: 700px) {
-  #toolbar-top,
-  #toolbar-bottom {
+  .toolbar-row,
+  .toolbar-context {
     padding: 4px 6px;
     gap: 4px;
   }
@@ -639,14 +497,18 @@ select {
   }
   .tool-btn,
   .action-btn,
-  .pattern-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 13px;
+  .play-btn {
+    width: 40px;
+    height: 40px;
   }
   .play-btn {
-    padding: 6px 14px;
-    font-size: 11px;
+    width: 56px;
+  }
+}
+
+@media (max-width: 400px) {
+  .toolbar-main {
+    flex-wrap: wrap;
   }
 }
 
@@ -659,9 +521,4 @@ body.splash #toolbar-bottom {
   transition-property: opacity;
   transition-timing-function: ease-out;
   /* transition-duration set dynamically by JS at reveal time */
-}
-
-body.splash .panel {
-  opacity: 0;
-  pointer-events: none;
 }

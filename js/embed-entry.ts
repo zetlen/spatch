@@ -47,16 +47,27 @@ if (!hash) {
     // Play button: click-to-toggle works on both mouse and touch
     const btn = document.getElementById('play-btn')!;
 
+    function setEmbedPlayIcon(playing: boolean): void {
+      const symbol = playing ? 'tabler-player-stop-filled' : 'tabler-player-play-filled';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '20');
+      svg.setAttribute('height', '20');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', `tabler-sprite.svg#${symbol}`);
+      svg.appendChild(use);
+      btn.replaceChildren(svg);
+    }
+
     btn.addEventListener('click', async () => {
       if (audio.isPlaying) {
         audio.release(sigil.envelope);
         btn.classList.remove('playing');
-        btn.textContent = '\u25B6 PLAY';
+        setEmbedPlayIcon(false);
       } else {
         if (sigil.voices.length === 0) return;
         await audio.play(sigil, sigil.envelope);
         btn.classList.add('playing');
-        btn.textContent = '\u25A0 STOP';
+        setEmbedPlayIcon(true);
       }
     });
   }

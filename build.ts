@@ -1,4 +1,4 @@
-import { watch } from 'fs';
+import { watch, readFileSync } from 'fs';
 import { join } from 'path';
 import pkg from './package.json';
 
@@ -10,6 +10,82 @@ async function getVersionComment(): Promise<string> {
 const isDev = process.argv.includes('--dev');
 const shouldWatch = process.argv.includes('--watch');
 const shouldServe = process.argv.includes('--serve');
+
+const TABLER_ICONS = 'node_modules/@tabler/icons/icons';
+
+// Scan source files for tabler-sprite.svg#tabler-{name} references and build
+// a minimal SVG sprite containing only the icons actually used.
+async function generateTablerSprite() {
+  // Scan all HTML, TS, and JS source files for icon references
+  const sourceGlobs = ['*.html', 'js/**/*.ts', 'js/**/*.js'];
+  const refs = new Set<string>();
+  const pattern = /tabler-sprite\.svg#tabler-([\w-]+)/g;
+
+  for (const glob of sourceGlobs) {
+    const files = new Bun.Glob(glob).scanSync('.');
+    for (const file of files) {
+      if (file.includes('node_modules')) continue;
+      const content = readFileSync(file, 'utf-8');
+      for (const match of content.matchAll(pattern)) {
+        refs.add(match[1]!);
+      }
+    }
+  }
+
+  if (refs.size === 0) {
+    console.warn('Warning: no tabler icon references found in source files');
+    return;
+  }
+
+  // Resolve each reference to an individual SVG file and convert to <symbol>
+  const symbols: string[] = [];
+  for (const name of [...refs].sort()) {
+    // Check if it's a filled variant (name ends with -filled, file is in filled/ without suffix)
+    const isFilled = name.endsWith('-filled');
+    const baseName = isFilled ? name.slice(0, -7) : name;
+    const dir = isFilled ? 'filled' : 'outline';
+    const svgPath = join(TABLER_ICONS, dir, `${baseName}.svg`);
+
+    const file = Bun.file(svgPath);
+    if (!(await file.exists())) {
+      console.warn(`Warning: icon "${name}" not found at ${svgPath}`);
+      continue;
+    }
+
+    const svg = await file.text();
+
+    // Extract attributes from the <svg> tag for the <symbol>
+    const attrsMatch = svg.match(/<svg\s([^>]+)>/s);
+    if (!attrsMatch) continue;
+    const attrs = attrsMatch[1]!;
+
+    // Extract viewBox
+    const viewBox = attrs.match(/viewBox="([^"]+)"/)?.[1] ?? '0 0 24 24';
+
+    // Carry over fill/stroke attributes from the source SVG
+    const symbolAttrs: string[] = [`id="tabler-${name}"`, `viewBox="${viewBox}"`];
+    if (isFilled) {
+      symbolAttrs.push('fill="currentColor"');
+    } else {
+      symbolAttrs.push('fill="none"', 'stroke="currentColor"', 'stroke-width="2"');
+      symbolAttrs.push('stroke-linecap="round"', 'stroke-linejoin="round"');
+    }
+
+    // Extract inner content (everything between <svg> and </svg>), stripping
+    // the transparent bounding-box path that Tabler includes in every icon
+    const inner = svg
+      .replace(/<svg[^>]*>/, '')
+      .replace(/<\/svg>/, '')
+      .replace(/<path\s+stroke="none"\s+d="M0 0h24v24H0z"\s+fill="none"\s*\/?>/, '')
+      .trim();
+
+    symbols.push(`<symbol ${symbolAttrs.join(' ')}>${inner}</symbol>`);
+  }
+
+  const sprite = `<svg xmlns="http://www.w3.org/2000/svg">${symbols.join('')}</svg>`;
+  await Bun.write('dist/tabler-sprite.svg', sprite);
+  console.log(`  Generated tabler-sprite.svg (${refs.size} icons, ${sprite.length} bytes)`);
+}
 
 async function build() {
   await Bun.$`rm -rf dist`;
@@ -45,6 +121,11 @@ async function build() {
       await Bun.write(output.path, html + '\n' + versionComment);
     }
   }
+
+  // Auto-generate SVG sprite from icon usage. Scan source HTML files for
+  // tabler-sprite.svg#tabler-{name} references, then assemble a sprite
+  // containing only the icons actually used.
+  await generateTablerSprite();
 
   // Build worklet separately — AudioWorklets must be loaded via addModule()
   // with a stable URL, so we build it as its own entry without hashing the name.

@@ -45,13 +45,13 @@
         border-style: solid;
         border-color: #f0ece8 #a8a39d #a8a39d #f0ece8;
         color: #2a2a2a;
-        font-family: 'Orbitron', 'Share Tech Mono', monospace;
-        font-weight: 700;
-        font-size: 13px;
-        padding: 8px 20px;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border-radius: 2px;
         cursor: pointer;
-        letter-spacing: 2px;
         transition: background 0.15s;
       }
       #play-btn:hover {
@@ -67,7 +67,9 @@
     <div id="wrap">
       <div id="canvas-frame"></div>
       <canvas id="c" width="800" height="800"></canvas>
-      <button id="play-btn">&#9654; PLAY</button>
+      <button id="play-btn" title="Play">
+        <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-player-play-filled" /></svg>
+      </button>
     </div>
     <script type="module" src="js/embed-entry.ts"></script>
   </body>

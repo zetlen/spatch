@@ -34,7 +34,7 @@ test.describe('Playback', () => {
     await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
-  test('play button shows stop text while playing', async ({ page }) => {
+  test('play button shows stop icon while playing', async ({ page }) => {
     // Place a shape first
     await page.click('[data-tool="circle"]');
     const canvas = page.locator('#sigil-canvas');
@@ -42,17 +42,18 @@ test.describe('Playback', () => {
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
     const playBtn = page.locator('#btn-play');
+    const useEl = playBtn.locator('use');
 
-    // Before playing
-    await expect(playBtn).toContainText('PLAY');
+    // Before playing — play icon
+    await expect(useEl).toHaveAttribute('href', /player-play-filled/);
 
     // Start playing via Space (latched)
     await page.keyboard.press('Space');
-    await expect(playBtn).toContainText('STOP');
+    await expect(useEl).toHaveAttribute('href', /player-stop-filled/);
 
     // Press Space again to stop
     await page.keyboard.press('Space');
-    await expect(playBtn).toContainText('PLAY', { timeout: 5000 });
+    await expect(useEl).toHaveAttribute('href', /player-play-filled/, { timeout: 5000 });
   });
 
   test('play does nothing with no shapes', async ({ page }) => {

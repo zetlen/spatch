@@ -17,7 +17,6 @@ import {
 import { Toolbar } from './toolbar.ts';
 import { AudioEngine, snapYToNote, rotationToTimbre } from './audio.ts';
 import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.ts';
-import { DecorationTool } from './decorations.ts';
 import { saveToURL, loadFromURL } from './serialize.ts';
 import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
 import { IDLE, type InteractionState } from './interaction.ts';
@@ -41,7 +40,6 @@ const store = new SigilStore();
 const undo = new UndoManager(store);
 const toolbar = new Toolbar(store, undo);
 const audio = new AudioEngine();
-const decoTool = new DecorationTool(store, undo);
 
 // ---- Selection state (app-level, not in store) ----
 
@@ -53,6 +51,7 @@ function setSelection(shapeId: string | null, decoId: string | null = null): voi
   selectedDecoId = decoId;
   toolbar.selectedId = shapeId;
   toolbar.selectedDecoId = decoId;
+  toolbar.updateBottomBar();
 }
 
 function getSelected(): Voice | null {
@@ -170,6 +169,13 @@ function renderLoop(): void {
 
     needsRender = false;
   }
+
+  if (playState === 'looping' && loopCycleDuration > 0) {
+    const elapsed = performance.now() - loopCycleStart;
+    const progress = Math.min(1, elapsed / loopCycleDuration);
+    playBtn.style.setProperty('--loop-progress', `${(progress * 100).toFixed(1)}%`);
+  }
+
   requestAnimationFrame(renderLoop);
 }
 renderLoop();
@@ -263,12 +269,9 @@ function handleADSRDrag(px: number, py: number): void {
 // ---- Tool change callback ----
 
 toolbar.onToolChange = (tool: string) => {
-  if (tool === 'text') {
-    decoTool.setTool(tool);
+  if (tool === 'deselect') {
     setSelection(null);
     needsRender = true;
-  } else {
-    decoTool.setTool(null);
   }
 };
 
@@ -345,21 +348,6 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
 
   const tool = toolbar.currentTool;
 
-  // Text decoration tool
-  if (tool === 'text') {
-    const result = decoTool.handleMouseDown(normalizedCoord(nx), normalizedCoord(ny));
-    if (result) {
-      if ('placed' in result) {
-        setSelection(null, result.placed);
-        toolbar.currentTool = 'select';
-        toolbar._updateToolActive();
-        decoTool.setTool(null);
-      }
-      needsRender = true;
-      return;
-    }
-  }
-
   // Shape (voice) placement tools
   const waveform = toolToWaveform[tool];
   if (waveform) {
@@ -368,7 +356,6 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
     setSelection(voice.id);
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
-    decoTool.setTool(null);
     toolbar.syncToSelectedShape();
     needsRender = true;
     return;
@@ -698,15 +685,12 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     setSelection(null);
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
-    decoTool.setTool(null);
-    document.getElementById('text-input')!.classList.add('hidden');
     shareMenu.classList.add('hidden');
     needsRender = true;
   }
   if (e.key === 'v' && !mod) {
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
-    decoTool.setTool(null);
   }
   if (e.key === ' ') {
     e.preventDefault();
@@ -716,6 +700,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     } else if (store.data.voices.length > 0) {
       startPlayback().then(() => {
         playState = 'latched';
+        updatePlayIndicators();
       });
     }
   }
@@ -728,6 +713,9 @@ const playFan = document.getElementById('play-fan')!;
 const fanLock = playFan.querySelector('.fan-lock')!;
 const fanLoop = playFan.querySelector('.fan-loop')! as HTMLElement;
 
+const playModeLock = document.getElementById('play-mode-lock')!;
+const playModeLoop = document.getElementById('play-mode-loop')!;
+
 let playState = 'idle'; // 'idle' | 'latched' | 'looping'
 let gestureActive = false;
 let gestureTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -735,8 +723,28 @@ let gesturePointerId: number | null = null;
 let lastFanInfo: { zone: string; ms?: number; pull?: number } | null = null;
 let loopHoldMs = 500;
 let loopTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let loopCycleStart = 0;
+let loopCycleDuration = 0;
 let releaseGlowTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let playGeneration = 0;
+
+function updatePlayIndicators(): void {
+  playModeLock.classList.toggle('hidden', playState !== 'latched');
+  playModeLoop.classList.toggle('hidden', playState !== 'looping');
+}
+
+// Icon reference for sprite scanner: tabler-sprite.svg#tabler-player-stop-filled
+function setPlayIcon(playing: boolean): void {
+  const symbol = playing ? 'tabler-player-stop-filled' : 'tabler-player-play-filled';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add('play-icon');
+  svg.setAttribute('width', '20');
+  svg.setAttribute('height', '20');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `tabler-sprite.svg#${symbol}`);
+  svg.appendChild(use);
+  playBtn.querySelector('.play-icon')!.replaceWith(svg);
+}
 
 async function startPlayback(): Promise<void> {
   if (releaseGlowTimeoutId != null) {
@@ -751,7 +759,7 @@ async function startPlayback(): Promise<void> {
     return;
   }
   playBtn.classList.add('playing');
-  playBtn.textContent = '\u25A0 STOP';
+  setPlayIcon(true);
   needsRender = true;
 }
 
@@ -762,9 +770,11 @@ function stopPlayback(): void {
     loopTimeoutId = null;
   }
   audio.release(store.data.envelope);
-  playBtn.classList.remove('playing');
-  playBtn.textContent = '\u25B6 PLAY';
+  playBtn.classList.remove('playing', 'looping');
+  playBtn.style.setProperty('--loop-progress', '0%');
+  setPlayIcon(false);
   playState = 'idle';
+  updatePlayIndicators();
   const releaseMs = store.data.envelope.release * 1000 + 100;
   releaseGlowTimeoutId = setTimeout(() => {
     releaseGlowTimeoutId = null;
@@ -776,10 +786,15 @@ function scheduleLoopRestart(): void {
   const env = store.data.envelope;
   const releaseMs = env.release * 1000;
 
+  loopCycleDuration = loopHoldMs + releaseMs + 50;
+  loopCycleStart = performance.now();
+  playBtn.classList.add('looping');
+
   loopTimeoutId = setTimeout(() => {
     audio.release(store.data.envelope);
     loopTimeoutId = setTimeout(() => {
       if (playState === 'looping') {
+        loopCycleStart = performance.now();
         startPlayback();
         scheduleLoopRestart();
       }
@@ -799,7 +814,7 @@ const FAN_DELAY_MS = 250;
 
 function fanZone(clientY: number): { zone: string; ms?: number; pull?: number } {
   const r = playBtn.getBoundingClientRect();
-  const dy = r.top + r.height / 2 - clientY;
+  const dy = clientY - (r.top + r.height / 2); // positive = below button
   if (dy < LOCK_MIN) return { zone: 'button' };
   if (dy < LOCK_MAX) return { zone: 'lock' };
   const t = Math.min(1, Math.max(0, (dy - LOOP_MIN) / LOOP_RANGE));
@@ -846,7 +861,7 @@ playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
   const earlyMove = (me: PointerEvent) => {
     if (me.pointerId !== gesturePointerId) return;
     const r = playBtn.getBoundingClientRect();
-    const dy = r.top + r.height / 2 - me.clientY;
+    const dy = me.clientY - (r.top + r.height / 2); // positive = below button
     if (dy > 10 && gestureTimerId != null) {
       clearTimeout(gestureTimerId);
       gestureTimerId = null;
@@ -879,7 +894,7 @@ playBtn.addEventListener('pointermove', (e: PointerEvent) => {
 
   if (info.zone === 'loop') {
     fanLoop.classList.add('hot', 'dragging');
-    fanLoop.style.transform = `translateY(-${info.pull}px)`;
+    fanLoop.style.transform = `translateY(${info.pull}px)`;
   } else {
     fanLoop.classList.remove('hot', 'dragging');
     fanLoop.style.transform = '';
@@ -908,9 +923,11 @@ playBtn.addEventListener('pointerup', (e: PointerEvent) => {
 
   if (info.zone === 'lock') {
     playState = 'latched';
+    updatePlayIndicators();
   } else if (info.zone === 'loop') {
     loopHoldMs = info.ms!;
     playState = 'looping';
+    updatePlayIndicators();
     scheduleLoopRestart();
   } else {
     // Released back on button
@@ -966,7 +983,7 @@ if (splashActive) {
     const doRelease = () => {
       audio.release(store.data.envelope);
       playBtn.classList.remove('playing');
-      playBtn.textContent = '\u25B6 PLAY';
+      setPlayIcon(false);
       playState = 'idle';
       const releaseMs = store.data.envelope.release * 1000 + 100;
       releaseGlowTimeoutId = setTimeout(() => {
@@ -1037,27 +1054,35 @@ function debouncedSave(): void {
 
 // ---- Share menu ----
 
-const menuBtn = document.getElementById('btn-menu')!;
+const shareBtn = document.getElementById('btn-share')!;
 const shareMenu = document.getElementById('share-menu')!;
 
-menuBtn.addEventListener('click', (e: MouseEvent) => {
+// Icon reference for sprite scanner: tabler-sprite.svg#tabler-link
+// Icon reference for sprite scanner: tabler-sprite.svg#tabler-code
+// Icon reference for sprite scanner: tabler-sprite.svg#tabler-check
+
+function syncShareActive(): void {
+  shareBtn.classList.toggle('active', !shareMenu.classList.contains('hidden'));
+}
+
+shareBtn.addEventListener('click', (e: MouseEvent) => {
   e.stopPropagation();
   shareMenu.classList.toggle('hidden');
+  syncShareActive();
 });
 
 document.addEventListener('click', (e: MouseEvent) => {
-  if (!shareMenu.contains(e.target as Node) && e.target !== menuBtn) {
+  if (!shareMenu.contains(e.target as Node) && e.target !== shareBtn) {
     shareMenu.classList.add('hidden');
+    syncShareActive();
   }
 });
 
 shareMenu.addEventListener('click', async (e: MouseEvent) => {
-  const item = (e.target as HTMLElement).closest('.share-menu-item') as HTMLElement | null;
-  if (!item) return;
+  const btn = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
+  if (!btn) return;
 
-  const action = item.dataset.action;
-  const label = item.querySelector('span')!;
-  const originalText = label.textContent!;
+  const action = btn.dataset.action;
 
   if (action === 'share') {
     await copyToClipboard(window.location.href);
@@ -1066,8 +1091,31 @@ shareMenu.addEventListener('click', async (e: MouseEvent) => {
     await copyToClipboard(snippet);
   }
 
-  label.textContent = 'Copied!';
+  // Briefly swap icon to check mark
+  const origSvg = btn.querySelector('svg')!;
+  const checkSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  checkSvg.setAttribute('width', '20');
+  checkSvg.setAttribute('height', '20');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', 'tabler-sprite.svg#tabler-check');
+  checkSvg.appendChild(use);
+  origSvg.replaceWith(checkSvg);
   setTimeout(() => {
-    label.textContent = originalText;
+    checkSvg.replaceWith(origSvg);
   }, 1500);
+});
+
+// ---- New button ----
+
+document.getElementById('btn-new')!.addEventListener('click', () => {
+  if (store.data.voices.length === 0 && store.data.texts.length === 0) return;
+  undo.snapshot();
+  for (const v of store.data.voices.slice()) {
+    store.removeVoice(v.id);
+  }
+  for (const d of store.data.texts.slice()) {
+    store.removeText(d.id);
+  }
+  setSelection(null);
+  needsRender = true;
 });

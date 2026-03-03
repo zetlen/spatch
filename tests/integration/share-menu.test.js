@@ -12,15 +12,15 @@ test.describe('Share menu', () => {
     const menu = page.locator('#share-menu');
     await expect(menu).toBeHidden();
 
-    await page.click('#btn-menu');
+    await page.click('#btn-share');
     await expect(menu).toBeVisible();
 
-    await page.click('#btn-menu');
+    await page.click('#btn-share');
     await expect(menu).toBeHidden();
   });
 
   test('clicking outside closes the menu', async ({ page }) => {
-    await page.click('#btn-menu');
+    await page.click('#btn-share');
     await expect(page.locator('#share-menu')).toBeVisible();
 
     await page.click('#sigil-canvas');
@@ -28,7 +28,7 @@ test.describe('Share menu', () => {
   });
 
   test('Escape closes the menu', async ({ page }) => {
-    await page.click('#btn-menu');
+    await page.click('#btn-share');
     await expect(page.locator('#share-menu')).toBeVisible();
 
     await page.keyboard.press('Escape');
@@ -47,7 +47,7 @@ test.describe('Share menu', () => {
     // Wait for URL hash to be set (debounced serialization)
     await page.waitForFunction(() => window.location.hash.length > 1, null, { timeout: 3000 });
 
-    await page.click('#btn-menu');
+    await page.click('#btn-share');
     await page.click('[data-action="share"]');
 
     // Check the label changed to "Copied!"
@@ -62,7 +62,7 @@ test.describe('Share menu', () => {
   test('Embed code shows Copied feedback', async ({ context, page }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
-    await page.click('#btn-menu');
+    await page.click('#btn-share');
     await page.click('[data-action="embed"]');
 
     await expect(page.locator('[data-action="embed"] span')).toHaveText('Copied!');
