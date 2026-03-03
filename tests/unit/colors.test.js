@@ -90,7 +90,7 @@ describe('hslToHex / hexToHsl round-trip', () => {
   test('white round-trips', () => {
     const hex = hslToHex(0, 0, 100);
     expect(hex).toBe('#ffffff');
-    const [h, s, l] = hexToHsl(hex);
+    const [_h, s, l] = hexToHsl(hex);
     expect(s).toBe(0);
     expect(l).toBe(100);
   });
@@ -98,7 +98,7 @@ describe('hslToHex / hexToHsl round-trip', () => {
   test('black round-trips', () => {
     const hex = hslToHex(0, 0, 0);
     expect(hex).toBe('#000000');
-    const [h, s, l] = hexToHsl(hex);
+    const [_h, s, l] = hexToHsl(hex);
     expect(s).toBe(0);
     expect(l).toBe(0);
   });

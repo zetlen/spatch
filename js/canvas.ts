@@ -6,7 +6,7 @@
 import { getSolidFillColor, ensureLinearGradient } from './colors.ts';
 import { ensurePatternDefs, getPatternOverlay } from './patterns.ts';
 import { voiceRotation } from './shapes.ts';
-import type { Voice, TextDecoration, SigilData, WaveformType, HandleType } from './types.ts';
+import type { Voice, TextDecoration, SigilData, HandleType } from './types.ts';
 import { waveformShape } from './types.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
