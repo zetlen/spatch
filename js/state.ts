@@ -2,7 +2,7 @@
 
 import {
   normalizedCoord,
-  createDefaultFill,
+  createRandomFill,
   type WaveformType,
   type Voice,
   type TextDecoration,
@@ -35,8 +35,8 @@ function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCo
     id: genId('v'),
     x,
     y,
-    size: normalizedCoord(0.12),
-    fill: createDefaultFill(),
+    size: normalizedCoord(0.2),
+    fill: createRandomFill(),
     effect: null as Voice['effect'],
     blend: DEFAULT_BLEND,
     border: null as Voice['border'],

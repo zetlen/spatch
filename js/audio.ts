@@ -670,6 +670,14 @@ export class AudioEngine {
         voice.fill,
         voice.waveform,
       );
+
+      // Update octave oscillator frequency if border is present
+      if (audioVoice.octaveOsc && voice.border) {
+        const octaveShift = voice.border.double ? 2 : 1;
+        const direction = voice.border.color === 'white' ? 1 : -1;
+        const octaveFreq = freq * Math.pow(2, direction * octaveShift);
+        audioVoice.octaveOsc.frequency.setValueAtTime(octaveFreq, now);
+      }
     }
 
     // Update auto EQ for changed positions/sizes
@@ -914,7 +922,7 @@ export class AudioEngine {
       octaveOsc.frequency.value = octaveFreq;
 
       const octaveGain = ctx.createGain();
-      octaveGain.gain.value = voice.border.thickness;
+      octaveGain.gain.value = Math.sqrt(voice.border.thickness);
       octaveOsc.connect(octaveGain);
       // Connect to formantMixer to avoid double gain application (#81)
       octaveGain.connect(formantMixer);

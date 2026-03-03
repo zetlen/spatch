@@ -118,23 +118,6 @@ export class Toolbar {
       btn.appendChild(band);
       dropdown.appendChild(btn);
     }
-
-    const sep = document.createElement('div');
-    sep.className = 'separator';
-    dropdown.appendChild(sep);
-
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'action-btn danger';
-    removeBtn.dataset.pattern = 'none';
-    removeBtn.title = 'Remove pattern';
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('width', '20');
-    svg.setAttribute('height', '20');
-    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', 'tabler-sprite.svg#tabler-trash');
-    svg.appendChild(use);
-    removeBtn.appendChild(svg);
-    dropdown.appendChild(removeBtn);
   }
 
   _bindPatternDropdown(): void {
@@ -160,15 +143,11 @@ export class Toolbar {
       const sel = this.getSelected();
       if (!sel) return;
 
-      const newPattern = pattern === 'none' ? null : (pattern as PatternType);
+      const newPattern = pattern as PatternType;
       const finalPattern = sel.effect === newPattern ? null : newPattern;
       this.undo.snapshot();
       this.store.updateVoice(sel.id, { effect: finalPattern });
       this._updatePatternDropdown();
-      if (pattern === 'none') {
-        dropdown.classList.add('hidden');
-        this._syncMenuActive();
-      }
     });
 
     document.addEventListener('click', (e) => {
@@ -457,15 +436,7 @@ export class Toolbar {
       const sel = this.getSelected();
       if (!sel) return;
 
-      if (!sel.border) {
-        // No border -- add default and open expansion
-        this.undo.snapshot();
-        this.store.updateVoice(sel.id, {
-          border: { color: 'white', double: false, thickness: normalizedCoord(0.5) },
-        });
-        this._openBorderExpansion();
-        this._updateBorderButton();
-      } else if (this._openExpansion === 'border') {
+      if (this._openExpansion === 'border') {
         // Already showing border expansion -- close it
         this._closeExpansion();
       } else {
@@ -590,28 +561,9 @@ export class Toolbar {
     slider.className = 'expansion-slider';
     slider.min = '1';
     slider.max = '100';
-    slider.value = '50';
+    slider.value = '1';
     slider.title = 'Thickness';
     area.appendChild(slider);
-
-    // --- Separator ---
-    const sep3 = document.createElement('div');
-    sep3.className = 'separator';
-    area.appendChild(sep3);
-
-    // --- Remove button (trash icon from sprite) ---
-    const removeBtn = document.createElement('button');
-    removeBtn.id = 'btn-remove-border';
-    removeBtn.className = 'border-remove-btn';
-    removeBtn.title = 'Remove border';
-    const trashSvg = document.createElementNS(SVG_NS, 'svg');
-    trashSvg.setAttribute('width', '18');
-    trashSvg.setAttribute('height', '18');
-    const trashUse = document.createElementNS(SVG_NS, 'use');
-    trashUse.setAttribute('href', 'tabler-sprite.svg#tabler-trash');
-    trashSvg.appendChild(trashUse);
-    removeBtn.appendChild(trashSvg);
-    area.appendChild(removeBtn);
 
     // Show expansion
     area.classList.remove('hidden');
@@ -627,15 +579,27 @@ export class Toolbar {
   _bindExpansionBorderControls(): void {
     const area = document.getElementById('bottom-expansion')!;
 
-    // Color toggles
+    // Color toggles — clicking the active color removes the border
     area.querySelectorAll<HTMLElement>('.border-color-btn').forEach((colorBtn) => {
       colorBtn.addEventListener('click', () => {
         const sel = this.getSelected();
-        if (!sel?.border) return;
+        if (!sel) return;
+        const clickedColor = colorBtn.dataset.borderColor as BorderColor;
         this.undo.snapshot();
-        this.store.updateVoice(sel.id, {
-          border: { ...sel.border, color: colorBtn.dataset.borderColor as BorderColor },
-        });
+        if (sel.border && sel.border.color === clickedColor) {
+          // Deselect: remove border
+          this.store.updateVoice(sel.id, { border: null });
+        } else if (sel.border) {
+          // Switch color
+          this.store.updateVoice(sel.id, {
+            border: { ...sel.border, color: clickedColor },
+          });
+        } else {
+          // No border yet — add one with this color
+          this.store.updateVoice(sel.id, {
+            border: { color: clickedColor, double: false, thickness: normalizedCoord(0.01) },
+          });
+        }
         this._updateBorderExpansion();
         this._updateBorderButton();
       });
@@ -669,40 +633,29 @@ export class Toolbar {
         this.undo.snapshot();
       });
     }
-
-    // Remove border
-    const removeBtn = document.getElementById('btn-remove-border');
-    if (removeBtn) {
-      removeBtn.addEventListener('click', () => {
-        const sel = this.getSelected();
-        if (!sel) return;
-        this.undo.snapshot();
-        this.store.updateVoice(sel.id, { border: null });
-        this._closeExpansion();
-        this._updateBorderButton();
-      });
-    }
   }
 
   _updateBorderExpansion(): void {
     const sel = this.getSelected();
-    if (!sel?.border) return;
-    const border = sel.border;
+    const border = sel?.border ?? null;
 
     // Update color toggles within expansion area
     document.querySelectorAll<HTMLElement>('#bottom-expansion .border-color-btn').forEach((b) => {
-      b.classList.toggle('active', b.dataset.borderColor === border.color);
+      b.classList.toggle('active', border != null && b.dataset.borderColor === border.color);
     });
 
     // Update style toggles within expansion area
     document.querySelectorAll<HTMLElement>('#bottom-expansion .border-style-btn').forEach((b) => {
-      b.classList.toggle('active', (b.dataset.borderDouble === '1') === border.double);
+      b.classList.toggle(
+        'active',
+        border != null && (b.dataset.borderDouble === '1') === border.double,
+      );
     });
 
     // Update thickness slider
     const slider = document.getElementById('border-thickness') as HTMLInputElement | null;
     if (slider) {
-      slider.value = String(Math.round(border.thickness * 100));
+      slider.value = border ? String(Math.round(border.thickness * 100)) : '1';
     }
   }
 

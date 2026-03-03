@@ -522,27 +522,6 @@ body {
   height: 4px;
 }
 
-.border-remove-btn {
-  background: var(--bg-toolbar);
-  border-width: 1px;
-  border-style: solid;
-  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
-  color: var(--danger);
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 2px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.border-remove-btn:hover {
-  background: rgba(204, 51, 68, 0.12);
-  border-color: var(--danger);
-}
-
 /* ---- Reverb Controls ---- */
 
 .reverb-style-btn {

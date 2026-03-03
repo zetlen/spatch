@@ -121,6 +121,15 @@ export function createDefaultFill(): SolidFill {
   return { mode: 'solid', h: 200, s: 80, l: 50 };
 }
 
+export function createRandomFill(): SolidFill {
+  return {
+    mode: 'solid',
+    h: Math.floor(Math.random() * 360),
+    s: 70 + Math.floor(Math.random() * 20),
+    l: 45 + Math.floor(Math.random() * 15),
+  };
+}
+
 export type BorderColor = 'white' | 'black';
 
 export interface Border {

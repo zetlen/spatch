@@ -690,7 +690,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   }
   if (e.key === ' ') {
     e.preventDefault();
-    if (splashActive) return;
+    if (e.repeat || splashActive) return;
     if (playState !== 'idle') {
       stopPlayback();
     } else if (store.data.voices.length > 0) {
