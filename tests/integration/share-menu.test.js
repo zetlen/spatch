@@ -50,11 +50,11 @@ test.describe('Share menu', () => {
     await page.click('#btn-share');
     await page.click('[data-action="share"]');
 
-    // Check the label changed to "Copied!"
-    await expect(page.locator('[data-action="share"] span')).toHaveText('Copied!');
+    // Check the icon changed to a check mark
+    await expect(page.locator('[data-action="share"] use')).toHaveAttribute('href', /tabler-check/);
 
-    // Label should revert after ~1.5s
-    await expect(page.locator('[data-action="share"] span')).toHaveText('Share link', {
+    // Icon should revert after ~1.5s
+    await expect(page.locator('[data-action="share"] use')).toHaveAttribute('href', /tabler-link/, {
       timeout: 3000,
     });
   });
@@ -65,9 +65,11 @@ test.describe('Share menu', () => {
     await page.click('#btn-share');
     await page.click('[data-action="embed"]');
 
-    await expect(page.locator('[data-action="embed"] span')).toHaveText('Copied!');
+    // Check the icon changed to a check mark
+    await expect(page.locator('[data-action="embed"] use')).toHaveAttribute('href', /tabler-check/);
 
-    await expect(page.locator('[data-action="embed"] span')).toHaveText('Embed code', {
+    // Icon should revert after ~1.5s
+    await expect(page.locator('[data-action="embed"] use')).toHaveAttribute('href', /tabler-code/, {
       timeout: 3000,
     });
   });

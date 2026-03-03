@@ -51,28 +51,17 @@ test.describe('Play fan gesture', () => {
     const centerX = box.x + box.width / 2;
     const centerY = box.y + box.height / 2;
 
-    // pointerdown + wait for fan
-    await playBtn.dispatchEvent('pointerdown', {
-      pointerId: 1,
-      clientX: centerX,
-      clientY: centerY,
-    });
+    // Real pointer down + hold to open fan
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.down();
     await page.waitForTimeout(400);
     await expect(page.locator('.play-fan')).toHaveClass(/open/);
 
-    // Simulate pointermove into lock zone (50px above center)
-    await playBtn.dispatchEvent('pointermove', {
-      pointerId: 1,
-      clientX: centerX,
-      clientY: centerY - 50,
-    });
+    // Move into lock zone (50px below center — fan extends downward)
+    await page.mouse.move(centerX, centerY + 50);
 
     // Release in lock zone
-    await playBtn.dispatchEvent('pointerup', {
-      pointerId: 1,
-      clientX: centerX,
-      clientY: centerY - 50,
-    });
+    await page.mouse.up();
 
     // Should still be playing (latched)
     await page.waitForTimeout(200);
@@ -81,7 +70,7 @@ test.describe('Play fan gesture', () => {
     expect(isPlaying).toBe(true);
 
     // Click play to stop
-    await playBtn.dispatchEvent('pointerdown', { pointerId: 2 });
+    await page.mouse.click(centerX, centerY);
     await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
@@ -91,34 +80,23 @@ test.describe('Play fan gesture', () => {
     const centerX = box.x + box.width / 2;
     const centerY = box.y + box.height / 2;
 
-    // pointerdown + wait for fan
-    await playBtn.dispatchEvent('pointerdown', {
-      pointerId: 1,
-      clientX: centerX,
-      clientY: centerY,
-    });
+    // Real pointer down + hold to open fan
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.down();
     await page.waitForTimeout(400);
 
-    // Move into loop zone (120px above center)
-    await playBtn.dispatchEvent('pointermove', {
-      pointerId: 1,
-      clientX: centerX,
-      clientY: centerY - 120,
-    });
+    // Move into loop zone (100px below center — past the lock zone)
+    await page.mouse.move(centerX, centerY + 100);
 
     // Release in loop zone
-    await playBtn.dispatchEvent('pointerup', {
-      pointerId: 1,
-      clientX: centerX,
-      clientY: centerY - 120,
-    });
+    await page.mouse.up();
 
     // Should be playing (looping)
     await page.waitForTimeout(200);
     await expect(page.locator('#btn-play')).toHaveClass(/playing/);
 
     // Click play to stop
-    await playBtn.dispatchEvent('pointerdown', { pointerId: 2 });
+    await page.mouse.click(centerX, centerY);
     await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
