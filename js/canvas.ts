@@ -454,40 +454,92 @@ function reconcileTexts(textLayer: SVGGElement, texts: TextDecoration[]): void {
 
 // ---- Selection UI ----
 
-function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch: boolean): void {
+function createShapeOutline(voice: Voice): SVGElement {
+  const shape = waveformShape(voice.waveform);
+  switch (shape) {
+    case 'circle': {
+      const el = svgEl('circle');
+      setAttrs(el, circleAttrs(voice));
+      return el;
+    }
+    case 'square': {
+      const el = svgEl('rect');
+      setAttrs(el, rectAttrs(voice));
+      return el;
+    }
+    case 'triangle': {
+      const el = svgEl('polygon');
+      el.setAttribute('points', trianglePoints(voice));
+      return el;
+    }
+  }
+}
+
+function shapeHandlePositions(voice: Voice): [HandleType, number, number][] {
   const r = voice.size / 2;
+  const shape = waveformShape(voice.waveform);
+  switch (shape) {
+    case 'circle':
+      return [
+        ['e', voice.x + r, voice.y],
+        ['n', voice.x, voice.y - r],
+        ['w', voice.x - r, voice.y],
+        ['s', voice.x, voice.y + r],
+      ];
+    case 'square':
+      return [
+        ['nw', voice.x - r, voice.y - r],
+        ['ne', voice.x + r, voice.y - r],
+        ['se', voice.x + r, voice.y + r],
+        ['sw', voice.x - r, voice.y + r],
+      ];
+    case 'triangle': {
+      const positions: [HandleType, number, number][] = [];
+      for (let i = 0; i < 3; i++) {
+        const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
+        const px = voice.x + Math.cos(angle) * r;
+        const py = voice.y + Math.sin(angle) * r;
+        const handle: HandleType = i === 0 ? 'n' : i === 1 ? 'se' : 'sw';
+        positions.push([handle, px, py]);
+      }
+      return positions;
+    }
+  }
+}
+
+function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch: boolean): void {
   const rotDeg = voiceRotation(voice);
   const groupTransform = rotDeg !== 0 ? `rotate(${rotDeg}, ${voice.x}, ${voice.y})` : undefined;
+  const strokeWidth = isTouch ? '0.003' : '0.002';
+  const dashArray = '0.008 0.008';
 
-  // Dashed bounding rect
-  const dashRect = svgEl('rect');
-  setAttrs(dashRect, {
-    x: String(voice.x - r),
-    y: String(voice.y - r),
-    width: String(voice.size),
-    height: String(voice.size),
+  // Black shadow outline
+  const shadow = createShapeOutline(voice);
+  setAttrs(shadow, {
     fill: 'none',
-    stroke: 'rgba(255,255,255,0.5)',
-    'stroke-width': isTouch ? '0.002' : '0.0015',
-    'stroke-dasharray': isTouch ? '0.008 0.008' : '0.005 0.005',
+    stroke: '#000000',
+    'stroke-width': strokeWidth,
+    'stroke-dasharray': dashArray,
   });
-  if (groupTransform) dashRect.setAttribute('transform', groupTransform);
-  selectionLayer.appendChild(dashRect);
+  if (groupTransform) shadow.setAttribute('transform', groupTransform);
+  selectionLayer.appendChild(shadow);
 
-  if (isTouch) return; // Touch: just the dashed rect
+  // White marching ants outline
+  const ants = createShapeOutline(voice);
+  setAttrs(ants, {
+    fill: 'none',
+    stroke: '#ffffff',
+    'stroke-width': strokeWidth,
+    'stroke-dasharray': dashArray,
+  });
+  ants.style.animation = 'march 0.7s linear infinite';
+  if (groupTransform) ants.setAttribute('transform', groupTransform);
+  selectionLayer.appendChild(ants);
 
-  // Resize handles
-  const handlePositions: [HandleType, number, number][] = [
-    ['nw', voice.x - r, voice.y - r],
-    ['ne', voice.x + r, voice.y - r],
-    ['se', voice.x + r, voice.y + r],
-    ['sw', voice.x - r, voice.y + r],
-    ['n', voice.x, voice.y - r],
-    ['e', voice.x + r, voice.y],
-    ['s', voice.x, voice.y + r],
-    ['w', voice.x - r, voice.y],
-  ];
+  if (isTouch) return; // Touch: just the marching ants
 
+  // Resize handles at shape vertices/cardinal points
+  const handlePositions = shapeHandlePositions(voice);
   for (const [handle, hx, hy] of handlePositions) {
     const rect = svgEl('rect');
     setAttrs(rect, {
@@ -506,6 +558,7 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
 
   // Rotation handle (not for sine)
   if (voice.waveform !== 'sine') {
+    const r = voice.size / 2;
     const rotHandleY = voice.y - r - ROT_HANDLE_OFFSET;
 
     // Stem line

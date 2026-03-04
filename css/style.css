@@ -70,7 +70,6 @@ body {
   top: 100%;
   background: var(--bg-toolbar);
   border-bottom: 1px solid var(--border);
-  justify-content: center;
   z-index: 9;
 }
 .toolbar-expansion.hidden {
@@ -103,7 +102,6 @@ body {
 .toolbar-context {
   display: flex;
   align-items: center;
-  justify-content: center;
   padding: 6px 12px;
   gap: 8px;
 }
@@ -144,7 +142,7 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  transition: background 0.15s;
+  touch-action: manipulation;
 }
 
 /* LED dot — property-active indicator */
@@ -158,8 +156,7 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--text-muted);
-  box-shadow: 0 0 3px var(--text-muted);
+  background: var(--text-primary);
 }
 
 .tool-btn:hover,
@@ -210,20 +207,12 @@ body {
 
 /* ---- Swatch ---- */
 
-.swatch {
+.swatch-color {
   width: 28px;
   height: 28px;
   border-radius: 2px;
-  border-width: 1px;
-  border-style: solid;
-  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
-  cursor: pointer;
   background: hsl(200, 80%, 50%);
-  transition: border-color 0.15s;
-}
-
-.swatch:hover {
-  border-color: var(--text-muted);
+  pointer-events: none;
 }
 
 /* ---- Canvas Area ---- */
@@ -254,6 +243,12 @@ body {
   inset: 0;
   background: #2a2a2a;
   transition: box-shadow 0.08s ease-out;
+}
+
+@keyframes march {
+  to {
+    stroke-dashoffset: -0.032;
+  }
 }
 
 #sigil-canvas {
@@ -428,7 +423,6 @@ body {
   padding: 4px;
   border-radius: 2px;
   cursor: pointer;
-  transition: background 0.15s;
 }
 .dropdown-item:hover {
   background: var(--hover-bg);

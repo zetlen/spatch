@@ -687,6 +687,9 @@ export class Toolbar {
     const patternOpen = !document.getElementById('pattern-dropdown')?.classList.contains('hidden');
     document.getElementById('btn-pattern')?.classList.toggle('active', patternOpen);
     document
+      .getElementById('fill-swatch')
+      ?.classList.toggle('active', this._openExpansion === 'fill');
+    document
       .getElementById('btn-blend')
       ?.classList.toggle('active', this._openExpansion === 'blend');
     document
@@ -699,6 +702,9 @@ export class Toolbar {
   _bindActionButtons(): void {
     document.getElementById('btn-undo')!.addEventListener('click', () => this.undo.undo());
     document.getElementById('btn-redo')!.addEventListener('click', () => this.undo.redo());
+    document.getElementById('btn-deselect')!.addEventListener('click', () => {
+      if (this.onToolChange) this.onToolChange('deselect');
+    });
     document.getElementById('btn-delete')!.addEventListener('click', () => {
       if (this.selectedId) {
         this.undo.snapshot();
@@ -757,7 +763,8 @@ export class Toolbar {
     const swatch = document.getElementById('fill-swatch')!;
     const sel = this.getSelected();
     if (sel) {
-      swatch.style.background = getSwatchColor(sel.fill);
+      const colorEl = swatch.querySelector<HTMLElement>('.swatch-color');
+      if (colorEl) colorEl.style.background = getSwatchColor(sel.fill);
     }
   }
 

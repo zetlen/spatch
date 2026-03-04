@@ -123,7 +123,15 @@
         <div id="bottom-tools" class="toolbar-context">
           <div class="toolbar-group tools-group">
             <button class="tool-btn" data-tool="select" title="Select (V)">
-              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-pointer" /></svg>
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path
+                  d="M5 3l14 9.5L11.5 14l-2.5 7L5 3z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linejoin="round"
+                />
+              </svg>
             </button>
             <div class="separator"></div>
             <button class="tool-btn shape-btn" data-tool="triangle" title="Triangle">
@@ -160,7 +168,21 @@
         <!-- Shown when a voice is selected -->
         <div id="bottom-props" class="toolbar-context hidden">
           <div class="toolbar-group props-group">
-            <div id="fill-swatch" class="swatch" title="Fill color"></div>
+            <button id="btn-deselect" class="action-btn" title="Deselect (Esc)">
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path
+                  d="M5 3l14 9.5L11.5 14l-2.5 7L5 3z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <div class="separator"></div>
+            <button id="fill-swatch" class="action-btn swatch" title="Fill color">
+              <span class="swatch-color"></span>
+            </button>
 
             <button id="btn-pattern" class="action-btn" title="Pattern">
               <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-texture" /></svg>

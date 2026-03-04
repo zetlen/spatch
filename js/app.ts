@@ -278,6 +278,17 @@ function pointerAngle(a: { x: number; y: number }, b: { x: number; y: number }):
   return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
 }
 
+// ---- Click stage background to deselect ----
+
+const canvasArea = document.getElementById('canvas-area')!;
+canvasArea.addEventListener('pointerdown', (e: PointerEvent) => {
+  const target = e.target as HTMLElement;
+  if (target === canvasArea) {
+    setSelection(null);
+    needsRender = true;
+  }
+});
+
 // ---- Pointer events (all on canvasWrap) ----
 
 const canvasWrap = document.getElementById('canvas-wrap')!;
