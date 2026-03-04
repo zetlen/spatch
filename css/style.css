@@ -1,6 +1,6 @@
 /* style.css — flat hybrid-bevel theme for spatch */
 
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Imbue:opsz,wght@10..100,200&display=swap');
 
 :root {
   --bg-body: #e8e4e0;
@@ -25,7 +25,9 @@
 body {
   background: var(--bg-body);
   color: var(--text-primary);
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Imbue', monospace;
+  font-optical-sizing: auto;
+  font-style: normal;
   overflow: hidden;
   height: 100dvh;
   height: 100vh; /* fallback for older browsers */
@@ -117,11 +119,9 @@ body {
 }
 
 .logo {
-  font-family: 'Orbitron', sans-serif;
-  font-weight: 900;
-  font-size: 16px;
+  font-size: 50px;
   color: var(--text-primary);
-  letter-spacing: 2px;
+  letter-spacing: -0.15rem;
   white-space: nowrap;
 }
 
@@ -564,7 +564,9 @@ body {
     gap: 4px;
   }
   .logo {
-    font-size: 12px;
+    font-size: 24px;
+    transform: rotate(-90deg);
+    letter-spacing: -2px;
   }
   .tool-btn,
   .action-btn,

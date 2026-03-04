@@ -439,7 +439,7 @@ function reconcileTexts(textLayer: SVGGElement, texts: TextDecoration[]): void {
       el.setAttribute('fill', 'black');
       el.setAttribute('text-anchor', 'middle');
       el.setAttribute('dominant-baseline', 'central');
-      el.setAttribute('font-family', "'Orbitron', sans-serif");
+      el.setAttribute('font-family', "'Imbue', serif");
       textLayer.appendChild(el);
     }
 
