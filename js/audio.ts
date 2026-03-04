@@ -20,15 +20,12 @@ import {
   type Reverb,
 } from './types.ts';
 
-// ---- Pentatonic scale ----
-const PENTATONIC_INTERVALS = [0, 2, 4, 7, 9];
-const PENTATONIC_SEMITONES: number[] = [];
-for (let octave = 0; octave < 3; octave++) {
-  for (const interval of PENTATONIC_INTERVALS) {
-    PENTATONIC_SEMITONES.push(octave * 12 + interval);
-  }
+// ---- Chromatic scale ----
+// 3 octaves from G2 (MIDI 43) to G5 (MIDI 79): 37 semitones
+const CHROMATIC_SEMITONES: number[] = [];
+for (let i = 0; i <= 36; i++) {
+  CHROMATIC_SEMITONES.push(i);
 }
-PENTATONIC_SEMITONES.push(36); // top: 3 octaves above root
 
 const BASE_MIDI = 43; // G2
 
@@ -39,20 +36,22 @@ function midiToFreq(midi: number): number {
 // ---- Mapping functions ----
 
 // Maximum micro-detuning in cents when positioned between note snap points.
-// Tanh curve flattens near edges so the pitch always sounds like "that note."
-const MAX_DETUNE_CENTS = 40;
+// Set to 0 for hard chromatic snap. Can be re-enabled later as a deliberate
+// per-voice or global parameter rather than an accidental side effect.
+const MAX_DETUNE_CENTS = 0;
 
 export function yToFrequency(y: NormalizedCoord): number {
   // y is 0-1, where 0=top (high pitch), 1=bottom (low pitch)
   const normalized = 1 - y;
-  const continuous = normalized * (PENTATONIC_SEMITONES.length - 1);
+  const continuous = normalized * (CHROMATIC_SEMITONES.length - 1);
   const index = Math.round(continuous);
-  const clamped = Math.max(0, Math.min(PENTATONIC_SEMITONES.length - 1, index));
+  const clamped = Math.max(0, Math.min(CHROMATIC_SEMITONES.length - 1, index));
   const offset = continuous - clamped; // -0.5 to +0.5
 
-  const baseFreq = midiToFreq(BASE_MIDI + PENTATONIC_SEMITONES[clamped]!);
+  const baseFreq = midiToFreq(BASE_MIDI + CHROMATIC_SEMITONES[clamped]!);
 
-  // Micro-detuning: tanh flattens near edges, every y produces a unique pitch
+  // Micro-detuning: tanh flattens near edges. Currently disabled (MAX_DETUNE_CENTS=0)
+  // for hard chromatic snap. Can be re-enabled as a deliberate parameter.
   const detuneCents = MAX_DETUNE_CENTS * Math.tanh(offset * 3);
   return baseFreq * Math.pow(2, detuneCents / 1200);
 }
@@ -61,7 +60,7 @@ export function yToFrequency(y: NormalizedCoord): number {
 // Uses a cubic curve so positions near note centers are "sticky" while
 // positions between notes are compressed but still reachable.
 export function snapYToNote(y: NormalizedCoord): NormalizedCoord {
-  const noteCount = PENTATONIC_SEMITONES.length;
+  const noteCount = CHROMATIC_SEMITONES.length;
   const normalized = 1 - y;
   const spacing = 1 / (noteCount - 1);
 

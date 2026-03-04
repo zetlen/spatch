@@ -12,62 +12,37 @@ import {
 } from '../../js/audio.ts';
 
 describe('yToFrequency', () => {
-  test('y=0 (top) returns highest pentatonic note', () => {
+  test('y=0 (top) returns highest chromatic note (G5)', () => {
     const freq = yToFrequency(0);
-    // y=0 → normalized=1 → index=15 → semitone 36 → MIDI 79 → G5
+    // y=0 → normalized=1 → index=36 → semitone 36 → MIDI 79 → G5
     // 440 * 2^((79-69)/12) ≈ 783.99
     expect(freq).toBeCloseTo(783.99, 0);
   });
 
-  test('y=1 (bottom) returns lowest pentatonic note', () => {
+  test('y=1 (bottom) returns lowest chromatic note (G2)', () => {
     const freq = yToFrequency(1);
     // y=1 → normalized=0 → index=0 → semitone 0 → MIDI 43 → G2
     // 440 * 2^((43-69)/12) ≈ 98.00
     expect(freq).toBeCloseTo(98.0, 0);
   });
 
-  test('exact note position has no micro-detuning', () => {
-    // y=0 and y=1 land exactly on note centers (offset=0)
-    // so they should be pure pentatonic pitches
-    const freqTop = yToFrequency(0);
-    const freqBottom = yToFrequency(1);
-    expect(freqTop).toBeCloseTo(783.99, 0); // G5
-    expect(freqBottom).toBeCloseTo(98.0, 0); // G2
-  });
-
-  test('between-note positions produce micro-detuned pitch', () => {
-    // y=0.5 → continuous=7.5, rounds to index 8 → semitone 19 (B3)
-    // MIDI 43+19=62 → 440 * 2^((62-69)/12) ≈ 293.66
-    // With detuning ~-36 cents: slightly flat
-    const freq = yToFrequency(0.5);
-    expect(freq).toBeLessThan(293.66);
-    expect(freq).toBeGreaterThan(284.0);
-  });
-
-  test('nearby y values produce distinct frequencies', () => {
-    // This was the original problem: slight position changes must produce
-    // audible differences, not dead zones
-    const f1 = yToFrequency(0.5);
-    const f2 = yToFrequency(0.51);
-    const f3 = yToFrequency(0.52);
-    expect(f1).not.toBeCloseTo(f2, 2);
-    expect(f2).not.toBeCloseTo(f3, 2);
-  });
-
-  test('micro-detuning stays within ±40 cents of the base note', () => {
-    // Test many positions and verify detuning never exceeds max
+  test('all positions snap to exact chromatic pitches (no detuning)', () => {
+    // With MAX_DETUNE_CENTS=0, every y should land exactly on a chromatic note
     for (let y = 0; y <= 1; y += 0.01) {
       const freq = yToFrequency(y);
-      // Find the nearest pure note frequency (what the old rounding would give)
       const normalized = 1 - y;
-      const semitones = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33, 36];
-      const index = Math.round(normalized * (semitones.length - 1));
-      const clamped = Math.max(0, Math.min(semitones.length - 1, index));
-      const baseFreq = 440 * Math.pow(2, (43 + semitones[clamped] - 69) / 12);
-      // Detuning in cents: 1200 * log2(freq / baseFreq)
-      const detuneCents = 1200 * Math.log2(freq / baseFreq);
-      expect(Math.abs(detuneCents)).toBeLessThanOrEqual(40.01);
+      const index = Math.round(normalized * 36);
+      const clamped = Math.max(0, Math.min(36, index));
+      const baseFreq = 440 * Math.pow(2, (43 + clamped - 69) / 12);
+      expect(freq).toBeCloseTo(baseFreq, 2);
     }
+  });
+
+  test('positions between notes snap to nearest chromatic pitch', () => {
+    // y=0.5 → normalized=0.5 → continuous=18 → index 18 → MIDI 61 (C#4/Db4)
+    // 440 * 2^((61-69)/12) ≈ 277.18
+    const freq = yToFrequency(0.5);
+    expect(freq).toBeCloseTo(277.18, 0);
   });
 
   test('returns positive frequency for any valid y', () => {
@@ -80,6 +55,18 @@ describe('yToFrequency', () => {
     const freqTop = yToFrequency(0);
     const freqBottom = yToFrequency(1);
     expect(freqTop).toBeGreaterThan(freqBottom);
+  });
+
+  test('37 chromatic notes across 3 octaves', () => {
+    // Each exact note position should give a unique chromatic pitch
+    const freqs = new Set();
+    for (let i = 0; i <= 36; i++) {
+      const y = 1 - i / 36;
+      const freq = yToFrequency(y);
+      const rounded = Math.round(freq * 100) / 100;
+      freqs.add(rounded);
+    }
+    expect(freqs.size).toBe(37);
   });
 });
 
@@ -226,21 +213,21 @@ describe('areaToGain', () => {
 });
 
 describe('snapYToNote', () => {
-  // 16 pentatonic notes, spacing = 1/15 ≈ 0.0667
-  const spacing = 1 / 15;
+  // 37 chromatic notes, spacing = 1/36 ≈ 0.0278
+  const spacing = 1 / 36;
 
   test('exact note positions are unchanged', () => {
     // y=0 (top, highest note) and y=1 (bottom, lowest note)
     expect(snapYToNote(0)).toBeCloseTo(0, 5);
     expect(snapYToNote(1)).toBeCloseTo(1, 5);
-    // Middle note: index 8, normalized = 8/15, y = 1 - 8/15
-    const midY = 1 - 8 * spacing;
+    // Middle note: index 18, normalized = 18/36 = 0.5, y = 0.5
+    const midY = 1 - 18 * spacing;
     expect(snapYToNote(midY)).toBeCloseTo(midY, 5);
   });
 
   test('positions near a note are pulled toward it (magnetic)', () => {
     // Slightly above a note center should snap closer to it
-    const noteY = 1 - 5 * spacing; // note at index 5
+    const noteY = 1 - 12 * spacing; // note at index 12
     const slightlyOff = noteY + spacing * 0.1;
     const snapped = snapYToNote(slightlyOff);
     // Snapped should be closer to the note than the raw position
@@ -249,13 +236,13 @@ describe('snapYToNote', () => {
 
   test('positions between notes are compressed but reachable', () => {
     // Halfway between two notes should still map to a position between them
-    const note5Y = 1 - 5 * spacing;
-    const note6Y = 1 - 6 * spacing;
-    const halfway = (note5Y + note6Y) / 2;
+    const note12Y = 1 - 12 * spacing;
+    const note13Y = 1 - 13 * spacing;
+    const halfway = (note12Y + note13Y) / 2;
     const snapped = snapYToNote(halfway);
     // Should still be between the two notes (not collapsed to either)
-    expect(snapped).toBeLessThan(note5Y);
-    expect(snapped).toBeGreaterThan(note6Y);
+    expect(snapped).toBeLessThan(note12Y);
+    expect(snapped).toBeGreaterThan(note13Y);
   });
 
   test('result is always clamped to [0, 1]', () => {
