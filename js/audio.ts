@@ -395,6 +395,19 @@ export class AudioEngine {
     this._audioEl.style.display = 'none';
     document.body.appendChild(this._audioEl);
     this._audioEl.play().catch(() => {});
+
+    // Permanent listeners for qualifying gestures (touchend, click) that
+    // resume the keep-alive <audio> if it was paused after a previous stop
+    // AND we're currently playing audio. This covers iOS Safari where play()
+    // is called from pointerdown (non-qualifying) — the touchend/click that
+    // follows in the same gesture will resume the element.
+    const resumeKeepAlive = () => {
+      if (this._audioEl && this._audioEl.paused && this.isPlaying) {
+        this._audioEl.play().catch(() => {});
+      }
+    };
+    document.addEventListener('touchend', resumeKeepAlive);
+    document.addEventListener('click', resumeKeepAlive);
   }
 
   /** Call from any user gesture to pre-warm the AudioContext. */
@@ -439,7 +452,16 @@ export class AudioEngine {
     this._analyser.connect(ctx.destination);
     // Also feed the stream destination — its <audio> element keeps Safari
     // from suspending the AudioContext, but doesn't produce audible output.
-    if (this._streamDest) this._analyser.connect(this._streamDest);
+    if (this._streamDest) {
+      this._analyser.connect(this._streamDest);
+      // Resume keep-alive <audio> if it was paused after a previous stop.
+      // May fail outside a user gesture (e.g. loop restart) — that's OK,
+      // the AudioContext is already running and the permanent touchend/click
+      // listeners in _init() will resume it on the next qualifying gesture.
+      if (this._audioEl && this._audioEl.paused) {
+        this._audioEl.play().catch(() => {});
+      }
+    }
 
     // Master reverb (if active)
     if (sigilState.reverb) {
@@ -766,8 +788,12 @@ export class AudioEngine {
       this._reverbWet = null;
     }
     this._reverbStyle = null;
-    // Don't pause _audioEl — it stays playing (silently) so we never need
-    // to call play() again, which would require a fresh user gesture on Safari.
+
+    // Pause the keep-alive <audio> element so iOS drops the audio session
+    // indicator (speaker icon in status bar / Control Center). It will be
+    // resumed in play() or by the permanent touchend/click listeners
+    // registered in _init().
+    if (this._audioEl) this._audioEl.pause();
 
     this.isPlaying = false;
   }

@@ -273,7 +273,10 @@ The current unlock strategy (in `audio.ts:_init()`) uses three layers:
    element. Safari treats `<audio> srcObject` streams as "real" media, preventing
    the context from being suspended during playback. The `<audio>` element does
    **not** produce audible output — it only signals to the OS that media is
-   active.
+   active. The element is **paused in `_cleanup()`** to release the iOS audio
+   session (dropping the status bar speaker icon), and **resumed in `play()`**
+   (best-effort) plus permanent `touchend`/`click` listeners on `document`
+   that resume it from qualifying gestures when `isPlaying` is true.
 
 **Event wiring rules:**
 - Global warmup: `touchend`, `click`, `keydown` on `document`.
