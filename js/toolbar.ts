@@ -5,7 +5,6 @@ import type { SigilStore, UndoManager } from './state.ts';
 import type {
   Voice,
   FillDraft,
-  FillMode,
   PatternType,
   BlendMode,
   BorderColor,
@@ -272,32 +271,20 @@ export class Toolbar {
     const activeMode = sel ? sel.fill.mode : this._fillDraft.mode;
     const isLinear = activeMode === 'linear';
 
-    // --- Solid mode button (filled square icon) ---
-    const solidBtn = document.createElement('button');
-    solidBtn.className = 'action-btn';
-    solidBtn.dataset.tab = 'solid';
-    solidBtn.title = 'Solid color';
-    if (!isLinear) solidBtn.classList.add('active');
-    const solidSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    solidSvg.setAttribute('width', '20');
-    solidSvg.setAttribute('height', '20');
-    solidSvg.setAttribute('viewBox', '0 0 20 20');
-    const solidRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    solidRect.setAttribute('x', '4');
-    solidRect.setAttribute('y', '4');
-    solidRect.setAttribute('width', '12');
-    solidRect.setAttribute('height', '12');
-    solidRect.setAttribute('fill', 'currentColor');
-    solidSvg.appendChild(solidRect);
-    solidBtn.appendChild(solidSvg);
-    area.appendChild(solidBtn);
+    // --- Color input 1 (always visible) ---
+    const colorInput1 = document.createElement('input');
+    colorInput1.type = 'color';
+    colorInput1.id = 'color-solid';
+    colorInput1.className = 'expansion-color-input';
+    colorInput1.title = 'Color';
+    area.appendChild(colorInput1);
 
-    // --- Linear mode button (gradient bar icon) ---
-    const linearBtn = document.createElement('button');
-    linearBtn.className = 'action-btn';
-    linearBtn.dataset.tab = 'linear';
-    linearBtn.title = 'Gradient';
-    if (isLinear) linearBtn.classList.add('active');
+    // --- Gradient toggle button ---
+    const gradBtn = document.createElement('button');
+    gradBtn.className = 'action-btn';
+    gradBtn.id = 'grad-toggle';
+    gradBtn.title = 'Gradient';
+    if (isLinear) gradBtn.classList.add('active');
     const linSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     linSvg.setAttribute('width', '20');
     linSvg.setAttribute('height', '20');
@@ -327,21 +314,8 @@ export class Toolbar {
     linRect.setAttribute('height', '12');
     linRect.setAttribute('fill', 'url(#fill-grad-icon)');
     linSvg.appendChild(linRect);
-    linearBtn.appendChild(linSvg);
-    area.appendChild(linearBtn);
-
-    // --- Separator ---
-    const sep = document.createElement('div');
-    sep.className = 'separator';
-    area.appendChild(sep);
-
-    // --- Color input 1 (always visible) ---
-    const colorInput1 = document.createElement('input');
-    colorInput1.type = 'color';
-    colorInput1.id = 'color-solid';
-    colorInput1.className = 'expansion-color-input';
-    colorInput1.title = 'Color';
-    area.appendChild(colorInput1);
+    gradBtn.appendChild(linSvg);
+    area.appendChild(gradBtn);
 
     // --- Color input 2 (linear only) ---
     const colorInput2 = document.createElement('input');
@@ -352,17 +326,35 @@ export class Toolbar {
     if (!isLinear) colorInput2.classList.add('hidden');
     area.appendChild(colorInput2);
 
-    // --- Angle slider (linear only) ---
-    const angleSlider = document.createElement('input');
-    angleSlider.type = 'range';
-    angleSlider.id = 'angle-slider';
-    angleSlider.className = 'expansion-slider';
-    angleSlider.min = '0';
-    angleSlider.max = '359';
-    angleSlider.value = '0';
-    angleSlider.title = 'Angle';
-    if (!isLinear) angleSlider.classList.add('hidden');
-    area.appendChild(angleSlider);
+    // --- Angle toggles (linear only) ---
+    // Icon references for sprite scanner:
+    // tabler-sprite.svg#tabler-feather tabler-sprite.svg#tabler-mushroom
+    // tabler-sprite.svg#tabler-anchor
+    const angleToggles = document.createElement('div');
+    angleToggles.id = 'angle-toggles';
+    angleToggles.className = 'angle-toggles';
+    if (!isLinear) angleToggles.classList.add('hidden');
+
+    const bits = [
+      { icon: 'feather', bit: 0 },
+      { icon: 'mushroom', bit: 1 },
+      { icon: 'anchor', bit: 2 },
+    ];
+    for (const { icon, bit } of bits) {
+      const btn = document.createElement('button');
+      btn.className = 'action-btn angle-toggle';
+      btn.dataset.angleBit = String(bit);
+      btn.title = icon.charAt(0).toUpperCase() + icon.slice(1);
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '20');
+      svg.setAttribute('height', '20');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', `tabler-sprite.svg#tabler-${icon}`);
+      svg.appendChild(use);
+      btn.appendChild(svg);
+      angleToggles.appendChild(btn);
+    }
+    area.appendChild(angleToggles);
 
     // Show expansion
     area.classList.remove('hidden');
@@ -378,51 +370,47 @@ export class Toolbar {
   _bindExpansionColorPicker(): void {
     const area = document.getElementById('bottom-expansion')!;
 
-    // Tab switching (solid/linear toggle buttons)
-    area.querySelectorAll<HTMLElement>('.action-btn[data-tab]').forEach((tab) => {
-      tab.addEventListener('click', () => {
-        const mode = tab.dataset.tab as FillMode;
-        const isLinear = mode === 'linear';
-
-        // Update active toggle
-        area
-          .querySelectorAll<HTMLElement>('.action-btn[data-tab]')
-          .forEach((t) => t.classList.toggle('active', t.dataset.tab === mode));
+    // Gradient toggle button
+    const gradToggle = document.getElementById('grad-toggle');
+    if (gradToggle) {
+      gradToggle.addEventListener('click', () => {
+        const isLinear = !gradToggle.classList.contains('active');
+        gradToggle.classList.toggle('active', isLinear);
 
         // Show/hide linear-only controls
-        const colorInput2 = document.getElementById('color-lin-2');
-        const angleSlider = document.getElementById('angle-slider');
-        colorInput2?.classList.toggle('hidden', !isLinear);
-        angleSlider?.classList.toggle('hidden', !isLinear);
+        document.getElementById('color-lin-2')?.classList.toggle('hidden', !isLinear);
+        document.getElementById('angle-toggles')?.classList.toggle('hidden', !isLinear);
 
         const sel = this.getSelected();
         if (sel) {
-          this._fillDraft.mode = mode;
+          this._fillDraft.mode = isLinear ? 'linear' : 'solid';
           this._commitFill(sel.id, false);
           this.updateSwatchFromSelected();
         }
 
         this._syncColorInputs();
       });
-    });
+    }
 
     // Bind native color inputs
     // color-solid serves as the primary color for both solid and linear modes
     this._bindNativeColorInput('color-solid', 'h', 's', 'l');
     this._bindNativeColorInput('color-lin-2', 'h2', 's2', 'l2');
 
-    // Angle slider
-    const angleSlider = document.getElementById('angle-slider') as HTMLInputElement | null;
-    if (angleSlider) {
-      angleSlider.addEventListener('input', () => {
+    // Angle toggle buttons
+    area.querySelectorAll<HTMLElement>('.angle-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
         const sel = this.getSelected();
-        if (sel) {
-          this._fillDraft.gradAngle = parseInt(angleSlider.value);
-          this._commitFill(sel.id, false);
-          this.updateSwatchFromSelected();
-        }
+        if (!sel) return;
+        const bit = parseInt(btn.dataset.angleBit!);
+        const currentBits = Math.round(this._fillDraft.gradAngle / 45) & 7;
+        const newBits = currentBits ^ (1 << bit);
+        this._fillDraft.gradAngle = newBits * 45;
+        this._commitFill(sel.id, false);
+        this.updateSwatchFromSelected();
+        this._syncAngleToggles();
       });
-    }
+    });
   }
 
   // ---- Border button -> inline expansion ----
@@ -750,8 +738,15 @@ export class Toolbar {
     const d = this._fillDraft;
     this._setColorInput('color-solid', d.h, d.s, d.l);
     this._setColorInput('color-lin-2', d.h2, d.s2, d.l2);
-    const angleSlider = document.getElementById('angle-slider') as HTMLInputElement | null;
-    if (angleSlider) angleSlider.value = String(d.gradAngle);
+    this._syncAngleToggles();
+  }
+
+  _syncAngleToggles(): void {
+    const bits = Math.round(this._fillDraft.gradAngle / 45) & 7;
+    document.querySelectorAll<HTMLElement>('.angle-toggle').forEach((btn) => {
+      const bit = parseInt(btn.dataset.angleBit!);
+      btn.classList.toggle('active', (bits & (1 << bit)) !== 0);
+    });
   }
 
   _setColorInput(inputId: string, h: number, s: number, l: number): void {
@@ -781,17 +776,11 @@ export class Toolbar {
     // Refresh open expansion if any
     if (this._openExpansion === 'fill') {
       this._syncColorInputs();
-      // Update active tab to match new voice's fill mode
-      const area = document.getElementById('bottom-expansion');
-      if (area) {
-        const isLinear = sel.fill.mode === 'linear';
-        area
-          .querySelectorAll<HTMLElement>('.action-btn[data-tab]')
-          .forEach((t) => t.classList.toggle('active', t.dataset.tab === sel.fill.mode));
-        // Show/hide linear-only controls
-        document.getElementById('color-lin-2')?.classList.toggle('hidden', !isLinear);
-        document.getElementById('angle-slider')?.classList.toggle('hidden', !isLinear);
-      }
+      // Sync gradient toggle and linear-only controls
+      const isLinear = sel.fill.mode === 'linear';
+      document.getElementById('grad-toggle')?.classList.toggle('active', isLinear);
+      document.getElementById('color-lin-2')?.classList.toggle('hidden', !isLinear);
+      document.getElementById('angle-toggles')?.classList.toggle('hidden', !isLinear);
     } else if (this._openExpansion === 'blend') {
       this._updateBlendExpansion();
     } else if (this._openExpansion === 'border') {

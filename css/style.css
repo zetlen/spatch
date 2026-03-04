@@ -483,6 +483,12 @@ body {
   height: 4px;
 }
 
+/* ---- Angle Toggles ---- */
+
+.angle-toggles {
+  display: contents;
+}
+
 /* ---- Border Controls ---- */
 
 .border-color-btn,

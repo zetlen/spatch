@@ -40,7 +40,7 @@ describe('getSwatchColor', () => {
     };
     const result = getSwatchColor(fill);
     expect(result).toContain('linear-gradient(');
-    expect(result).toContain('45deg');
+    expect(result).toContain('135deg');
   });
 
   // Unknown fill mode test removed: Fill is now a discriminated union,

@@ -55,7 +55,7 @@ export function getSwatchColor(fill: Fill): string {
     case 'solid':
       return hslToString(fill.h, fill.s, fill.l);
     case 'linear':
-      return `linear-gradient(${fill.gradAngle}deg, ${hslToString(fill.h, fill.s, fill.l)}, ${hslToString(fill.h2, fill.s2, fill.l2)})`;
+      return `linear-gradient(${fill.gradAngle + 90}deg, ${hslToString(fill.h, fill.s, fill.l)}, ${hslToString(fill.h2, fill.s2, fill.l2)})`;
   }
 }
 
