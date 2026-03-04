@@ -268,6 +268,18 @@ toolbar.onToolChange = (tool: string) => {
   }
 };
 
+toolbar.onDuplicate = () => {
+  if (selectedId) {
+    undo.snapshot();
+    const dup = store.duplicateVoice(selectedId, 0.03, 0.03);
+    if (dup) {
+      setSelection(dup.id);
+      toolbar.syncToSelectedShape();
+      needsRender = true;
+    }
+  }
+};
+
 // ---- Pinch helpers ----
 
 function pointerDist(a: { x: number; y: number }, b: { x: number; y: number }): number {
@@ -670,7 +682,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     e.preventDefault();
     if (selectedId) {
       undo.snapshot();
-      const dup = store.duplicateVoice(selectedId, 0, 0);
+      const dup = store.duplicateVoice(selectedId, 0.03, 0.03);
       if (dup) {
         setSelection(dup.id);
         toolbar.syncToSelectedShape();

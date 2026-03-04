@@ -460,7 +460,13 @@ body {
   background-size: 4px 4px;
 }
 .pattern-preview-gradient {
-  background: linear-gradient(90deg, var(--text-primary), transparent);
+  background: repeating-linear-gradient(
+    90deg,
+    var(--text-primary) 0 2px,
+    transparent 2px 4px,
+    var(--text-primary) 4px 5px,
+    transparent 5px 9px
+  );
 }
 
 /* ---- Expansion row controls ---- */

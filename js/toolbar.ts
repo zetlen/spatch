@@ -17,6 +17,7 @@ export class Toolbar {
   undo: UndoManager;
   currentTool: string;
   onToolChange: ((tool: string) => void) | null;
+  onDuplicate: (() => void) | null;
   selectedId: string | null;
   selectedDecoId: string | null;
   _fillDraft: FillDraft;
@@ -29,6 +30,7 @@ export class Toolbar {
     this.undo = undo;
     this.currentTool = 'select';
     this.onToolChange = null;
+    this.onDuplicate = null;
     this.selectedId = null;
     this.selectedDecoId = null;
     this._fillDraft = {
@@ -452,14 +454,24 @@ export class Toolbar {
     whiteSvg.setAttribute('width', '20');
     whiteSvg.setAttribute('height', '20');
     whiteSvg.setAttribute('viewBox', '0 0 20 20');
-    const whiteCircle = document.createElementNS(SVG_NS, 'circle');
-    whiteCircle.setAttribute('cx', '10');
-    whiteCircle.setAttribute('cy', '10');
-    whiteCircle.setAttribute('r', '6');
-    whiteCircle.setAttribute('fill', 'white');
-    whiteCircle.setAttribute('stroke', '#999');
-    whiteCircle.setAttribute('stroke-width', '1');
-    whiteSvg.appendChild(whiteCircle);
+    const whiteOutline = document.createElementNS(SVG_NS, 'line');
+    whiteOutline.setAttribute('x1', '4');
+    whiteOutline.setAttribute('y1', '10');
+    whiteOutline.setAttribute('x2', '16');
+    whiteOutline.setAttribute('y2', '10');
+    whiteOutline.setAttribute('stroke', '#999');
+    whiteOutline.setAttribute('stroke-width', '5');
+    whiteOutline.setAttribute('stroke-linecap', 'round');
+    whiteSvg.appendChild(whiteOutline);
+    const whiteLine = document.createElementNS(SVG_NS, 'line');
+    whiteLine.setAttribute('x1', '4');
+    whiteLine.setAttribute('y1', '10');
+    whiteLine.setAttribute('x2', '16');
+    whiteLine.setAttribute('y2', '10');
+    whiteLine.setAttribute('stroke', 'white');
+    whiteLine.setAttribute('stroke-width', '3');
+    whiteLine.setAttribute('stroke-linecap', 'round');
+    whiteSvg.appendChild(whiteLine);
     whiteBtn.appendChild(whiteSvg);
     area.appendChild(whiteBtn);
 
@@ -472,12 +484,15 @@ export class Toolbar {
     blackSvg.setAttribute('width', '20');
     blackSvg.setAttribute('height', '20');
     blackSvg.setAttribute('viewBox', '0 0 20 20');
-    const blackCircle = document.createElementNS(SVG_NS, 'circle');
-    blackCircle.setAttribute('cx', '10');
-    blackCircle.setAttribute('cy', '10');
-    blackCircle.setAttribute('r', '6');
-    blackCircle.setAttribute('fill', 'currentColor');
-    blackSvg.appendChild(blackCircle);
+    const blackLine = document.createElementNS(SVG_NS, 'line');
+    blackLine.setAttribute('x1', '4');
+    blackLine.setAttribute('y1', '10');
+    blackLine.setAttribute('x2', '16');
+    blackLine.setAttribute('y2', '10');
+    blackLine.setAttribute('stroke', 'currentColor');
+    blackLine.setAttribute('stroke-width', '3');
+    blackLine.setAttribute('stroke-linecap', 'round');
+    blackSvg.appendChild(blackLine);
     blackBtn.appendChild(blackSvg);
     area.appendChild(blackBtn);
 
@@ -692,6 +707,9 @@ export class Toolbar {
     document.getElementById('btn-redo')!.addEventListener('click', () => this.undo.redo());
     document.getElementById('btn-deselect')!.addEventListener('click', () => {
       if (this.onToolChange) this.onToolChange('deselect');
+    });
+    document.getElementById('btn-duplicate')!.addEventListener('click', () => {
+      if (this.onDuplicate) this.onDuplicate();
     });
     document.getElementById('btn-delete')!.addEventListener('click', () => {
       if (this.selectedId) {

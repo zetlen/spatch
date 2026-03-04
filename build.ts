@@ -1,4 +1,4 @@
-import { watch, readFileSync } from 'fs';
+import { watch, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import pkg from './package.json';
 
@@ -12,6 +12,13 @@ const shouldWatch = process.argv.includes('--watch');
 const shouldServe = process.argv.includes('--serve');
 
 const TABLER_ICONS = 'node_modules/@tabler/icons/icons';
+
+function checkDependencies() {
+  if (!existsSync(TABLER_ICONS)) {
+    console.error('Error: node_modules not installed. Run `bun install` first.');
+    process.exit(1);
+  }
+}
 
 // Scan source files for tabler-sprite.svg#tabler-{name} references and build
 // a minimal SVG sprite containing only the icons actually used.
@@ -39,6 +46,7 @@ async function generateTablerSprite() {
 
   // Resolve each reference to an individual SVG file and convert to <symbol>
   const symbols: string[] = [];
+  const missing: string[] = [];
   for (const name of [...refs].sort()) {
     // Check if it's a filled variant (name ends with -filled, file is in filled/ without suffix)
     const isFilled = name.endsWith('-filled');
@@ -48,7 +56,7 @@ async function generateTablerSprite() {
 
     const file = Bun.file(svgPath);
     if (!(await file.exists())) {
-      console.warn(`Warning: icon "${name}" not found at ${svgPath}`);
+      missing.push(name);
       continue;
     }
 
@@ -82,12 +90,18 @@ async function generateTablerSprite() {
     symbols.push(`<symbol ${symbolAttrs.join(' ')}>${inner}</symbol>`);
   }
 
+  if (missing.length > 0) {
+    console.error(`Error: ${missing.length} icon(s) not found: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+
   const sprite = `<svg xmlns="http://www.w3.org/2000/svg">${symbols.join('')}</svg>`;
   await Bun.write('dist/tabler-sprite.svg', sprite);
   console.log(`  Generated tabler-sprite.svg (${refs.size} icons, ${sprite.length} bytes)`);
 }
 
 async function build() {
+  checkDependencies();
   await Bun.$`rm -rf dist`;
 
   // Scan scene images so we can inject the list as a build-time constant

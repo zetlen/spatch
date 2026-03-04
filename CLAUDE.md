@@ -52,7 +52,7 @@ tests/
 ## How to Run
 
 ```bash
-bun install          # install dependencies
+bun install          # install dependencies (MUST run before build/dev)
 bun run build        # build to dist/ (minified)
 bun run dev          # build to dist/ (unminified, with source maps)
 bun run test         # run unit + integration tests
@@ -62,6 +62,10 @@ bun run check        # typecheck (tsc --noEmit)
 bun run lint         # lint (oxlint)
 bun run fmt          # format (oxfmt)
 ```
+
+**IMPORTANT:** `bun install` must be run before `bun run build` or `bun run dev`.
+The build will exit with an error if dependencies are missing. It will also fail
+if any referenced tabler icon cannot be found in `node_modules`.
 
 **Pre-commit hooks** (lefthook): auto-formats staged files with oxfmt, fixes
 lint with oxlint, and runs tsc. Commits will be auto-formatted.
