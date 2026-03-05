@@ -2,7 +2,9 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": null,
   "categories": {},
-  "rules": {},
+  "rules": {
+    "no-use-before-define": ["error", { "functions": false, "classes": true, "variables": true }]
+  },
   "env": {
     "builtin": true
   },

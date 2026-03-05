@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun run build.ts",
-    "dev": "bun run build.ts --dev --watch --serve",
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
     "clean": "rm -rf dist",
-    "serve": "cd dist && bunx serve",
     "test": "bun test && bunx playwright test",
     "test:unit": "bun test",
     "test:e2e": "bunx playwright test",
@@ -26,7 +26,8 @@
     "lefthook": "^2.1.1",
     "oxfmt": "^0.35.0",
     "oxlint": "^1.50.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   },
   "trustedDependencies": [
     "lefthook"

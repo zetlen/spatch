@@ -121,6 +121,8 @@ function updateFrameShadow(
 
 // ---- Responsive canvas sizing ----
 
+let needsRender = true;
+
 function resizeCanvas(): void {
   const area = document.getElementById('canvas-area')!;
   const maxH = area.clientHeight - 24;
@@ -140,9 +142,29 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 initStage();
 
-// ---- Render loop ----
+// ---- Play state (hoisted for renderLoop / keyboard handler) ----
 
-let needsRender = true;
+const playBtn = document.getElementById('btn-play')!;
+const playFan = document.getElementById('play-fan')!;
+const fanLock = playFan.querySelector('.fan-lock')!;
+const fanLoop = playFan.querySelector('.fan-loop')! as HTMLElement;
+
+const playModeLock = document.getElementById('play-mode-lock')!;
+const playModeLoop = document.getElementById('play-mode-loop')!;
+
+let playState = 'idle'; // 'idle' | 'latched' | 'looping'
+let gestureActive = false;
+let gestureTimerId: ReturnType<typeof setTimeout> | null = null;
+let gesturePointerId: number | null = null;
+let lastFanInfo: { zone: string; ms?: number; pull?: number } | null = null;
+let loopHoldMs = 500;
+let loopTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let loopCycleStart = 0;
+let loopCycleDuration = 0;
+let releaseGlowTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let playGeneration = 0;
+
+// ---- Render loop ----
 
 store.onChange(() => {
   needsRender = true;
@@ -638,6 +660,11 @@ canvasWrap.addEventListener('pointercancel', handlePointerEnd);
 
 let clipboard: Voice | null = null;
 
+// ---- Share menu (hoisted for keyboard handler) ----
+
+const shareBtn = document.getElementById('btn-share')!;
+const shareMenu = document.getElementById('share-menu')!;
+
 // ---- Keyboard shortcuts ----
 
 document.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -727,32 +754,12 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 
 // ---- Play mode selector & Play button ----
 
-const playBtn = document.getElementById('btn-play')!;
-const playFan = document.getElementById('play-fan')!;
-const fanLock = playFan.querySelector('.fan-lock')!;
-const fanLoop = playFan.querySelector('.fan-loop')! as HTMLElement;
-
-const playModeLock = document.getElementById('play-mode-lock')!;
-const playModeLoop = document.getElementById('play-mode-loop')!;
-
-let playState = 'idle'; // 'idle' | 'latched' | 'looping'
-let gestureActive = false;
-let gestureTimerId: ReturnType<typeof setTimeout> | null = null;
-let gesturePointerId: number | null = null;
-let lastFanInfo: { zone: string; ms?: number; pull?: number } | null = null;
-let loopHoldMs = 500;
-let loopTimeoutId: ReturnType<typeof setTimeout> | null = null;
-let loopCycleStart = 0;
-let loopCycleDuration = 0;
-let releaseGlowTimeoutId: ReturnType<typeof setTimeout> | null = null;
-let playGeneration = 0;
-
 function updatePlayIndicators(): void {
   playModeLock.classList.toggle('hidden', playState !== 'latched');
   playModeLoop.classList.toggle('hidden', playState !== 'looping');
 }
 
-// Icon reference for sprite scanner: tabler-sprite.svg#tabler-player-stop-filled
+// Icon reference for sprite scanner: #tabler-player-stop-filled
 function setPlayIcon(playing: boolean): void {
   const symbol = playing ? 'tabler-player-stop-filled' : 'tabler-player-play-filled';
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -760,7 +767,7 @@ function setPlayIcon(playing: boolean): void {
   svg.setAttribute('width', '20');
   svg.setAttribute('height', '20');
   const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-  use.setAttribute('href', `tabler-sprite.svg#${symbol}`);
+  use.setAttribute('href', `#${symbol}`);
   svg.appendChild(use);
   playBtn.querySelector('.play-icon')!.replaceWith(svg);
 }
@@ -1102,12 +1109,7 @@ function debouncedSave(): void {
 
 // ---- Share menu ----
 
-const shareBtn = document.getElementById('btn-share')!;
-const shareMenu = document.getElementById('share-menu')!;
-
-// Icon reference for sprite scanner: tabler-sprite.svg#tabler-link
-// Icon reference for sprite scanner: tabler-sprite.svg#tabler-code
-// Icon reference for sprite scanner: tabler-sprite.svg#tabler-check
+// Icon reference for sprite scanner: #tabler-link #tabler-code #tabler-check
 
 function syncShareActive(): void {
   shareBtn.classList.toggle('active', !shareMenu.classList.contains('hidden'));
@@ -1145,7 +1147,7 @@ shareMenu.addEventListener('click', async (e: MouseEvent) => {
   checkSvg.setAttribute('width', '20');
   checkSvg.setAttribute('height', '20');
   const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-  use.setAttribute('href', 'tabler-sprite.svg#tabler-check');
+  use.setAttribute('href', '#tabler-check');
   checkSvg.appendChild(use);
   origSvg.replaceWith(checkSvg);
   setTimeout(() => {

@@ -4,3 +4,4 @@ tmp/
 test-results/
 .playwright-mcp/
 *.tar.gz
+.env*

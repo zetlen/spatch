@@ -1,5 +1,21 @@
 # CLAUDE.md — spatch
 
+## Branch Rebase Rule
+
+Working branches must be fully rebased on `origin/main`. Stale branches
+cause conflicts and regressions that are expensive to fix. Check at session
+start and before every push:
+
+```bash
+git fetch origin main && git log HEAD..origin/main --oneline
+```
+
+If this produces any output, stop and rebase before doing other work:
+`git rebase origin/main` — then verify build and tests still pass.
+
+If the branch is behind `origin/main`, confirm with the user before proceeding.
+The lefthook `pre-push` hook also blocks pushes of stale branches.
+
 ## What This Is
 
 spatch is a browser instrument. You compose visual sigils from geometric shapes
@@ -10,12 +26,16 @@ and hear them as synthesized chords. Every visual property maps to an audio para
 ```
 package.json         Package manifest (Bun)
 bun.lock             Lockfile
-build.ts             Build script (Bun.build)
+vite.config.ts       Vite build/dev config (plugins, MPA input, virtual modules)
 tsconfig.json        TypeScript configuration
 index.html           Main app (source HTML entry point)
 embed.html           Standalone embed viewer (reads state from URL hash)
 css/style.css        All styles (CSS custom properties, flat hybrid-bevel theme)
+scripts/
+  vite-plugin-svg-sprite.ts  Reusable Vite plugin: scans sources for icon refs,
+                             builds SVG sprite, inlines into HTML
 js/
+  virtual.d.ts       Type declarations for virtual modules (scene-images)
   types.ts           Shared type definitions: branded primitives, Voice
                      (discriminated union), Fill (discriminated union),
                      TextDecoration, Envelope, branding functions
@@ -53,8 +73,9 @@ tests/
 
 ```bash
 bun install          # install dependencies (MUST run before build/dev)
-bun run build        # build to dist/ (minified)
-bun run dev          # build to dist/ (unminified, with source maps)
+bun run build        # production build to dist/ (vite build)
+bun run dev          # Vite dev server with HMR (port 5173)
+bun run preview      # serve production build locally (vite preview)
 bun run test         # run unit + integration tests
 bun run test:unit    # unit tests only (bun test)
 bun run test:e2e     # integration tests only (Playwright, needs dev server)
@@ -64,8 +85,11 @@ bun run fmt          # format (oxfmt)
 ```
 
 **IMPORTANT:** `bun install` must be run before `bun run build` or `bun run dev`.
-The build will exit with an error if dependencies are missing. It will also fail
-if any referenced tabler icon cannot be found in `node_modules`.
+The build will fail if dependencies are missing or if any referenced tabler icon
+cannot be found in `node_modules`.
+
+**Serve note:** `bun run dev` starts a Vite dev server (port 5173) with HMR.
+For production testing, use `bun run build && bun run preview`.
 
 **Pre-commit hooks** (lefthook): auto-formats staged files with oxfmt, fixes
 lint with oxlint, and runs tsc. Commits will be auto-formatted.

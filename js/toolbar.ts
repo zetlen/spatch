@@ -192,10 +192,8 @@ export class Toolbar {
     area.replaceChildren();
 
     // Icon references for sprite scanner:
-    // tabler-sprite.svg#tabler-ghost tabler-sprite.svg#tabler-skull
-    // tabler-sprite.svg#tabler-diamond tabler-sprite.svg#tabler-meteor
-    // tabler-sprite.svg#tabler-virus tabler-sprite.svg#tabler-spiral
-    // tabler-sprite.svg#tabler-biohazard
+    // #tabler-ghost #tabler-skull #tabler-diamond #tabler-meteor
+    // #tabler-virus #tabler-spiral #tabler-biohazard
     const modes: Array<{ value: BlendMode; symbol: string; title: string }> = [
       { value: 'soft-light', symbol: 'tabler-ghost', title: 'Soft Light' },
       { value: 'multiply', symbol: 'tabler-skull', title: 'Multiply' },
@@ -219,7 +217,7 @@ export class Toolbar {
       svg.setAttribute('width', '20');
       svg.setAttribute('height', '20');
       const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-      use.setAttribute('href', `tabler-sprite.svg#${m.symbol}`);
+      use.setAttribute('href', `#${m.symbol}`);
       svg.appendChild(use);
       btn.appendChild(svg);
       area.appendChild(btn);
@@ -330,8 +328,7 @@ export class Toolbar {
 
     // --- Angle toggles (linear only) ---
     // Icon references for sprite scanner:
-    // tabler-sprite.svg#tabler-feather tabler-sprite.svg#tabler-mushroom
-    // tabler-sprite.svg#tabler-anchor
+    // #tabler-feather #tabler-mushroom #tabler-anchor
     const angleToggles = document.createElement('div');
     angleToggles.id = 'angle-toggles';
     angleToggles.className = 'angle-toggles';
@@ -351,7 +348,7 @@ export class Toolbar {
       svg.setAttribute('width', '20');
       svg.setAttribute('height', '20');
       const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-      use.setAttribute('href', `tabler-sprite.svg#tabler-${icon}`);
+      use.setAttribute('href', `#tabler-${icon}`);
       svg.appendChild(use);
       btn.appendChild(svg);
       angleToggles.appendChild(btn);

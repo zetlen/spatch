@@ -1,5 +1,4 @@
-declare const __SCENE_IMAGES__: string[];
-const IMAGES: string[] = __SCENE_IMAGES__;
+import IMAGES from 'virtual:scene-images';
 
 const STAGE_CLASS = 'stage-florid';
 
