@@ -10,65 +10,56 @@ test.describe('Stage themes', () => {
     await page.waitForSelector('#sigil-canvas');
   });
 
-  test('cycle button exists and starts on minimal', async ({ page }) => {
+  test('cycle button exists and starts on white', async ({ page }) => {
     const btn = page.locator('#btn-stage');
     await expect(btn).toBeVisible();
-    await expect(btn).toHaveAttribute('title', 'Stage: Minimal');
+    await expect(btn).toHaveAttribute('title', 'Stage: White');
 
     const area = page.locator('#canvas-area');
-    await expect(area).not.toHaveClass(/stage-subtle/);
     await expect(area).not.toHaveClass(/stage-florid/);
   });
 
-  test('clicking cycles through minimal → subtle → florid → minimal', async ({ page }) => {
+  test('clicking cycles white → florid → white', async ({ page }) => {
     const btn = page.locator('#btn-stage');
     const area = page.locator('#canvas-area');
 
-    // Click 1: minimal → subtle
-    await btn.click();
-    await expect(area).toHaveClass(/stage-subtle/);
-    await expect(btn).toHaveAttribute('title', 'Stage: Subtle');
-
-    // Click 2: subtle → florid
+    // Click 1: white → florid
     await btn.click();
     await expect(area).toHaveClass(/stage-florid/);
-    await expect(btn).toHaveAttribute('title', /Stage: Florid/);
+    await expect(btn).toHaveAttribute('title', /Stage: Image/);
 
-    // Click 3: florid → minimal
+    // Click 2: florid → white
     await btn.click();
-    await expect(area).not.toHaveClass(/stage-subtle/);
     await expect(area).not.toHaveClass(/stage-florid/);
-    await expect(btn).toHaveAttribute('title', 'Stage: Minimal');
+    await expect(btn).toHaveAttribute('title', 'Stage: White');
   });
 
   test('theme persists across reload', async ({ page }) => {
     const btn = page.locator('#btn-stage');
     const area = page.locator('#canvas-area');
 
-    // Set to subtle
+    // Set to florid
     await btn.click();
-    await expect(area).toHaveClass(/stage-subtle/);
+    await expect(area).toHaveClass(/stage-florid/);
 
     // Reload
     await page.reload();
     await page.waitForSelector('#sigil-canvas');
 
-    await expect(area).toHaveClass(/stage-subtle/);
-    await expect(btn).toHaveAttribute('title', 'Stage: Subtle');
+    await expect(area).toHaveClass(/stage-florid/);
+    await expect(btn).toHaveAttribute('title', /Stage: Image/);
   });
 
-  test('florid mode advances image on full cycle', async ({ page }) => {
+  test('florid mode advances image on each cycle', async ({ page }) => {
     const area = page.locator('#canvas-area');
     const btn = page.locator('#btn-stage');
 
     // Get to florid (image 1)
-    await btn.click(); // subtle
     await btn.click(); // florid
     const bg1 = await area.evaluate((el) => getComputedStyle(el).getPropertyValue('--stage-bg'));
 
-    // Full cycle: florid → minimal → subtle → florid (image 2)
-    await btn.click(); // minimal
-    await btn.click(); // subtle
+    // Cycle: florid → white → florid (image 2)
+    await btn.click(); // white
     await btn.click(); // florid
     const bg2 = await area.evaluate((el) => getComputedStyle(el).getPropertyValue('--stage-bg'));
 

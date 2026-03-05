@@ -23,7 +23,7 @@
 }
 
 body {
-  background: var(--bg-body);
+  background: white;
   color: var(--text-primary);
   font-family: 'Imbue', monospace;
   font-optical-sizing: auto;
@@ -299,7 +299,19 @@ body {
   z-index: 0;
 }
 
-/* Scan lines base (used by both subtle and florid ::after) */
+/* Scene background on app — extends behind transparent toolbars */
+#app.stage-florid {
+  --stage-bg: none;
+  background-image: var(--stage-bg);
+  background-size: cover;
+  background-position: center;
+}
+
+#app.stage-florid #canvas-area {
+  background: transparent;
+}
+
+/* Scan lines base (florid ::after overrides background) */
 #canvas-area::after {
   background: repeating-linear-gradient(
     to bottom,
@@ -309,17 +321,6 @@ body {
     rgba(0, 0, 0, 0.03) 4px
   );
   transform: translateY(calc(var(--audio-level) * 4px));
-}
-
-/* Subtle: pastel gradient + faint scan lines */
-#canvas-area.stage-subtle::before {
-  opacity: 1;
-  background: linear-gradient(135deg, #f0c4d0 0%, #d4bce8 35%, #b8d8e8 65%, #c8e8d4 100%);
-}
-
-#canvas-area.stage-subtle::after {
-  opacity: 1;
-  filter: hue-rotate(calc(var(--audio-level) * 30deg));
 }
 
 /* Florid: background image + gradient tint + scan lines */
@@ -555,6 +556,19 @@ body {
 .reverb-slider {
   flex: 1;
   height: 4px;
+}
+
+/* ---- Scene-active toolbar transparency ---- */
+
+#app.stage-florid #toolbar-top,
+#app.stage-florid #toolbar-bottom {
+  background: transparent;
+  border-color: transparent;
+}
+
+#app.stage-florid .toolbar-expansion {
+  background: color-mix(in srgb, var(--bg-toolbar) 80%, transparent);
+  backdrop-filter: blur(8px);
 }
 
 /* ---- Hidden utility ---- */

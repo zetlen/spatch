@@ -1167,3 +1167,10 @@ document.getElementById('btn-new')!.addEventListener('click', () => {
   setSelection(null);
   needsRender = true;
 });
+
+// ---- Splash preview button ----
+
+document.getElementById('btn-splash')!.addEventListener('click', () => {
+  localStorage.removeItem(splashKey);
+  location.reload();
+});

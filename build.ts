@@ -1,4 +1,4 @@
-import { watch, readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
 import { join } from 'path';
 import pkg from './package.json';
 
@@ -117,11 +117,9 @@ async function build() {
     minify: !isDev,
     sourcemap: 'external',
     target: 'browser',
-    naming: {
-      entry: '[name].[ext]',
-      chunk: '[name]-[hash].[ext]',
-      asset: '[name]-[hash].[ext]',
-    },
+    naming: isDev
+      ? { entry: '[name].[ext]', chunk: '[name].[ext]', asset: '[name].[ext]' }
+      : { entry: '[name].[ext]', chunk: '[name]-[hash].[ext]', asset: '[name]-[hash].[ext]' },
     define: {
       __SCENE_IMAGES__: JSON.stringify(sceneFiles.map((f) => `img/scene/${f}`)),
     },
@@ -172,13 +170,17 @@ if (!ok && !shouldWatch) process.exit(1);
 
 if (shouldServe) {
   const PORT = 3000;
+  const NO_CACHE_HEADERS: Record<string, string> = isDev
+    ? { 'Cache-Control': 'no-store, no-cache, must-revalidate', Pragma: 'no-cache', Expires: '0' }
+    : {};
+
   Bun.serve({
     port: PORT,
     async fetch(req) {
       let pathname = new URL(req.url).pathname;
       if (pathname === '/') pathname = '/index.html';
       const file = Bun.file(join('dist', pathname));
-      if (await file.exists()) return new Response(file);
+      if (await file.exists()) return new Response(file, { headers: NO_CACHE_HEADERS });
       return new Response('Not found', { status: 404 });
     },
   });
@@ -186,29 +188,86 @@ if (shouldServe) {
 }
 
 if (shouldWatch) {
-  let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
-  const dirs = ['js', 'css'];
+  const POLL_INTERVAL = 500;
+  const WATCH_DIRS = ['js', 'css'];
+  const WATCH_ROOT_EXT = '.html';
 
-  for (const dir of dirs) {
-    watch(dir, { recursive: true }, () => {
-      if (rebuildTimer) clearTimeout(rebuildTimer);
-      rebuildTimer = setTimeout(async () => {
-        console.log('\nRebuilding...');
-        await build();
-      }, 100);
-    });
+  // Collect initial mtimes
+  const mtimes = new Map<string, number>();
+
+  function scanDir(dir: string): void {
+    for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isFile()) {
+        try {
+          mtimes.set(full, statSync(full).mtimeMs);
+        } catch {
+          /* deleted between readdir and stat */
+        }
+      }
+    }
   }
 
-  // Also watch root HTML files
-  watch('.', { recursive: false }, (_event, filename) => {
-    if (filename && filename.endsWith('.html')) {
-      if (rebuildTimer) clearTimeout(rebuildTimer);
-      rebuildTimer = setTimeout(async () => {
-        console.log('\nRebuilding...');
-        await build();
-      }, 100);
+  function scanRootHtml(): void {
+    for (const entry of readdirSync('.', { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith(WATCH_ROOT_EXT)) {
+        try {
+          mtimes.set(entry.name, statSync(entry.name).mtimeMs);
+        } catch {
+          /* ignore */
+        }
+      }
     }
-  });
+  }
 
-  console.log('Watching for changes in js/, css/, and *.html...');
+  for (const dir of WATCH_DIRS) scanDir(dir);
+  scanRootHtml();
+
+  let building = false;
+
+  setInterval(async () => {
+    if (building) return;
+
+    let changed = false;
+
+    for (const dir of WATCH_DIRS) {
+      for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
+        if (!entry.isFile()) continue;
+        const full = join(dir, entry.name);
+        try {
+          const mtime = statSync(full).mtimeMs;
+          if (mtimes.get(full) !== mtime) {
+            mtimes.set(full, mtime);
+            changed = true;
+          }
+        } catch {
+          /* deleted */
+        }
+      }
+    }
+
+    for (const entry of readdirSync('.', { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(WATCH_ROOT_EXT)) continue;
+      try {
+        const mtime = statSync(entry.name).mtimeMs;
+        if (mtimes.get(entry.name) !== mtime) {
+          mtimes.set(entry.name, mtime);
+          changed = true;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (changed) {
+      building = true;
+      console.log('\nRebuilding...');
+      await build();
+      building = false;
+    }
+  }, POLL_INTERVAL);
+
+  console.log(
+    `Polling for changes every ${POLL_INTERVAL}ms in ${WATCH_DIRS.join(', ')}, and *.html...`,
+  );
 }
