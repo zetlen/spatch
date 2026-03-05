@@ -331,7 +331,7 @@ describe('AudioEngine — border / octave doubling', () => {
 
     const audioVoice = engine.activeVoices[0];
     expect(audioVoice.octaveOsc).not.toBeNull();
-    expect(audioVoice.currentBorder).toBe('white:0:0.5');
+    expect(audioVoice.currentBorder).toBe('white:0');
   });
 
   test('border change triggers voice rebuild', async () => {
@@ -350,7 +350,7 @@ describe('AudioEngine — border / octave doubling', () => {
 
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice).not.toBe(originalVoice);
-    expect(newVoice.currentBorder).toBe('black:0:0.5');
+    expect(newVoice.currentBorder).toBe('black:0');
   });
 
   test('adding border triggers voice rebuild', async () => {
@@ -368,7 +368,7 @@ describe('AudioEngine — border / octave doubling', () => {
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice).not.toBe(originalVoice);
     expect(newVoice.octaveOsc).not.toBeNull();
-    expect(newVoice.currentBorder).toBe('white:1:0.7');
+    expect(newVoice.currentBorder).toBe('white:1');
   });
 
   test('removing border triggers voice rebuild', async () => {
@@ -384,6 +384,45 @@ describe('AudioEngine — border / octave doubling', () => {
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice.octaveOsc).toBeNull();
     expect(newVoice.currentBorder).toBeNull();
+  });
+
+  test('thickness change updates gain smoothly without rebuild', async () => {
+    const voice = makeVoice('a', 'sine', {
+      border: { color: 'white', double: false, thickness: 0.3 },
+    });
+    await startWith([voice]);
+
+    const originalVoice = engine.activeVoices[0];
+
+    // Change only thickness
+    const updated = makeVoice('a', 'sine', {
+      border: { color: 'white', double: false, thickness: 0.8 },
+    });
+    engine.updateVoices(makeSigilState([updated]));
+
+    // Same voice object — NOT rebuilt
+    const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(sameVoice).toBe(originalVoice);
+  });
+
+  test('octave gain updates when shape size changes', async () => {
+    const voice = makeVoice('a', 'sine', {
+      size: 0.3,
+      border: { color: 'white', double: false, thickness: 0.5 },
+    });
+    await startWith([voice]);
+
+    const audioVoice = engine.activeVoices[0];
+    const initialGain = audioVoice.octaveGainNode.gain.value;
+
+    // Increase size
+    const updated = makeVoice('a', 'sine', {
+      size: 0.7,
+      border: { color: 'white', double: false, thickness: 0.5 },
+    });
+    engine.updateVoices(makeSigilState([updated]));
+
+    expect(audioVoice.octaveGainNode.gain.value).toBeGreaterThan(initialGain);
   });
 
   test('border works with all waveform types', async () => {

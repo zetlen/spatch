@@ -18,6 +18,7 @@ import {
   type NormalizedCoord,
   type ReverbStyle,
   type Reverb,
+  type BorderColor,
 } from './types.ts';
 
 // ---- Chromatic scale ----
@@ -136,6 +137,30 @@ export function waveformGain(waveform: WaveformType): number {
     case 'sine':
       return 1.6; // sine is single-partial; boost to match perceived loudness
   }
+}
+
+// Direction-dependent loudness coefficients for octave-doubled border oscillator.
+// Higher octaves sound louder perceptually (equal-loudness contours), so we
+// attenuate up-shifts and boost down-shifts.
+const OCTAVE_GAIN_COEFF: Record<string, number> = {
+  'up-1': 0.5,
+  'up-2': 0.35,
+  'down-1': 1.5,
+  'down-2': 2.0,
+};
+
+export function borderOctaveGain(
+  waveform: WaveformType,
+  size: NormalizedCoord,
+  thickness: NormalizedCoord,
+  color: BorderColor,
+  double: boolean,
+): number {
+  const baseGain = areaToGain(waveform, size) * waveformGain(waveform);
+  const direction = color === 'white' ? 'up' : 'down';
+  const shift = double ? 2 : 1;
+  const coeff = OCTAVE_GAIN_COEFF[`${direction}-${shift}`]!;
+  return baseGain * Math.sqrt(thickness) * coeff;
 }
 
 // ---- PWM Waveshaper for Square (Pulse) ----
@@ -291,6 +316,7 @@ interface AudioVoiceBase {
   currentBorder: string | null; // serialized border for change detection
   blendEffect: BlendEffect | null;
   octaveOsc: OscillatorNode | null;
+  octaveGainNode: GainNode | null;
   shapeId: string;
   gain: GainNode;
   formantF1: BiquadFilterNode;
@@ -610,7 +636,7 @@ export class AudioEngine {
 
       // Effect, blend, or border changed — tear down and rebuild the entire voice
       const borderKey = voice.border
-        ? `${voice.border.color}:${voice.border.double ? 1 : 0}:${voice.border.thickness}`
+        ? `${voice.border.color}:${voice.border.double ? 1 : 0}`
         : null;
       if (
         voice.effect !== audioVoice.currentEffect ||
@@ -665,6 +691,20 @@ export class AudioEngine {
         const direction = voice.border.color === 'white' ? 1 : -1;
         const octaveFreq = freq * Math.pow(2, direction * octaveShift);
         audioVoice.octaveOsc.frequency.setValueAtTime(octaveFreq, now);
+      }
+
+      // Update octave oscillator gain if border is present
+      if (audioVoice.octaveGainNode && voice.border) {
+        audioVoice.octaveGainNode.gain.setValueAtTime(
+          borderOctaveGain(
+            voice.waveform,
+            voice.size,
+            voice.border.thickness,
+            voice.border.color,
+            voice.border.double,
+          ),
+          now,
+        );
       }
     }
 
@@ -867,6 +907,7 @@ export class AudioEngine {
     // White = up, black = down. Single = 1 octave, double = 2 octaves.
     // Thickness scales the doubled voice gain.
     let octaveOsc: OscillatorNode | null = null;
+    let octaveGainNode: GainNode | null = null;
     if (voice.border) {
       const octaveShift = voice.border.double ? 2 : 1;
       const direction = voice.border.color === 'white' ? 1 : -1;
@@ -882,16 +923,20 @@ export class AudioEngine {
       octaveOsc.type = oscTypeMap[voice.waveform];
       octaveOsc.frequency.value = octaveFreq;
 
-      const octaveGain = ctx.createGain();
-      octaveGain.gain.value = Math.sqrt(voice.border.thickness);
-      octaveOsc.connect(octaveGain);
+      octaveGainNode = ctx.createGain();
+      octaveGainNode.gain.value = borderOctaveGain(
+        voice.waveform,
+        voice.size,
+        voice.border.thickness,
+        voice.border.color,
+        voice.border.double,
+      );
+      octaveOsc.connect(octaveGainNode);
       // Connect to formantMixer to avoid double gain application (#81)
-      octaveGain.connect(formantMixer);
+      octaveGainNode.connect(formantMixer);
     }
 
-    const borderKey = voice.border
-      ? `${voice.border.color}:${voice.border.double ? 1 : 0}:${voice.border.thickness}`
-      : null;
+    const borderKey = voice.border ? `${voice.border.color}:${voice.border.double ? 1 : 0}` : null;
 
     const shared = {
       outputNode: panner,
@@ -901,6 +946,7 @@ export class AudioEngine {
       currentBorder: borderKey,
       blendEffect: blendFx,
       octaveOsc,
+      octaveGainNode,
       shapeId: voice.id,
       gain,
       formantF1,

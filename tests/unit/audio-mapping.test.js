@@ -9,6 +9,7 @@ import {
   snapYToNote,
   hueToFormants,
   lightnessToCutoff,
+  borderOctaveGain,
 } from '../../js/audio.ts';
 
 describe('yToFrequency', () => {
@@ -350,6 +351,59 @@ describe('hueToFormants', () => {
       expect(Math.abs(f.f2 - prevF2)).toBeLessThan(30);
       prevF1 = f.f1;
       prevF2 = f.f2;
+    }
+  });
+});
+
+describe('borderOctaveGain', () => {
+  test('returns 0 for zero thickness', () => {
+    expect(borderOctaveGain('sine', 0.5, 0, 'white', false)).toBe(0);
+  });
+
+  test('scales with shape size (larger shape = louder)', () => {
+    const small = borderOctaveGain('sine', 0.2, 0.5, 'white', false);
+    const large = borderOctaveGain('sine', 0.6, 0.5, 'white', false);
+    expect(large).toBeGreaterThan(small);
+  });
+
+  test('scales with thickness', () => {
+    const thin = borderOctaveGain('sine', 0.5, 0.2, 'white', false);
+    const thick = borderOctaveGain('sine', 0.5, 0.8, 'white', false);
+    expect(thick).toBeGreaterThan(thin);
+  });
+
+  test('octave up (white) is quieter than octave down (black)', () => {
+    const up = borderOctaveGain('sine', 0.5, 0.5, 'white', false);
+    const down = borderOctaveGain('sine', 0.5, 0.5, 'black', false);
+    expect(down).toBeGreaterThan(up);
+  });
+
+  test('double octave up is quieter than single octave up', () => {
+    const single = borderOctaveGain('sine', 0.5, 0.5, 'white', false);
+    const double = borderOctaveGain('sine', 0.5, 0.5, 'white', true);
+    expect(double).toBeLessThan(single);
+  });
+
+  test('double octave down is louder than single octave down', () => {
+    const single = borderOctaveGain('sine', 0.5, 0.5, 'black', false);
+    const double = borderOctaveGain('sine', 0.5, 0.5, 'black', true);
+    expect(double).toBeGreaterThan(single);
+  });
+
+  test('different waveforms at same size produce different gains', () => {
+    const sine = borderOctaveGain('sine', 0.5, 0.5, 'white', false);
+    const pulse = borderOctaveGain('pulse', 0.5, 0.5, 'white', false);
+    expect(sine).not.toBeCloseTo(pulse, 2);
+  });
+
+  test('always returns non-negative', () => {
+    for (const wf of ['sine', 'pulse', 'blend']) {
+      for (const color of ['white', 'black']) {
+        for (const dbl of [false, true]) {
+          const g = borderOctaveGain(wf, 0.5, 0.5, color, dbl);
+          expect(g).toBeGreaterThanOrEqual(0);
+        }
+      }
     }
   });
 });
