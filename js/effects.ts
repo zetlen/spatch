@@ -1,19 +1,27 @@
-// effects.ts — Audio effect builders mapped to visual patterns and blend modes
+// Effects.ts — Audio effect builders mapped to visual patterns and blend modes
 
-import type { PatternType, BlendMode, AudioEffect } from './types.ts';
+import type { AudioEffect, BlendMode, PatternType } from './types.ts';
 
-export function createEffect(audioCtx: AudioContext, pattern: PatternType): AudioEffect | null {
+export function createEffect(
+  audioCtx: AudioContext,
+  pattern: PatternType,
+): AudioEffect | undefined {
   switch (pattern) {
-    case 'stripes':
+    case 'stripes': {
       return createChorus(audioCtx);
-    case 'checker':
+    }
+    case 'checker': {
       return createTremolo(audioCtx);
-    case 'noise':
+    }
+    case 'noise': {
       return createFlanger(audioCtx);
-    case 'gradient':
+    }
+    case 'gradient': {
       return createPhaser(audioCtx);
-    default:
-      return null;
+    }
+    default: {
+      return;
+    }
   }
 }
 
@@ -46,7 +54,7 @@ function createChorus(ctx: AudioContext): AudioEffect {
   dry.connect(output);
   wet.connect(output);
 
-  return { input, output, dispose: () => lfo.stop() };
+  return { dispose: () => lfo.stop(), input, output };
 }
 
 // Checkerboard → LFO Tremolo
@@ -70,7 +78,7 @@ function createTremolo(ctx: AudioContext): AudioEffect {
   input.connect(tremoloGain);
   tremoloGain.connect(output);
 
-  return { input, output, dispose: () => lfo.stop() };
+  return { dispose: () => lfo.stop(), input, output };
 }
 
 // Noise texture → Flanger
@@ -107,7 +115,7 @@ function createFlanger(ctx: AudioContext): AudioEffect {
   dry.connect(output);
   wet.connect(output);
 
-  return { input, output, dispose: () => lfo.stop() };
+  return { dispose: () => lfo.stop(), input, output };
 }
 
 // Gradient overlay → Phaser
@@ -145,19 +153,19 @@ function createPhaser(ctx: AudioContext): AudioEffect {
   for (let i = 0; i < filters.length - 1; i++) {
     filters[i]!.connect(filters[i + 1]!);
   }
-  filters[filters.length - 1]!.connect(wet);
+  filters.at(-1)!.connect(wet);
 
   input.connect(dry);
   dry.connect(output);
   wet.connect(output);
 
-  return { input, output, dispose: () => lfo.stop() };
+  return { dispose: () => lfo.stop(), input, output };
 }
 
 // ---- Blend mode audio effects ----
 //
 // Each blend effect is a dry/wet chain. The wet amount is controlled externally
-// by setting the wetGain.gain value based on geometric overlap.
+// By setting the wetGain.gain value based on geometric overlap.
 
 export interface BlendEffect {
   input: GainNode;
@@ -166,46 +174,55 @@ export interface BlendEffect {
   dispose: () => void;
 }
 
+const noop = () => {};
+
 export function createBlendEffect(ctx: AudioContext, mode: BlendMode): BlendEffect {
   const input = ctx.createGain();
   const output = ctx.createGain();
   const dry = ctx.createGain();
   dry.gain.value = 1;
   const wet = ctx.createGain();
-  wet.gain.value = 0; // overlap drives this
+  wet.gain.value = 0; // Overlap drives this
 
   input.connect(dry);
   dry.connect(output);
 
-  let dispose = () => {};
+  let dispose = noop;
 
   switch (mode) {
-    case 'soft-light':
+    case 'soft-light': {
       dispose = wireSaturation(ctx, input, wet, 2);
       break;
-    case 'multiply':
+    }
+    case 'multiply': {
       dispose = wireSaturation(ctx, input, wet, 6);
       break;
-    case 'screen':
+    }
+    case 'screen': {
       wireCompression(ctx, input, wet);
       break;
-    case 'overlay':
+    }
+    case 'overlay': {
       dispose = wireExciter(ctx, input, wet);
       break;
-    case 'color-burn':
+    }
+    case 'color-burn': {
       wireGate(ctx, input, wet, dry);
       break;
-    case 'difference':
+    }
+    case 'difference': {
       dispose = wireCombFilter(ctx, input, wet);
       break;
-    case 'exclusion':
+    }
+    case 'exclusion': {
       dispose = wireFlanger(ctx, input, wet);
       break;
+    }
   }
 
   wet.connect(output);
 
-  return { input, output, wetGain: wet, dispose };
+  return { dispose, input, output, wetGain: wet };
 }
 
 // Tape saturation — gentle even-order harmonics via waveshaper
@@ -273,7 +290,7 @@ function wireGate(ctx: AudioContext, input: GainNode, wet: GainNode, dry: GainNo
   // The caller sets wet.gain = overlap, but we want dry.gain = 1 - overlap.
   // We'll handle this in the overlap update by also adjusting dry.
   // Wire wet to pass silence (just connect input to wet for the node graph,
-  // but the actual gating happens via dry.gain adjustment in updateOverlap).
+  // But the actual gating happens via dry.gain adjustment in updateOverlap).
   input.connect(wet);
   // Store reference to dry on wet for the update function to find
   (wet as GainNode & { _dryGain?: GainNode })._dryGain = dry;
@@ -284,7 +301,7 @@ function wireCombFilter(ctx: AudioContext, input: GainNode, wet: GainNode): () =
   const delay = ctx.createDelay(0.05);
   delay.delayTime.value = 0.008; // ~125 Hz comb frequency
   const feedback = ctx.createGain();
-  feedback.gain.value = -0.7; // negative = destructive interference
+  feedback.gain.value = -0.7; // Negative = destructive interference
 
   input.connect(delay);
   delay.connect(feedback);
@@ -334,19 +351,23 @@ export function computeOverlap(
   const dy = y1 - y2;
   const dist = Math.sqrt(dx * dx + dy * dy);
   const combinedRadius = (size1 + size2) / 2;
-  if (combinedRadius <= 0) return 0;
+  if (combinedRadius <= 0) {
+    return 0;
+  }
   return Math.max(0, 1 - dist / combinedRadius);
 }
 
 /** Compute total overlap for a voice against all other voices. */
 export function computeTotalOverlap(
   voiceIndex: number,
-  voices: ReadonlyArray<{ x: number; y: number; size: number }>,
+  voices: readonly { x: number; y: number; size: number }[],
 ): number {
   const v = voices[voiceIndex]!;
   let total = 0;
   for (let i = 0; i < voices.length; i++) {
-    if (i === voiceIndex) continue;
+    if (i === voiceIndex) {
+      continue;
+    }
     const other = voices[i]!;
     total += computeOverlap(v.x, v.y, v.size, other.x, other.y, other.size);
   }

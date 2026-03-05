@@ -1,23 +1,23 @@
-import { describe, test, expect } from 'bun:test';
-import { hitTestADSRCorner, calcResize, calcRotation, voiceRotation } from '../../js/shapes.ts';
+import { describe, expect, test } from 'bun:test';
+import { calcResize, calcRotation, hitTestADSRCorner, voiceRotation } from '../../js/shapes.ts';
 
 const CANVAS_SIZE = 800;
 
 function makeVoice(overrides = {}) {
   return {
+    effect: undefined,
+    fill: { h: 200, l: 50, mode: 'solid', s: 80 },
     id: 'test1',
+    size: 0.12,
     waveform: 'sine',
     x: 0.5,
     y: 0.5,
-    size: 0.12,
-    fill: { mode: 'solid', h: 200, s: 80, l: 50 },
-    effect: null,
     ...overrides,
   };
 }
 
 describe('hitTestADSRCorner', () => {
-  const envelope = { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 };
+  const envelope = { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 };
 
   test('detects attack corner (bottom-left)', () => {
     const result = hitTestADSRCorner(envelope, 5, CANVAS_SIZE - 5, CANVAS_SIZE);
@@ -41,7 +41,7 @@ describe('hitTestADSRCorner', () => {
 
   test('returns null for center of canvas', () => {
     const result = hitTestADSRCorner(envelope, 400, 400, CANVAS_SIZE);
-    expect(result).toBeNull();
+    expect(result).toBeUndefined();
   });
 });
 
@@ -69,12 +69,12 @@ describe('calcResize', () => {
   test('clamps to minimum size', () => {
     const tiny = calcResize(voice, 'se', -1000, -1000, CANVAS_SIZE);
     expect(tiny).toBeGreaterThan(0);
-    expect(tiny).toBeCloseTo((10 * 2) / CANVAS_SIZE, 5); // min radius 10 → size 20/800
+    expect(tiny).toBeCloseTo((10 * 2) / CANVAS_SIZE, 5); // Min radius 10 → size 20/800
   });
 
   test('clamps to maximum size', () => {
-    const huge = calcResize(voice, 'se', 10000, 10000, CANVAS_SIZE);
-    expect(huge).toBeLessThanOrEqual(0.9); // max radius 0.45*800 → size 0.9
+    const huge = calcResize(voice, 'se', 10_000, 10_000, CANVAS_SIZE);
+    expect(huge).toBeLessThanOrEqual(0.9); // Max radius 0.45*800 → size 0.9
   });
 });
 
@@ -112,27 +112,27 @@ describe('voiceRotation', () => {
   });
 
   test('pulse voice with timbre 0 returns 0', () => {
-    const voice = makeVoice({ waveform: 'pulse', timbre: 0 });
+    const voice = makeVoice({ timbre: 0, waveform: 'pulse' });
     expect(voiceRotation(voice)).toBe(0);
   });
 
   test('pulse voice with timbre 1 returns 90 (full period)', () => {
-    const voice = makeVoice({ waveform: 'pulse', timbre: 1 });
+    const voice = makeVoice({ timbre: 1, waveform: 'pulse' });
     expect(voiceRotation(voice)).toBe(90);
   });
 
   test('pulse voice with timbre 0.5 returns 45', () => {
-    const voice = makeVoice({ waveform: 'pulse', timbre: 0.5 });
+    const voice = makeVoice({ timbre: 0.5, waveform: 'pulse' });
     expect(voiceRotation(voice)).toBe(45);
   });
 
   test('blend voice with timbre 1 returns 120 (full period)', () => {
-    const voice = makeVoice({ waveform: 'blend', timbre: 1 });
+    const voice = makeVoice({ timbre: 1, waveform: 'blend' });
     expect(voiceRotation(voice)).toBe(120);
   });
 
   test('blend voice with timbre 0.5 returns 60', () => {
-    const voice = makeVoice({ waveform: 'blend', timbre: 0.5 });
+    const voice = makeVoice({ timbre: 0.5, waveform: 'blend' });
     expect(voiceRotation(voice)).toBe(60);
   });
 });

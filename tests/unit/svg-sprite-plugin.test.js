@@ -1,11 +1,11 @@
-import { describe, test, expect } from 'bun:test';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'fs';
+import { describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { scanSourceFiles, buildSymbol, rewriteHtml } from '../../scripts/vite-plugin-svg-sprite.ts';
+import { buildSymbol, rewriteHtml, scanSourceFiles } from '../../scripts/vite-plugin-svg-sprite.ts';
 
 // ---------------------------------------------------------------------------
-// scanSourceFiles
+// ScanSourceFiles
 // ---------------------------------------------------------------------------
 
 describe('scanSourceFiles', () => {
@@ -55,7 +55,7 @@ describe('scanSourceFiles', () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildSymbol
+// BuildSymbol
 // ---------------------------------------------------------------------------
 
 describe('buildSymbol', () => {
@@ -93,7 +93,7 @@ describe('buildSymbol', () => {
 });
 
 // ---------------------------------------------------------------------------
-// rewriteHtml
+// RewriteHtml
 // ---------------------------------------------------------------------------
 
 describe('rewriteHtml', () => {

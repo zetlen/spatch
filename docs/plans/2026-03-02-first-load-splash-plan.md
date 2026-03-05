@@ -271,7 +271,7 @@ if (isSplash) {
   const canvasArea = document.getElementById('canvas-area')!;
   const MIN_SUSTAIN_MS = 2000;
   let splashDownTime = 0;
-  let splashMinTimer: ReturnType<typeof setTimeout> | null = null;
+  let splashMinTimer: ReturnType<typeof setTimeout> | undefined = null;
   let splashPointerDown = false;
 
   function splashReveal(): void {

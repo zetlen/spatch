@@ -36,6 +36,8 @@ scripts/
                              builds SVG sprite, inlines into HTML
 js/
   virtual.d.ts       Type declarations for virtual modules (scene-images)
+  dom.ts             Typed DOM helper: qel() wraps querySelector with type
+                     parameter and runtime null check
   types.ts           Shared type definitions: branded primitives, Voice
                      (discriminated union), Fill (discriminated union),
                      TextDecoration, Envelope, branding functions
@@ -57,6 +59,7 @@ js/
                      (pitch, pan, gain, timbre, formants), voice building
   envelope.ts        ADSR ↔ canvas corner radius conversion
   toolbar.ts         Toolbar class: tool/pattern/color picker UI binding
+  stage.ts           Stage theme cycling (white / florid background images)
   decorations.ts     DecorationTool class: text placement only
   vocoder.ts         Formant synthesis for text decorations (bandpass filter bank)
   embed.ts           Embed snippet generator + modal UI
@@ -99,6 +102,10 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 ## CI/CD
 
 - **Gitea instance**: `got.colonpipe.org`. API token is in `$GITEA_ACCESS_TOKEN`.
+- **Runner**: Custom `mise-playwright` Docker image with mise, Playwright, and
+  browser deps pre-installed. Tool versions (Bun, Node) pinned in `.mise.toml`.
+- **CI check**: `.gitea/workflows/ci.yml` runs on PRs to `main`. Runs typecheck,
+  lint, format check, unit tests, integration tests, and build.
 - **Versioning**: CalVer (`YYYY.MM.MICRO`), bumped automatically by CI on deploy.
   Micro increments per deploy within the month, resets on month change.
 - **Deploy trigger**: Push to `main` (PR merge) or `workflow_dispatch`.
@@ -191,7 +198,7 @@ design rationale and enumeration of past violations.
   - `border` → inset stroke(s) on the shape + octave-doubled sine oscillator.
     White border = octave up, black = octave down. Single = 1 octave shift,
     double = 2 octaves. `thickness` scales both the visual stroke width and
-    the doubled oscillator's gain. Null = no border, no doubling.
+    the doubled oscillator's gain. Undefined = no border, no doubling.
 
 - **Text decorations** use vocoder synthesis. Fields: text (vocoder content),
   x (pan), y (pitch), size (carrier volume). All text renders black. Every
@@ -239,7 +246,7 @@ design rationale and enumeration of past violations.
   instead of raw `as` casts. SVG uses `viewBox="0 0 1 1"` so all coordinates map
   directly to normalized space. Display size is CSS-scaled to fit viewport (max 800px).
 - Shape IDs are generated with a counter + random suffix (e.g., `s1a3f`).
-- **Fill** is a discriminated union (`SolidFill | RadialFill | LinearFill`). The
+- **Fill** is a discriminated union (`SolidFill | LinearFill`). The
   toolbar uses a flat `FillDraft` bag internally for mode-switching without data loss,
   converted via `fillToFillDraft()` / `fillDraftToFill()`.
 - **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice`),
@@ -252,7 +259,7 @@ design rationale and enumeration of past violations.
   Each voice has a `blend` field (default `soft-light`). SVG renders each voice
   group with CSS `mix-blend-mode` inside an isolation container. Audio routes each
   voice through a blend effect whose wet/dry is computed from geometric overlap.
-- **Border** is `{ color: BorderColor, double: boolean, thickness: NormalizedCoord } | null`.
+- **Border** is `{ color: BorderColor, double: boolean, thickness: NormalizedCoord } | undefined`.
   Visual: inset stroke(s) drawn inside the clipped shape. Audio: adds a sine
   oscillator at an octave-shifted frequency. Border changes trigger full voice
   rebuild in audio engine. The border panel UI (bottom toolbar) controls all fields.

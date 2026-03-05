@@ -1,7 +1,7 @@
-// types.ts — Shared type definitions for spatch
+// Types.ts — Shared type definitions for spatch
 //
 // These are the contracts between modules. Import them at file boundaries;
-// let TypeScript infer everything inside function bodies.
+// Let TypeScript infer everything inside function bodies.
 
 // ---- Branded primitives ----
 // Catch "wrong kind of number" bugs at module boundaries.
@@ -83,50 +83,54 @@ export interface FillDraft {
 }
 
 export function fillToFillDraft(fill: Fill): FillDraft {
-  const base = { h: fill.h, s: fill.s, l: fill.l, h2: 180, s2: 80, l2: 45, gradAngle: 0 };
+  const base = { gradAngle: 0, h: fill.h, h2: 180, l: fill.l, l2: 45, s: fill.s, s2: 80 };
   switch (fill.mode) {
-    case 'solid':
+    case 'solid': {
       return { ...base, mode: 'solid' };
-    case 'linear':
+    }
+    case 'linear': {
       return {
         ...base,
-        mode: 'linear',
-        h2: fill.h2,
-        s2: fill.s2,
-        l2: fill.l2,
         gradAngle: fill.gradAngle,
+        h2: fill.h2,
+        l2: fill.l2,
+        mode: 'linear',
+        s2: fill.s2,
       };
+    }
   }
 }
 
 export function fillDraftToFill(draft: FillDraft): Fill {
   switch (draft.mode) {
-    case 'solid':
-      return { mode: 'solid', h: draft.h, s: draft.s, l: draft.l };
-    case 'linear':
+    case 'solid': {
+      return { h: draft.h, l: draft.l, mode: 'solid', s: draft.s };
+    }
+    case 'linear': {
       return {
-        mode: 'linear',
-        h: draft.h,
-        s: draft.s,
-        l: draft.l,
-        h2: draft.h2,
-        s2: draft.s2,
-        l2: draft.l2,
         gradAngle: draft.gradAngle,
+        h: draft.h,
+        h2: draft.h2,
+        l: draft.l,
+        l2: draft.l2,
+        mode: 'linear',
+        s: draft.s,
+        s2: draft.s2,
       };
+    }
   }
 }
 
 export function createDefaultFill(): SolidFill {
-  return { mode: 'solid', h: 200, s: 80, l: 50 };
+  return { h: 200, l: 50, mode: 'solid', s: 80 };
 }
 
 export function createRandomFill(): SolidFill {
   return {
-    mode: 'solid',
     h: Math.floor(Math.random() * 360),
-    s: 70 + Math.floor(Math.random() * 20),
     l: 45 + Math.floor(Math.random() * 15),
+    mode: 'solid',
+    s: 70 + Math.floor(Math.random() * 20),
   };
 }
 
@@ -151,9 +155,9 @@ interface VoiceBase {
   y: NormalizedCoord;
   size: NormalizedCoord;
   fill: Fill;
-  effect: PatternType | null;
+  effect: PatternType | undefined;
   blend: BlendMode;
-  border: Border | null;
+  border: Border | undefined;
 }
 
 export interface SineVoice extends VoiceBase {
@@ -201,17 +205,20 @@ export interface SigilData {
   envelope: Envelope;
   voices: Voice[];
   texts: TextDecoration[];
-  reverb: Reverb | null;
+  reverb: Reverb | undefined;
 }
 
 export function waveformShape(waveform: WaveformType): 'circle' | 'square' | 'triangle' {
   switch (waveform) {
-    case 'sine':
+    case 'sine': {
       return 'circle';
-    case 'pulse':
+    }
+    case 'pulse': {
       return 'square';
-    case 'blend':
+    }
+    case 'blend': {
       return 'triangle';
+    }
   }
 }
 
@@ -224,7 +231,7 @@ export interface AudioEffect {
 }
 
 export interface VocoderChain {
-  input: null;
+  input: undefined;
   output: GainNode;
   duration: number;
   dispose: () => void;

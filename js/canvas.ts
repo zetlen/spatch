@@ -1,45 +1,50 @@
-// canvas.ts — SVG DOM reconciler
+// Canvas.ts — SVG DOM reconciler
 //
 // Creates, updates, and removes SVG elements to match SigilData.
 // Elements are keyed by voice ID for efficient reconciliation.
 
-import { getSolidFillColor, ensureLinearGradient } from './colors.ts';
+import { ensureLinearGradient, getSolidFillColor } from './colors.ts';
 import { ensurePatternDefs, getPatternOverlay } from './patterns.ts';
 import { voiceRotation } from './shapes.ts';
-import type { Voice, TextDecoration, SigilData, HandleType } from './types.ts';
-import { waveformShape } from './types.ts';
+import {
+  type HandleType,
+  type SigilData,
+  type TextDecoration,
+  type Voice,
+  waveformShape,
+} from './types.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // SVG viewBox units (0-1 space)
-const HANDLE_SIZE = 0.00625;
-const ROT_HANDLE_OFFSET = 0.03125;
+const HANDLE_SIZE = 0.006_25;
+const ROT_HANDLE_OFFSET = 0.031_25;
 
 // ---- Touch tracking ----
 
 let lastInputWasTouch = false;
-window.addEventListener(
+globalThis.addEventListener(
   'pointerdown',
   (e) => {
-    lastInputWasTouch = e.pointerType === 'touch';
+    lastInputWasTouch = (e as PointerEvent).pointerType === 'touch';
   },
   true,
 );
 
 // ---- Reconciler state ----
 
-let _voiceLayer: SVGGElement | null = null;
-let _textLayer: SVGGElement | null = null;
-let _selectionLayer: SVGGElement | null = null;
-let _defs: SVGDefsElement | null = null;
+let _voiceLayer: SVGGElement | undefined;
+let _textLayer: SVGGElement | undefined;
+let _selectionLayer: SVGGElement | undefined;
+let _defs: SVGDefsElement | undefined;
 let _patternDefsReady = false;
 
 /** Reset internal cache — call when switching SVG roots (e.g. embed). */
 export function resetCache(): void {
-  _voiceLayer = null;
-  _textLayer = null;
-  _selectionLayer = null;
-  _defs = null;
+  _voiceLayer = undefined;
+  _textLayer = undefined;
+  _selectionLayer = undefined;
+  _defs = undefined;
   _patternDefsReady = false;
 }
 
@@ -66,42 +71,42 @@ function ensureLayers(svg: SVGSVGElement): {
   if (_voiceLayer && _textLayer && _selectionLayer && _defs) {
     return {
       defs: _defs,
-      voiceLayer: _voiceLayer,
-      textLayer: _textLayer,
       selectionLayer: _selectionLayer,
+      textLayer: _textLayer,
+      voiceLayer: _voiceLayer,
     };
   }
 
   // Find or create <defs>
-  let defs = svg.querySelector('defs') as SVGDefsElement | null;
+  let defs = svg.querySelector('defs') as SVGDefsElement | undefined;
   if (!defs) {
     defs = svgEl('defs');
     svg.prepend(defs);
   }
 
   // Find or create voice layer (first <g> with isolation)
-  let voiceLayer = svg.querySelector('g[data-layer="voices"]') as SVGGElement | null;
+  let voiceLayer = svg.querySelector('g[data-layer="voices"]') as SVGGElement | undefined;
   if (!voiceLayer) {
     voiceLayer = svgEl('g');
-    voiceLayer.setAttribute('data-layer', 'voices');
+    voiceLayer.dataset.layer = 'voices';
     voiceLayer.style.isolation = 'isolate';
-    svg.appendChild(voiceLayer);
+    svg.append(voiceLayer);
   }
 
   // Find or create text layer
-  let textLayer = svg.querySelector('g[data-layer="texts"]') as SVGGElement | null;
+  let textLayer = svg.querySelector('g[data-layer="texts"]') as SVGGElement | undefined;
   if (!textLayer) {
     textLayer = svgEl('g');
-    textLayer.setAttribute('data-layer', 'texts');
-    svg.appendChild(textLayer);
+    textLayer.dataset.layer = 'texts';
+    svg.append(textLayer);
   }
 
   // Find or create selection layer
-  let selectionLayer = svg.querySelector('g[data-layer="selection"]') as SVGGElement | null;
+  let selectionLayer = svg.querySelector('g[data-layer="selection"]') as SVGGElement | undefined;
   if (!selectionLayer) {
     selectionLayer = svgEl('g');
-    selectionLayer.setAttribute('data-layer', 'selection');
-    svg.appendChild(selectionLayer);
+    selectionLayer.dataset.layer = 'selection';
+    svg.append(selectionLayer);
   }
 
   _defs = defs;
@@ -109,7 +114,7 @@ function ensureLayers(svg: SVGSVGElement): {
   _textLayer = textLayer;
   _selectionLayer = selectionLayer;
 
-  return { defs, voiceLayer, textLayer, selectionLayer };
+  return { defs, selectionLayer, textLayer, voiceLayer };
 }
 
 // ---- Shape geometry ----
@@ -122,10 +127,10 @@ function circleAttrs(voice: Voice): Record<string, string> {
 function rectAttrs(voice: Voice): Record<string, string> {
   const r = voice.size / 2;
   return {
+    height: String(voice.size),
+    width: String(voice.size),
     x: String(voice.x - r),
     y: String(voice.y - r),
-    width: String(voice.size),
-    height: String(voice.size),
   };
 }
 
@@ -165,35 +170,43 @@ function createShapeElement(voice: Voice): SVGElement {
 function updateShapeElement(el: SVGElement, voice: Voice): void {
   const shape = waveformShape(voice.waveform);
   switch (shape) {
-    case 'circle':
+    case 'circle': {
       setAttrs(el, circleAttrs(voice));
       break;
-    case 'square':
+    }
+    case 'square': {
       setAttrs(el, rectAttrs(voice));
       break;
-    case 'triangle':
+    }
+    case 'triangle': {
       el.setAttribute('points', trianglePoints(voice));
       break;
+    }
   }
 }
 
 function shapeTagName(voice: Voice): string {
   const shape = waveformShape(voice.waveform);
   switch (shape) {
-    case 'circle':
+    case 'circle': {
       return 'circle';
-    case 'square':
+    }
+    case 'square': {
       return 'rect';
-    case 'triangle':
+    }
+    case 'triangle': {
       return 'polygon';
+    }
   }
 }
 
 // ---- Transform for rotation ----
 
-function voiceTransform(voice: Voice): string | null {
+function voiceTransform(voice: Voice): string | undefined {
   const rotDeg = voiceRotation(voice);
-  if (rotDeg === 0) return null;
+  if (rotDeg === 0) {
+    return;
+  }
   return `rotate(${rotDeg}, ${voice.x}, ${voice.y})`;
 }
 
@@ -209,7 +222,9 @@ function applyFill(shapeEl: SVGElement, voice: Voice, defs: SVGDefsElement): voi
     shapeEl.setAttribute('fill', getSolidFillColor(voice.fill));
     // Remove stale gradient def if fill mode changed
     const oldGrad = defs.querySelector(`#grad-${voice.id}`);
-    if (oldGrad) oldGrad.remove();
+    if (oldGrad) {
+      oldGrad.remove();
+    }
   }
 }
 
@@ -218,23 +233,30 @@ function applyFill(shapeEl: SVGElement, voice: Voice, defs: SVGDefsElement): voi
 function applyPatternOverlay(group: SVGGElement, voice: Voice, defs: SVGDefsElement): void {
   // Remove existing overlay elements (marked with data-overlay)
   const existing = group.querySelectorAll('[data-overlay]');
-  for (const el of existing) el.remove();
+  for (const el of existing) {
+    el.remove();
+  }
   // Remove old gradient overlay def
   const oldGradOverlay = defs.querySelector(`#grad-overlay-${voice.id}`);
-  if (oldGradOverlay) oldGradOverlay.remove();
+  if (oldGradOverlay) {
+    oldGradOverlay.remove();
+  }
 
-  if (!voice.effect) return;
+  if (!voice.effect) {
+    return;
+  }
 
-  const mainShape = group.querySelector('circle, rect, polygon') as SVGElement | null;
-  if (!mainShape) return;
+  const mainShape = group.querySelector('circle, rect, polygon') as SVGElement | undefined;
+  if (!mainShape) {
+    return;
+  }
 
   if (voice.effect === 'noise') {
     // Apply noise filter directly to the main shape
     mainShape.setAttribute('filter', 'url(#pat-noise)');
     return;
-  } else {
-    mainShape.removeAttribute('filter');
   }
+  mainShape.removeAttribute('filter');
 
   if (voice.effect === 'gradient') {
     // Create a per-voice gradient overlay
@@ -254,29 +276,35 @@ function applyPatternOverlay(group: SVGGElement, voice: Voice, defs: SVGDefsElem
     stop2.setAttribute('offset', '100%');
     stop2.setAttribute('stop-color', 'black');
     stop2.setAttribute('stop-opacity', '0.35');
-    grad.appendChild(stop1);
-    grad.appendChild(stop2);
-    defs.appendChild(grad);
+    grad.append(stop1);
+    grad.append(stop2);
+    defs.append(grad);
 
     const overlay = createShapeElement(voice);
     overlay.setAttribute('fill', `url(#${gradId})`);
-    overlay.setAttribute('data-overlay', 'true');
+    overlay.dataset.overlay = 'true';
     const transform = voiceTransform(voice);
-    if (transform) overlay.setAttribute('transform', transform);
-    group.appendChild(overlay);
+    if (transform) {
+      overlay.setAttribute('transform', transform);
+    }
+    group.append(overlay);
     return;
   }
 
   // Stripes or checker: clone shape geometry with pattern fill
   const { value } = getPatternOverlay(voice.effect);
-  if (!value) return;
+  if (!value) {
+    return;
+  }
 
   const overlay = createShapeElement(voice);
   overlay.setAttribute('fill', value);
-  overlay.setAttribute('data-overlay', 'true');
+  overlay.dataset.overlay = 'true';
   const transform = voiceTransform(voice);
-  if (transform) overlay.setAttribute('transform', transform);
-  group.appendChild(overlay);
+  if (transform) {
+    overlay.setAttribute('transform', transform);
+  }
+  group.append(overlay);
 }
 
 // ---- Borders ----
@@ -284,9 +312,13 @@ function applyPatternOverlay(group: SVGGElement, voice: Voice, defs: SVGDefsElem
 function applyBorders(group: SVGGElement, voice: Voice): void {
   // Remove existing border elements
   const existing = group.querySelectorAll('[data-border]');
-  for (const el of existing) el.remove();
+  for (const el of existing) {
+    el.remove();
+  }
 
-  if (!voice.border) return;
+  if (!voice.border) {
+    return;
+  }
 
   const r = voice.size / 2;
   const maxW = r * 0.12;
@@ -297,10 +329,12 @@ function applyBorders(group: SVGGElement, voice: Voice): void {
   outerBorder.setAttribute('fill', 'none');
   outerBorder.setAttribute('stroke', voice.border.color);
   outerBorder.setAttribute('stroke-width', String(w));
-  outerBorder.setAttribute('data-border', 'outer');
+  outerBorder.dataset.border = 'outer';
   const transform = voiceTransform(voice);
-  if (transform) outerBorder.setAttribute('transform', transform);
-  group.appendChild(outerBorder);
+  if (transform) {
+    outerBorder.setAttribute('transform', transform);
+  }
+  group.append(outerBorder);
 
   if (voice.border.double) {
     // Inner border: concentric shape inset past outer + gap
@@ -312,9 +346,11 @@ function applyBorders(group: SVGGElement, voice: Voice): void {
       innerBorder.setAttribute('fill', 'none');
       innerBorder.setAttribute('stroke', voice.border.color);
       innerBorder.setAttribute('stroke-width', String(w * 0.5));
-      innerBorder.setAttribute('data-border', 'inner');
-      if (transform) innerBorder.setAttribute('transform', transform);
-      group.appendChild(innerBorder);
+      innerBorder.dataset.border = 'inner';
+      if (transform) {
+        innerBorder.setAttribute('transform', transform);
+      }
+      group.append(innerBorder);
     }
   }
 }
@@ -325,13 +361,15 @@ function reconcileVoice(group: SVGGElement, voice: Voice, defs: SVGDefsElement):
   const expectedTag = shapeTagName(voice);
 
   // Get or create the main shape element (first child that isn't an overlay/border)
-  let shapeEl = group.querySelector(
-    ':scope > :not([data-overlay]):not([data-border])',
-  ) as SVGElement | null;
+  let shapeEl = group.querySelector(':scope > :not([data-overlay]):not([data-border])') as
+    | SVGElement
+    | undefined;
 
   if (!shapeEl || shapeEl.tagName.toLowerCase() !== expectedTag) {
     // Shape type changed or first render — rebuild main shape
-    if (shapeEl) shapeEl.remove();
+    if (shapeEl) {
+      shapeEl.remove();
+    }
     shapeEl = createShapeElement(voice);
     // Insert as first child
     group.prepend(shapeEl);
@@ -371,31 +409,35 @@ function reconcileVoices(voiceLayer: SVGGElement, voices: Voice[], defs: SVGDefs
   // Remove groups for deleted voices
   const existingGroups = voiceLayer.querySelectorAll<SVGGElement>(':scope > g[data-voice-id]');
   for (const g of existingGroups) {
-    const id = g.getAttribute('data-voice-id')!;
+    const id = g.dataset.voiceId!;
     if (!voiceIds.has(id)) {
       g.remove();
       // Clean up gradient defs
       const grad = defs.querySelector(`#grad-${id}`);
-      if (grad) grad.remove();
+      if (grad) {
+        grad.remove();
+      }
       const gradOverlay = defs.querySelector(`#grad-overlay-${id}`);
-      if (gradOverlay) gradOverlay.remove();
+      if (gradOverlay) {
+        gradOverlay.remove();
+      }
     }
   }
 
   // Add or update groups for each voice (in order, so z-order matches array order)
-  let prevGroup: SVGGElement | null = null;
+  let prevGroup;
   for (const voice of voices) {
     let group = voiceLayer.querySelector<SVGGElement>(`g[data-voice-id="${voice.id}"]`);
     if (!group) {
       group = svgEl('g');
-      group.setAttribute('data-voice-id', voice.id);
+      group.dataset.voiceId = voice.id;
       // Insert after previous sibling to maintain order
       if (prevGroup && prevGroup.nextSibling) {
-        voiceLayer.insertBefore(group, prevGroup.nextSibling);
+        prevGroup.nextSibling.before(group);
       } else if (!prevGroup) {
         voiceLayer.prepend(group);
       } else {
-        voiceLayer.appendChild(group);
+        voiceLayer.append(group);
       }
     } else {
       // Ensure correct order
@@ -403,8 +445,8 @@ function reconcileVoices(voiceLayer: SVGGElement, voices: Voice[], defs: SVGDefs
         ? prevGroup.nextSibling
         : voiceLayer.firstChild;
       if (group !== expectedNext) {
-        if (prevGroup) {
-          voiceLayer.insertBefore(group, prevGroup.nextSibling);
+        if (prevGroup?.nextSibling) {
+          prevGroup.nextSibling.before(group);
         } else {
           voiceLayer.prepend(group);
         }
@@ -424,7 +466,7 @@ function reconcileTexts(textLayer: SVGGElement, texts: TextDecoration[]): void {
   // Remove deleted texts
   const existingTexts = textLayer.querySelectorAll<SVGTextElement>(':scope > text[data-deco-id]');
   for (const el of existingTexts) {
-    const id = el.getAttribute('data-deco-id')!;
+    const id = el.dataset.decoId!;
     if (!textIds.has(id)) {
       el.remove();
     }
@@ -435,12 +477,12 @@ function reconcileTexts(textLayer: SVGGElement, texts: TextDecoration[]): void {
     let el = textLayer.querySelector<SVGTextElement>(`text[data-deco-id="${text.id}"]`);
     if (!el) {
       el = svgEl('text');
-      el.setAttribute('data-deco-id', text.id);
+      el.dataset.decoId = text.id;
       el.setAttribute('fill', 'black');
       el.setAttribute('text-anchor', 'middle');
       el.setAttribute('dominant-baseline', 'central');
       el.setAttribute('font-family', "'Imbue', serif");
-      textLayer.appendChild(el);
+      textLayer.append(el);
     }
 
     el.setAttribute('x', String(text.x));
@@ -479,20 +521,22 @@ function shapeHandlePositions(voice: Voice): [HandleType, number, number][] {
   const r = voice.size / 2;
   const shape = waveformShape(voice.waveform);
   switch (shape) {
-    case 'circle':
+    case 'circle': {
       return [
         ['e', voice.x + r, voice.y],
         ['n', voice.x, voice.y - r],
         ['w', voice.x - r, voice.y],
         ['s', voice.x, voice.y + r],
       ];
-    case 'square':
+    }
+    case 'square': {
       return [
         ['nw', voice.x - r, voice.y - r],
         ['ne', voice.x + r, voice.y - r],
         ['se', voice.x + r, voice.y + r],
         ['sw', voice.x - r, voice.y + r],
       ];
+    }
     case 'triangle': {
       const positions: [HandleType, number, number][] = [];
       for (let i = 0; i < 3; i++) {
@@ -518,42 +562,50 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
   setAttrs(shadow, {
     fill: 'none',
     stroke: '#000000',
-    'stroke-width': strokeWidth,
     'stroke-dasharray': dashArray,
+    'stroke-width': strokeWidth,
   });
-  if (groupTransform) shadow.setAttribute('transform', groupTransform);
-  selectionLayer.appendChild(shadow);
+  if (groupTransform) {
+    shadow.setAttribute('transform', groupTransform);
+  }
+  selectionLayer.append(shadow);
 
   // White marching ants outline
   const ants = createShapeOutline(voice);
   setAttrs(ants, {
     fill: 'none',
     stroke: '#ffffff',
-    'stroke-width': strokeWidth,
     'stroke-dasharray': dashArray,
+    'stroke-width': strokeWidth,
   });
   ants.style.animation = 'march 0.7s linear infinite';
-  if (groupTransform) ants.setAttribute('transform', groupTransform);
-  selectionLayer.appendChild(ants);
+  if (groupTransform) {
+    ants.setAttribute('transform', groupTransform);
+  }
+  selectionLayer.append(ants);
 
-  if (isTouch) return; // Touch: just the marching ants
+  if (isTouch) {
+    return;
+  } // Touch: just the marching ants
 
   // Resize handles at shape vertices/cardinal points
   const handlePositions = shapeHandlePositions(voice);
   for (const [handle, hx, hy] of handlePositions) {
     const rect = svgEl('rect');
     setAttrs(rect, {
-      x: String(hx - HANDLE_SIZE),
-      y: String(hy - HANDLE_SIZE),
-      width: String(HANDLE_SIZE * 2),
-      height: String(HANDLE_SIZE * 2),
+      'data-handle': handle,
       fill: '#ffffff',
+      height: String(HANDLE_SIZE * 2),
       stroke: '#2a2a2a',
       'stroke-width': '0.001',
-      'data-handle': handle,
+      width: String(HANDLE_SIZE * 2),
+      x: String(hx - HANDLE_SIZE),
+      y: String(hy - HANDLE_SIZE),
     });
-    if (groupTransform) rect.setAttribute('transform', groupTransform);
-    selectionLayer.appendChild(rect);
+    if (groupTransform) {
+      rect.setAttribute('transform', groupTransform);
+    }
+    selectionLayer.append(rect);
   }
 
   // Rotation handle (not for sine)
@@ -564,29 +616,33 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
     // Stem line
     const line = svgEl('line');
     setAttrs(line, {
-      x1: String(voice.x),
-      y1: String(voice.y - r),
-      x2: String(voice.x),
-      y2: String(rotHandleY),
       stroke: 'rgba(255,255,255,0.4)',
       'stroke-width': '0.001',
+      x1: String(voice.x),
+      x2: String(voice.x),
+      y1: String(voice.y - r),
+      y2: String(rotHandleY),
     });
-    if (groupTransform) line.setAttribute('transform', groupTransform);
-    selectionLayer.appendChild(line);
+    if (groupTransform) {
+      line.setAttribute('transform', groupTransform);
+    }
+    selectionLayer.append(line);
 
     // Handle circle
     const circle = svgEl('circle');
     setAttrs(circle, {
       cx: String(voice.x),
       cy: String(rotHandleY),
-      r: String(HANDLE_SIZE * 1.2),
+      'data-handle': 'rotate',
       fill: '#888888',
+      r: String(HANDLE_SIZE * 1.2),
       stroke: '#2a2a2a',
       'stroke-width': '0.001',
-      'data-handle': 'rotate',
     });
-    if (groupTransform) circle.setAttribute('transform', groupTransform);
-    selectionLayer.appendChild(circle);
+    if (groupTransform) {
+      circle.setAttribute('transform', groupTransform);
+    }
+    selectionLayer.append(circle);
   }
 }
 
@@ -597,33 +653,39 @@ function renderDecoSelection(
 ): void {
   // Use the SVG text element's BBox for accurate bounds
   const textEl = _textLayer?.querySelector<SVGTextElement>(`text[data-deco-id="${text.id}"]`);
-  if (!textEl) return;
+  if (!textEl) {
+    return;
+  }
 
   let bbox: DOMRect;
   try {
     bbox = textEl.getBBox();
   } catch {
-    // getBBox can throw if element is not rendered
+    // GetBBox can throw if element is not rendered
     return;
   }
 
-  if (bbox.width === 0 && bbox.height === 0) return;
+  if (bbox.width === 0 && bbox.height === 0) {
+    return;
+  }
 
   // Dashed bounding rect
   const dashRect = svgEl('rect');
   setAttrs(dashRect, {
+    fill: 'none',
+    height: String(bbox.height),
+    stroke: 'rgba(255,255,255,0.5)',
+    'stroke-dasharray': isTouch ? '0.008 0.008' : '0.005 0.005',
+    'stroke-width': isTouch ? '0.002' : '0.0015',
+    width: String(bbox.width),
     x: String(bbox.x),
     y: String(bbox.y),
-    width: String(bbox.width),
-    height: String(bbox.height),
-    fill: 'none',
-    stroke: 'rgba(255,255,255,0.5)',
-    'stroke-width': isTouch ? '0.002' : '0.0015',
-    'stroke-dasharray': isTouch ? '0.008 0.008' : '0.005 0.005',
   });
-  selectionLayer.appendChild(dashRect);
+  selectionLayer.append(dashRect);
 
-  if (isTouch) return;
+  if (isTouch) {
+    return;
+  }
 
   // Corner resize handles
   const corners: [HandleType, number, number][] = [
@@ -636,24 +698,24 @@ function renderDecoSelection(
   for (const [handle, hx, hy] of corners) {
     const rect = svgEl('rect');
     setAttrs(rect, {
-      x: String(hx - HANDLE_SIZE),
-      y: String(hy - HANDLE_SIZE),
-      width: String(HANDLE_SIZE * 2),
-      height: String(HANDLE_SIZE * 2),
+      'data-handle': handle,
       fill: '#ffffff',
+      height: String(HANDLE_SIZE * 2),
       stroke: '#2a2a2a',
       'stroke-width': '0.001',
-      'data-handle': handle,
+      width: String(HANDLE_SIZE * 2),
+      x: String(hx - HANDLE_SIZE),
+      y: String(hy - HANDLE_SIZE),
     });
-    selectionLayer.appendChild(rect);
+    selectionLayer.append(rect);
   }
 }
 
 function renderSelection(
   selectionLayer: SVGGElement,
   state: SigilData,
-  selectedId: string | null,
-  selectedDecoId: string | null | undefined,
+  selectedId: string | undefined,
+  selectedDecoId: string | undefined | undefined,
 ): void {
   // Clear previous selection UI
   while (selectionLayer.firstChild) {
@@ -682,8 +744,8 @@ function renderSelection(
 export function render(
   svg: SVGSVGElement,
   state: SigilData,
-  selectedId: string | null,
-  selectedDecoId?: string | null,
+  selectedId: string | undefined,
+  selectedDecoId?: string | undefined,
 ): void {
   const { defs, voiceLayer, textLayer, selectionLayer } = ensureLayers(svg);
 

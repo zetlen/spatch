@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { SigilStore, UndoManager, createDefaultState } from '../../js/state.ts';
 
 describe('SigilStore CRUD', () => {
@@ -54,7 +54,7 @@ describe('SigilStore updateVoice / updateFill / updateEnvelope', () => {
 
     const updated = store.getVoice(voice.id);
     expect(updated.x).toBe(0.8);
-    expect(updated.y).toBe(0.5); // unchanged
+    expect(updated.y).toBe(0.5); // Unchanged
   });
 
   test('updateVoice can set timbre on pulse voice', () => {
@@ -71,14 +71,14 @@ describe('SigilStore updateVoice / updateFill / updateEnvelope', () => {
     const store = new SigilStore();
     const voice = store.addVoice('sine', 0.5, 0.5);
     store.updateFill(voice.id, {
-      mode: 'linear',
       gradAngle: 0,
       h: 200,
-      s: 80,
-      l: 50,
       h2: 100,
-      s2: 60,
+      l: 50,
       l2: 40,
+      mode: 'linear',
+      s: 80,
+      s2: 60,
     });
 
     const updated = store.getVoice(voice.id);
@@ -93,7 +93,7 @@ describe('SigilStore updateVoice / updateFill / updateEnvelope', () => {
 
     expect(store.data.envelope.attack).toBe(1.5);
     expect(store.data.envelope.sustain).toBe(0.3);
-    expect(store.data.envelope.decay).toBe(0.2); // unchanged
+    expect(store.data.envelope.decay).toBe(0.2); // Unchanged
   });
 });
 
@@ -136,14 +136,14 @@ describe('UndoManager undo / redo', () => {
   test('undo does nothing when stack is empty', () => {
     const store = new SigilStore();
     const undo = new UndoManager(store);
-    undo.undo(); // should not throw
+    undo.undo(); // Should not throw
     expect(store.data.voices).toHaveLength(0);
   });
 
   test('redo does nothing when stack is empty', () => {
     const store = new SigilStore();
     const undo = new UndoManager(store);
-    undo.redo(); // should not throw
+    undo.redo(); // Should not throw
     expect(store.data.voices).toHaveLength(0);
   });
 
@@ -155,7 +155,7 @@ describe('UndoManager undo / redo', () => {
     undo.undo();
     undo.snapshot();
     store.addVoice('pulse', 0.3, 0.3);
-    undo.redo(); // should do nothing since redo stack cleared
+    undo.redo(); // Should do nothing since redo stack cleared
     expect(store.data.voices).toHaveLength(1);
     expect(store.data.voices[0].waveform).toBe('pulse');
   });
@@ -208,7 +208,7 @@ describe('SigilStore border', () => {
   test('voices default to null border', () => {
     const store = new SigilStore();
     const voice = store.addVoice('sine', 0.5, 0.5);
-    expect(voice.border).toBeNull();
+    expect(voice.border).toBeUndefined();
   });
 
   test('updateVoice can set border', () => {
@@ -219,7 +219,7 @@ describe('SigilStore border', () => {
     });
 
     const updated = store.getVoice(voice.id);
-    expect(updated.border).not.toBeNull();
+    expect(updated.border).not.toBeUndefined();
     expect(updated.border.color).toBe('white');
     expect(updated.border.double).toBe(false);
     expect(updated.border.thickness).toBe(0.5);
@@ -231,10 +231,10 @@ describe('SigilStore border', () => {
     store.updateVoice(voice.id, {
       border: { color: 'black', double: true, thickness: 0.8 },
     });
-    store.updateVoice(voice.id, { border: null });
+    store.updateVoice(voice.id, { border: undefined });
 
     const updated = store.getVoice(voice.id);
-    expect(updated.border).toBeNull();
+    expect(updated.border).toBeUndefined();
   });
 
   test('border persists through undo/redo', () => {
@@ -246,9 +246,9 @@ describe('SigilStore border', () => {
       border: { color: 'white', double: false, thickness: 0.6 },
     });
 
-    expect(store.getVoice(voice.id).border).not.toBeNull();
+    expect(store.getVoice(voice.id).border).not.toBeUndefined();
     undo.undo();
-    expect(store.data.voices[0].border).toBeNull();
+    expect(store.data.voices[0].border).toBeUndefined();
     undo.redo();
     expect(store.data.voices[0].border.color).toBe('white');
     expect(store.data.voices[0].border.thickness).toBe(0.6);
@@ -292,7 +292,7 @@ describe('SigilStore onChange listener', () => {
 
   test('listener receives current data', () => {
     const store = new SigilStore();
-    let receivedData = null;
+    let receivedData;
     store.onChange((data) => {
       receivedData = data;
     });
@@ -357,13 +357,13 @@ describe('SigilStore loadState', () => {
 describe('SigilStore reverb', () => {
   test('default state has null reverb', () => {
     const store = new SigilStore();
-    expect(store.data.reverb).toBeNull();
+    expect(store.data.reverb).toBeUndefined();
   });
 
   test('updateReverb sets reverb', () => {
     const store = new SigilStore();
     store.updateReverb({ depth: 0.5, style: 'glow' });
-    expect(store.data.reverb).not.toBeNull();
+    expect(store.data.reverb).not.toBeUndefined();
     expect(store.data.reverb.depth).toBe(0.5);
     expect(store.data.reverb.style).toBe('glow');
   });
@@ -371,8 +371,8 @@ describe('SigilStore reverb', () => {
   test('updateReverb to null removes reverb', () => {
     const store = new SigilStore();
     store.updateReverb({ depth: 0.5, style: 'dim' });
-    store.updateReverb(null);
-    expect(store.data.reverb).toBeNull();
+    store.updateReverb(undefined);
+    expect(store.data.reverb).toBeUndefined();
   });
 
   test('updateReverb notifies listeners', () => {
@@ -391,9 +391,9 @@ describe('SigilStore reverb', () => {
     undo.snapshot();
     store.updateReverb({ depth: 0.7, style: 'dim' });
 
-    expect(store.data.reverb).not.toBeNull();
+    expect(store.data.reverb).not.toBeUndefined();
     undo.undo();
-    expect(store.data.reverb).toBeNull();
+    expect(store.data.reverb).toBeUndefined();
     undo.redo();
     expect(store.data.reverb.depth).toBe(0.7);
     expect(store.data.reverb.style).toBe('dim');

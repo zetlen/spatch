@@ -1,11 +1,11 @@
-// envelope.ts — ADSR corner controls and visual rendering
+// Envelope.ts — ADSR corner controls and visual rendering
 
-import type { Envelope, ADSRCorner } from './types.ts';
+import type { ADSRCorner, Envelope } from './types.ts';
 
 // Maps canvas corner rounding to ADSR values
 // Corners: bottom-left=attack, top-left=decay, top-right=sustain, bottom-right=release
 
-const MAX_RADIUS_RATIO = 0.15; // max corner radius as fraction of canvas size
+const MAX_RADIUS_RATIO = 0.15; // Max corner radius as fraction of canvas size
 
 export interface CornerRadii {
   bottomLeft: number;
@@ -17,10 +17,10 @@ export interface CornerRadii {
 export function envelopeToCornerRadii(envelope: Envelope, canvasSize: number): CornerRadii {
   const maxR = canvasSize * MAX_RADIUS_RATIO;
   return {
-    bottomLeft: (envelope.attack / 2.0) * maxR,
-    topLeft: (envelope.decay / 2.0) * maxR,
+    bottomLeft: (envelope.attack / 2) * maxR,
+    bottomRight: (envelope.release / 3) * maxR,
+    topLeft: (envelope.decay / 2) * maxR,
     topRight: envelope.sustain * maxR,
-    bottomRight: (envelope.release / 3.0) * maxR,
   };
 }
 
@@ -48,13 +48,17 @@ export function dragToEnvelopeValue(
   const normalizedDist = dragDistance / maxR;
 
   switch (cornerName) {
-    case 'attack':
-      return Math.max(0.01, Math.min(2.0, normalizedDist * 2.0));
-    case 'decay':
-      return Math.max(0.01, Math.min(2.0, normalizedDist * 2.0));
-    case 'sustain':
-      return Math.max(0, Math.min(1.0, normalizedDist));
-    case 'release':
-      return Math.max(0.01, Math.min(3.0, normalizedDist * 3.0));
+    case 'attack': {
+      return Math.max(0.01, Math.min(2, normalizedDist * 2));
+    }
+    case 'decay': {
+      return Math.max(0.01, Math.min(2, normalizedDist * 2));
+    }
+    case 'sustain': {
+      return Math.max(0, Math.min(1, normalizedDist));
+    }
+    case 'release': {
+      return Math.max(0.01, Math.min(3, normalizedDist * 3));
+    }
   }
 }

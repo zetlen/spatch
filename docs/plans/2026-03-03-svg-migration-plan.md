@@ -55,7 +55,7 @@ Remove the `workletReady` parameter from `createEffect` signature (line 8) and u
 export function createEffect(
   audioCtx: AudioContext,
   pattern: PatternType,
-): AudioEffect | null {
+): AudioEffect | undefined {
 ```
 
 **Step 4: Remove worklet registration from audio.ts**
@@ -244,7 +244,7 @@ export function ensureLinearGradient(
   fill: LinearFill,
   shapeRotationDeg: number,
 ): void {
-  let grad = defs.querySelector(`#${id}`) as SVGLinearGradientElement | null;
+  let grad = defs.querySelector(`#${id}`) as SVGLinearGradientElement | undefined;
   if (!grad) {
     grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
     grad.id = id;
@@ -434,11 +434,11 @@ Key implementation notes:
 
 The render function signature changes from:
 ```typescript
-export function render(ctx: CanvasRenderingContext2D, state: SigilData, canvasSize: number, selectedId: string | null, selectedDecoId?: string | null): void
+export function render(ctx: CanvasRenderingContext2D, state: SigilData, canvasSize: number, selectedId: string | undefined, selectedDecoId?: string | undefined): void
 ```
 to:
 ```typescript
-export function render(svg: SVGSVGElement, state: SigilData, selectedId: string | null, selectedDecoId?: string | null): void
+export function render(svg: SVGSVGElement, state: SigilData, selectedId: string | undefined, selectedDecoId?: string | undefined): void
 ```
 
 Also export `resetCache()` for embed use and `isLastInputTouch()` (unchanged).

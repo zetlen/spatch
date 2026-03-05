@@ -1,4 +1,4 @@
-// vocoder.ts — Formant-based vocoder pipeline
+// Vocoder.ts — Formant-based vocoder pipeline
 
 import type { VocoderChain } from './types.ts';
 
@@ -12,11 +12,11 @@ const VOWEL_FORMANTS: Record<string, [number, number, number]> = {
 };
 
 // Consonant types
-const FRICATIVES = new Set('sfvzh'.split(''));
-const STOPS = new Set('pbtdkg'.split(''));
-const NASALS = new Set('mn'.split(''));
+const FRICATIVES = new Set('sfvzh');
+const STOPS = new Set('pbtdkg');
+const NASALS = new Set('mn');
 
-const CHAR_DURATION = 0.15; // seconds per character
+const CHAR_DURATION = 0.15; // Seconds per character
 const NUM_BANDS = 16;
 const BAND_LOW = 100;
 const BAND_HIGH = 8000;
@@ -24,10 +24,12 @@ const BAND_HIGH = 8000;
 // Create a vocoder effect that modulates a carrier oscillator based on text
 export function createVocoderChain(
   audioCtx: AudioContext,
-  text: string | null,
+  text: string | undefined,
   carrierNode: OscillatorNode,
-): VocoderChain | null {
-  if (!text || text.length === 0) return null;
+): VocoderChain | undefined {
+  if (!text || text.length === 0) {
+    return;
+  }
 
   const output = audioCtx.createGain();
   output.gain.value = 0.6;
@@ -35,7 +37,7 @@ export function createVocoderChain(
   // Create bandpass filter bank
   const bands: { filter: BiquadFilterNode; gain: GainNode; freq: number }[] = [];
   for (let i = 0; i < NUM_BANDS; i++) {
-    const freq = BAND_LOW * Math.pow(BAND_HIGH / BAND_LOW, i / (NUM_BANDS - 1));
+    const freq = BAND_LOW * (BAND_HIGH / BAND_LOW) ** (i / (NUM_BANDS - 1));
     const filter = audioCtx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.value = freq;
@@ -48,12 +50,12 @@ export function createVocoderChain(
     filter.connect(gain);
     gain.connect(output);
 
-    bands.push({ filter, gain, freq });
+    bands.push({ filter, freq, gain });
   }
 
   // Schedule gain automation based on text formants
   const now = audioCtx.currentTime;
-  const chars = text.toLowerCase().split('');
+  const chars = [...text.toLowerCase()];
 
   for (let ci = 0; ci < chars.length; ci++) {
     const char = chars[ci]!;
@@ -74,9 +76,6 @@ export function createVocoderChain(
   const totalDuration = chars.length * CHAR_DURATION;
 
   return {
-    input: null,
-    output,
-    duration: totalDuration,
     dispose: () => {
       for (const band of bands) {
         try {
@@ -87,30 +86,49 @@ export function createVocoderChain(
         } catch {}
       }
     },
+    duration: totalDuration,
+    input: undefined,
+    output,
   };
 }
 
-function getFormants(char: string): [number, number, number] | null {
+function getFormants(char: string): [number, number, number] | undefined {
   // Vowels
-  if (VOWEL_FORMANTS[char]) return VOWEL_FORMANTS[char];
+  if (VOWEL_FORMANTS[char]) {
+    return VOWEL_FORMANTS[char];
+  }
 
   // Fricatives: broadband noise-like formants
-  if (FRICATIVES.has(char)) return [2500, 4000, 6000];
+  if (FRICATIVES.has(char)) {
+    return [2500, 4000, 6000];
+  }
 
   // Nasals: low formants
-  if (NASALS.has(char)) return [250, 2500, 3000];
+  if (NASALS.has(char)) {
+    return [250, 2500, 3000];
+  }
 
   // Stops: very brief transient (handled as silence + burst)
-  if (STOPS.has(char)) return null;
+  if (STOPS.has(char)) {
+    return;
+  }
 
   // Other consonants: approximate
-  if (char === 'r') return [500, 1500, 2500];
-  if (char === 'l') return [350, 1700, 2700];
-  if (char === 'w') return [300, 700, 2500];
-  if (char === 'y') return [280, 2200, 2900];
+  if (char === 'r') {
+    return [500, 1500, 2500];
+  }
+  if (char === 'l') {
+    return [350, 1700, 2700];
+  }
+  if (char === 'w') {
+    return [300, 700, 2500];
+  }
+  if (char === 'y') {
+    return [280, 2200, 2900];
+  }
 
   // Space or unknown: silence
-  return null;
+  return;
 }
 
 function getFormantGain(bandFreq: number, formants: [number, number, number]): number {

@@ -1,30 +1,30 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
-  yToFrequency,
-  xToPan,
-  rotationToTimbre,
-  waveformGain,
-  shapeAreaFraction,
   areaToGain,
-  snapYToNote,
+  borderOctaveGain,
   hueToFormants,
   lightnessToCutoff,
-  borderOctaveGain,
+  rotationToTimbre,
+  shapeAreaFraction,
+  snapYToNote,
+  waveformGain,
+  xToPan,
+  yToFrequency,
 } from '../../js/audio.ts';
 
 describe('yToFrequency', () => {
   test('y=0 (top) returns highest chromatic note (G5)', () => {
     const freq = yToFrequency(0);
-    // y=0 → normalized=1 → index=36 → semitone 36 → MIDI 79 → G5
+    // Y=0 → normalized=1 → index=36 → semitone 36 → MIDI 79 → G5
     // 440 * 2^((79-69)/12) ≈ 783.99
     expect(freq).toBeCloseTo(783.99, 0);
   });
 
   test('y=1 (bottom) returns lowest chromatic note (G2)', () => {
     const freq = yToFrequency(1);
-    // y=1 → normalized=0 → index=0 → semitone 0 → MIDI 43 → G2
+    // Y=1 → normalized=0 → index=0 → semitone 0 → MIDI 43 → G2
     // 440 * 2^((43-69)/12) ≈ 98.00
-    expect(freq).toBeCloseTo(98.0, 0);
+    expect(freq).toBeCloseTo(98, 0);
   });
 
   test('all positions snap to exact chromatic pitches (no detuning)', () => {
@@ -34,13 +34,13 @@ describe('yToFrequency', () => {
       const normalized = 1 - y;
       const index = Math.round(normalized * 36);
       const clamped = Math.max(0, Math.min(36, index));
-      const baseFreq = 440 * Math.pow(2, (43 + clamped - 69) / 12);
+      const baseFreq = 440 * 2 ** ((43 + clamped - 69) / 12);
       expect(freq).toBeCloseTo(baseFreq, 2);
     }
   });
 
   test('positions between notes snap to nearest chromatic pitch', () => {
-    // y=0.5 → normalized=0.5 → continuous=18 → index 18 → MIDI 61 (C#4/Db4)
+    // Y=0.5 → normalized=0.5 → continuous=18 → index 18 → MIDI 61 (C#4/Db4)
     // 440 * 2^((61-69)/12) ≈ 277.18
     const freq = yToFrequency(0.5);
     expect(freq).toBeCloseTo(277.18, 0);
@@ -145,7 +145,7 @@ describe('waveformGain', () => {
   });
 
   test('pulse is attenuated below 1.0', () => {
-    expect(waveformGain('pulse')).toBeLessThan(1.0);
+    expect(waveformGain('pulse')).toBeLessThan(1);
     expect(waveformGain('pulse')).toBeGreaterThan(0);
   });
 
@@ -182,7 +182,7 @@ describe('shapeAreaFraction', () => {
       const small = shapeAreaFraction(type, 0.2);
       const big = shapeAreaFraction(type, 0.4);
       // Doubling size should quadruple area
-      expect(big / small).toBeCloseTo(4.0);
+      expect(big / small).toBeCloseTo(4);
     }
   });
 });
@@ -218,7 +218,7 @@ describe('snapYToNote', () => {
   const spacing = 1 / 36;
 
   test('exact note positions are unchanged', () => {
-    // y=0 (top, highest note) and y=1 (bottom, lowest note)
+    // Y=0 (top, highest note) and y=1 (bottom, lowest note)
     expect(snapYToNote(0)).toBeCloseTo(0, 5);
     expect(snapYToNote(1)).toBeCloseTo(1, 5);
     // Middle note: index 18, normalized = 18/36 = 0.5, y = 0.5
@@ -228,7 +228,7 @@ describe('snapYToNote', () => {
 
   test('positions near a note are pulled toward it (magnetic)', () => {
     // Slightly above a note center should snap closer to it
-    const noteY = 1 - 12 * spacing; // note at index 12
+    const noteY = 1 - 12 * spacing; // Note at index 12
     const slightlyOff = noteY + spacing * 0.1;
     const snapped = snapYToNote(slightlyOff);
     // Snapped should be closer to the note than the raw position
@@ -259,7 +259,7 @@ describe('snapYToNote', () => {
     let prev = snapYToNote(0);
     for (let y = 0.01; y <= 1; y += 0.01) {
       const snapped = snapYToNote(y);
-      expect(snapped).toBeGreaterThanOrEqual(prev - 0.0001); // small epsilon for float
+      expect(snapped).toBeGreaterThanOrEqual(prev - 0.0001); // Small epsilon for float
       prev = snapped;
     }
   });
@@ -268,18 +268,18 @@ describe('snapYToNote', () => {
 describe('lightnessToCutoff', () => {
   test('lightness 0 (black) returns ~300 Hz', () => {
     const freq = lightnessToCutoff(0);
-    expect(freq).toBeCloseTo(300, -1); // within 10 Hz
+    expect(freq).toBeCloseTo(300, -1); // Within 10 Hz
   });
 
   test('lightness 50 (mid) returns ~1900 Hz', () => {
     const freq = lightnessToCutoff(50);
     // Geometric midpoint of 300–12000: 300 * sqrt(40) ≈ 1897
-    expect(freq).toBeCloseTo(1897, -2); // within 100 Hz
+    expect(freq).toBeCloseTo(1897, -2); // Within 100 Hz
   });
 
   test('lightness 100 (white) returns ~12000 Hz', () => {
     const freq = lightnessToCutoff(100);
-    expect(freq).toBeCloseTo(12000, -2); // within 100 Hz
+    expect(freq).toBeCloseTo(12_000, -2); // Within 100 Hz
   });
 
   test('monotonically increasing', () => {
@@ -300,19 +300,19 @@ describe('lightnessToCutoff', () => {
 
 describe('hueToFormants', () => {
   test('returns anchor values at exact anchor hues', () => {
-    // hue=0 → /a/: F1=730, F2=1090
+    // Hue=0 → /a/: F1=730, F2=1090
     const a = hueToFormants(0);
     expect(a.f1).toBeCloseTo(730, 0);
     expect(a.f2).toBeCloseTo(1090, 0);
 
-    // hue=120 → /i/: F1=270, F2=2290
+    // Hue=120 → /i/: F1=270, F2=2290
     const i = hueToFormants(120);
     expect(i.f1).toBeCloseTo(270, 0);
     expect(i.f2).toBeCloseTo(2290, 0);
   });
 
   test('interpolates smoothly between anchors', () => {
-    // hue=30 should be halfway between /a/ (F1=730) and /e/ (F1=530)
+    // Hue=30 should be halfway between /a/ (F1=730) and /e/ (F1=530)
     const mid = hueToFormants(30);
     expect(mid.f1).toBeCloseTo(630, 0); // (730+530)/2
     expect(mid.f2).toBeCloseTo(1465, 0); // (1090+1840)/2

@@ -1,4 +1,4 @@
-// patterns.ts — SVG pattern definitions for visual overlays
+// Patterns.ts — SVG pattern definitions for visual overlays
 
 import type { PatternType } from './types.ts';
 
@@ -6,7 +6,9 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** Ensure all pattern definitions exist in the given <defs> element. */
 export function ensurePatternDefs(defs: SVGDefsElement): void {
-  if (defs.querySelector('#pat-stripes')) return; // already defined
+  if (defs.querySelector('#pat-stripes')) {
+    return;
+  } // Already defined
 
   // Stripes: repeating horizontal band
   const stripes = createPattern('pat-stripes', 0.0075, 0.0075);
@@ -14,8 +16,8 @@ export function ensurePatternDefs(defs: SVGDefsElement): void {
   stripesRect.setAttribute('width', '0.0075');
   stripesRect.setAttribute('height', '0.00375');
   stripesRect.setAttribute('fill', 'rgba(0,0,0,0.45)');
-  stripes.appendChild(stripesRect);
-  defs.appendChild(stripes);
+  stripes.append(stripesRect);
+  defs.append(stripes);
 
   // Checker: 2x2 alternating squares
   const checker = createPattern('pat-checker', 0.01, 0.01);
@@ -23,15 +25,15 @@ export function ensurePatternDefs(defs: SVGDefsElement): void {
   cRect1.setAttribute('width', '0.005');
   cRect1.setAttribute('height', '0.005');
   cRect1.setAttribute('fill', 'rgba(0,0,0,0.35)');
-  checker.appendChild(cRect1);
+  checker.append(cRect1);
   const cRect2 = document.createElementNS(SVG_NS, 'rect');
   cRect2.setAttribute('x', '0.005');
   cRect2.setAttribute('y', '0.005');
   cRect2.setAttribute('width', '0.005');
   cRect2.setAttribute('height', '0.005');
   cRect2.setAttribute('fill', 'rgba(0,0,0,0.35)');
-  checker.appendChild(cRect2);
-  defs.appendChild(checker);
+  checker.append(cRect2);
+  defs.append(checker);
 
   // Noise: feTurbulence filter
   const noiseFilter = document.createElementNS(SVG_NS, 'filter');
@@ -46,20 +48,20 @@ export function ensurePatternDefs(defs: SVGDefsElement): void {
   turb.setAttribute('numOctaves', '4');
   turb.setAttribute('seed', '1');
   turb.setAttribute('result', 'noise');
-  noiseFilter.appendChild(turb);
+  noiseFilter.append(turb);
   const colorMatrix = document.createElementNS(SVG_NS, 'feColorMatrix');
   colorMatrix.setAttribute('in', 'noise');
   colorMatrix.setAttribute('type', 'matrix');
   // Convert noise to black with variable alpha
   colorMatrix.setAttribute('values', '0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.3 0');
   colorMatrix.setAttribute('result', 'darkNoise');
-  noiseFilter.appendChild(colorMatrix);
+  noiseFilter.append(colorMatrix);
   const composite = document.createElementNS(SVG_NS, 'feComposite');
   composite.setAttribute('in', 'darkNoise');
   composite.setAttribute('in2', 'SourceGraphic');
   composite.setAttribute('operator', 'atop');
-  noiseFilter.appendChild(composite);
-  defs.appendChild(noiseFilter);
+  noiseFilter.append(composite);
+  defs.append(noiseFilter);
 }
 
 function createPattern(id: string, width: number, height: number): SVGPatternElement {
@@ -77,14 +79,18 @@ function createPattern(id: string, width: number, height: number): SVGPatternEle
  */
 export function getPatternOverlay(pattern: PatternType): { attr: string; value: string } {
   switch (pattern) {
-    case 'stripes':
+    case 'stripes': {
       return { attr: 'fill', value: 'url(#pat-stripes)' };
-    case 'checker':
+    }
+    case 'checker': {
       return { attr: 'fill', value: 'url(#pat-checker)' };
-    case 'noise':
+    }
+    case 'noise': {
       return { attr: 'filter', value: 'url(#pat-noise)' };
-    case 'gradient':
+    }
+    case 'gradient': {
       // Gradient overlay is handled per-voice with a dedicated gradient def
       return { attr: 'fill', value: '' };
+    }
   }
 }

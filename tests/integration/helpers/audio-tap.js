@@ -6,12 +6,14 @@
  */
 
 (function () {
-  const OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!OriginalAudioContext) return;
+  const OriginalAudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!OriginalAudioContext) {
+    return;
+  }
 
   const origConnect = AudioNode.prototype.connect;
 
-  window.AudioContext = function (...args) {
+  globalThis.AudioContext = function AudioContext(...args) {
     const ctx = new OriginalAudioContext(...args);
 
     // Create analyser tap
@@ -27,7 +29,7 @@
     origConnect.call(analyser, origDestination);
 
     // Patch connect so anything going to destination routes through our tap
-    AudioNode.prototype.connect = function (dest, ...rest) {
+    AudioNode.prototype.connect = function connect(dest, ...rest) {
       if (dest === origDestination) {
         return origConnect.call(this, tapGain, ...rest);
       }
@@ -35,14 +37,24 @@
     };
 
     // Expose tap API
-    window.__audioTap = {
+    globalThis.__audioTap = {
       analyser,
       context: ctx,
+
+      getAmplitude() {
+        const data = new Float32Array(analyser.fftSize);
+        analyser.getFloatTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) {
+          sum += data[i] * data[i];
+        }
+        return Math.sqrt(sum / data.length);
+      },
 
       getFrequencyData() {
         const data = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(data);
-        return Array.from(data);
+        return [...data];
       },
 
       getPeakFrequency() {
@@ -60,16 +72,6 @@
         return (maxIdx / data.length) * nyquist;
       },
 
-      getAmplitude() {
-        const data = new Float32Array(analyser.fftSize);
-        analyser.getFloatTimeDomainData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) {
-          sum += data[i] * data[i];
-        }
-        return Math.sqrt(sum / data.length);
-      },
-
       isPlaying() {
         return this.getAmplitude() > 0.001;
       },
@@ -79,5 +81,5 @@
   };
 
   // Preserve prototype chain
-  window.AudioContext.prototype = OriginalAudioContext.prototype;
+  globalThis.AudioContext.prototype = OriginalAudioContext.prototype;
 })();

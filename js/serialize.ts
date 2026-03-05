@@ -1,42 +1,42 @@
-// serialize.ts — URL encode/decode sigil state with lz-string
+// Serialize.ts — URL encode/decode sigil state with lz-string
 //
 // Wire format: positional arrays, no keys, no IDs.
 //
 //   [envelope, voices, texts, reverb?]
 //
-//   envelope = [attack, decay, sustain, release]
+//   Envelope = [attack, decay, sustain, release]
 //
-//   voice (sine)        = ["s", x, y, size, fill, effect, blend, border]
-//   voice (pulse/blend) = ["p"|"b", x, y, size, fill, effect, blend, border, timbre]
+//   Voice (sine)        = ["s", x, y, size, fill, effect, blend, border]
+//   Voice (pulse/blend) = ["p"|"b", x, y, size, fill, effect, blend, border, timbre]
 //
-//   border = 0 (none) | ["W"|"B", 0|1, thickness]
+//   Border = 0 (none) | ["W"|"B", 0|1, thickness]
 //
-//   fill (solid)   = ["s", h, s, l]
-//   fill (linear)  = ["l", gradAngle, h, s, l, h2, s2, l2]
+//   Fill (solid)   = ["s", h, s, l]
+//   Fill (linear)  = ["l", gradAngle, h, s, l, h2, s2, l2]
 //
-//   effect = "s"|"c"|"n"|"g" | 0
+//   Effect = "s"|"c"|"n"|"g" | 0
 //
-//   text = [text, x, y, size]
+//   Text = [text, x, y, size]
 //
-//   reverb = 0 (none) | ["G"|"D", depth]
+//   Reverb = 0 (none) | ["G"|"D", depth]
 
 import LZString from 'lz-string';
 import { genId } from './state.ts';
 import {
-  normalizedCoord,
-  type SigilData,
-  type Voice,
-  type TextDecoration,
-  type Fill,
-  type SolidFill,
-  type LinearFill,
-  type WaveformType,
-  type PatternType,
   type BlendMode,
   type Border,
   type BorderColor,
+  type Fill,
+  type LinearFill,
+  type PatternType,
   type Reverb,
   type ReverbStyle,
+  type SigilData,
+  type SolidFill,
+  type TextDecoration,
+  type Voice,
+  type WaveformType,
+  normalizedCoord,
 } from './types.ts';
 
 export function serializeState(state: SigilData): string {
@@ -50,25 +50,29 @@ export function _serializeToJSON(state: SigilData): string {
   return JSON.stringify(pack(state));
 }
 
-export function deserializeState(hash: string): SigilData | null {
+export function deserializeState(hash: string): SigilData | undefined {
   try {
     const json = LZString.decompressFromEncodedURIComponent(hash);
-    if (!json) return null;
+    if (!json) {
+      return;
+    }
     return unpack(JSON.parse(json));
-  } catch (e) {
-    console.warn('Failed to deserialize state:', e);
-    return null;
+  } catch (error) {
+    console.warn('Failed to deserialize state:', error);
+    return;
   }
 }
 
 export function saveToURL(state: SigilData): void {
   const encoded = serializeState(state);
-  history.replaceState(null, '', '#' + encoded);
+  history.replaceState(undefined, '', '#' + encoded);
 }
 
-export function loadFromURL(): SigilData | null {
-  const hash = window.location.hash.slice(1);
-  if (!hash) return null;
+export function loadFromURL(): SigilData | undefined {
+  const hash = globalThis.location.hash.slice(1);
+  if (!hash) {
+    return;
+  }
   return deserializeState(hash);
 }
 
@@ -90,10 +94,10 @@ type PackedText = [string, number, number, number];
 type PackedReverb = 0 | [string, number];
 
 type PackedState = [
-  [number, number, number, number], // envelope
-  PackedVoice[], // voices
-  PackedText[], // texts
-  PackedReverb?, // reverb (optional)
+  [number, number, number, number], // Envelope
+  PackedVoice[], // Voices
+  PackedText[], // Texts
+  PackedReverb?, // Reverb (optional)
 ];
 
 function pack(state: SigilData): PackedState {
@@ -118,18 +122,20 @@ function pack(state: SigilData): PackedState {
     state.texts.map((t): PackedText => [t.text, round3(t.x), round3(t.y), round3(t.size)]),
   ];
   const rv = packReverb(state.reverb);
-  if (rv !== 0) packed.push(rv);
+  if (rv !== 0) {
+    packed.push(rv);
+  }
   return packed;
 }
 
 // ---- Unpack ----
 
-const waveformMap: Record<string, WaveformType> = { s: 'sine', p: 'pulse', b: 'blend' };
+const waveformMap: Record<string, WaveformType> = { b: 'blend', p: 'pulse', s: 'sine' };
 const effectMap: Record<string, PatternType> = {
-  s: 'stripes',
   c: 'checker',
-  n: 'noise',
   g: 'gradient',
+  n: 'noise',
+  s: 'stripes',
 };
 
 function unpack(packed: PackedState): SigilData {
@@ -138,56 +144,67 @@ function unpack(packed: PackedState): SigilData {
     envelope: {
       attack: env[0],
       decay: env[1],
-      sustain: env[2],
       release: env[3],
+      sustain: env[2],
     },
-    voices: (voices || []).map((pv): Voice => {
-      const waveform: WaveformType = waveformMap[pv[0]] || 'sine';
-      const effect: PatternType | null = pv[5] ? (effectMap[pv[5] as string] ?? null) : null;
-      const blend: BlendMode = unpackBlend(pv[6] as string);
-      const border = unpackBorder(pv[7] as PackedBorder);
-      const base = {
-        id: genId('v'),
-        x: normalizedCoord(pv[1]),
-        y: normalizedCoord(pv[2]),
-        size: normalizedCoord(pv[3]),
-        fill: unpackFill(pv[4]),
-        effect,
-        blend,
-        border,
-      };
-      switch (waveform) {
-        case 'sine':
-          return { ...base, waveform: 'sine' };
-        case 'pulse':
-          return { ...base, waveform: 'pulse', timbre: normalizedCoord((pv[8] as number) ?? 0) };
-        case 'blend':
-          return { ...base, waveform: 'blend', timbre: normalizedCoord((pv[8] as number) ?? 0) };
-      }
-    }),
+    reverb: unpackReverb(packed[3] as PackedReverb | undefined),
     texts: (texts || []).map(
       (pt): TextDecoration => ({
         id: genId('t'),
+        size: normalizedCoord(pt[3]),
         text: pt[0],
         x: normalizedCoord(pt[1]),
         y: normalizedCoord(pt[2]),
-        size: normalizedCoord(pt[3]),
       }),
     ),
-    reverb: unpackReverb(packed[3] as PackedReverb | undefined),
+    voices: (voices || []).map((pv): Voice => {
+      const waveform: WaveformType = waveformMap[pv[0]] || 'sine';
+      const effect: PatternType | undefined = pv[5]
+        ? (effectMap[pv[5] as string] ?? undefined)
+        : undefined;
+      const blend: BlendMode = unpackBlend(pv[6] as string);
+      const border = unpackBorder(pv[7] as PackedBorder);
+      const base = {
+        blend,
+        border,
+        effect,
+        fill: unpackFill(pv[4]),
+        id: genId('v'),
+        size: normalizedCoord(pv[3]),
+        x: normalizedCoord(pv[1]),
+        y: normalizedCoord(pv[2]),
+      };
+      switch (waveform) {
+        case 'sine': {
+          return Object.assign(base, { waveform: 'sine' as const });
+        }
+        case 'pulse': {
+          return Object.assign(base, {
+            timbre: normalizedCoord((pv[8] as number) ?? 0),
+            waveform: 'pulse' as const,
+          });
+        }
+        case 'blend': {
+          return Object.assign(base, {
+            timbre: normalizedCoord((pv[8] as number) ?? 0),
+            waveform: 'blend' as const,
+          });
+        }
+      }
+    }),
   };
 }
 
 // ---- Blend pack/unpack ----
 
 const blendPackMap: Record<BlendMode, string> = {
-  'soft-light': 'S',
-  multiply: 'M',
-  screen: 'R',
-  overlay: 'O',
   'color-burn': 'B',
   difference: 'D',
   exclusion: 'X',
+  multiply: 'M',
+  overlay: 'O',
+  screen: 'R',
+  'soft-light': 'S',
 };
 
 const blendUnpackMap: Record<string, BlendMode> = Object.fromEntries(
@@ -199,22 +216,28 @@ function packBlend(blend: BlendMode): string {
 }
 
 function unpackBlend(packed: string | undefined): BlendMode {
-  if (packed && packed in blendUnpackMap) return blendUnpackMap[packed]!;
+  if (packed && packed in blendUnpackMap) {
+    return blendUnpackMap[packed]!;
+  }
   return 'soft-light';
 }
 
 // ---- Border pack/unpack ----
 
-const borderColorMap: Record<BorderColor, string> = { white: 'W', black: 'B' };
-const borderColorUnmap: Record<string, BorderColor> = { W: 'white', B: 'black' };
+const borderColorMap: Record<BorderColor, string> = { black: 'B', white: 'W' };
+const borderColorUnmap: Record<string, BorderColor> = { B: 'black', W: 'white' };
 
-function packBorder(border: Border | null): PackedBorder {
-  if (!border) return 0;
+function packBorder(border: Border | undefined): PackedBorder {
+  if (!border) {
+    return 0;
+  }
   return [borderColorMap[border.color], border.double ? 1 : 0, round3(border.thickness)];
 }
 
-function unpackBorder(packed: PackedBorder | undefined): Border | null {
-  if (!packed || !Array.isArray(packed)) return null;
+function unpackBorder(packed: PackedBorder | undefined): Border | undefined {
+  if (!packed || !Array.isArray(packed)) {
+    return;
+  }
   return {
     color: borderColorUnmap[packed[0]] ?? 'white',
     double: packed[1] === 1,
@@ -224,19 +247,23 @@ function unpackBorder(packed: PackedBorder | undefined): Border | null {
 
 // ---- Reverb pack/unpack ----
 
-const reverbStyleMap: Record<string, string> = { glow: 'G', dim: 'D' };
-const reverbStyleUnmap: Record<string, ReverbStyle> = { G: 'glow', D: 'dim' };
+const reverbStyleMap: Record<string, string> = { dim: 'D', glow: 'G' };
+const reverbStyleUnmap: Record<string, ReverbStyle> = { D: 'dim', G: 'glow' };
 
-function packReverb(reverb: Reverb | null): PackedReverb {
-  if (!reverb) return 0;
+function packReverb(reverb: Reverb | undefined): PackedReverb {
+  if (!reverb) {
+    return 0;
+  }
   return [reverbStyleMap[reverb.style]!, round3(reverb.depth)];
 }
 
-function unpackReverb(packed: PackedReverb | undefined): Reverb | null {
-  if (!packed || !Array.isArray(packed)) return null;
+function unpackReverb(packed: PackedReverb | undefined): Reverb | undefined {
+  if (!packed || !Array.isArray(packed)) {
+    return;
+  }
   return {
-    style: reverbStyleUnmap[packed[0]] ?? 'glow',
     depth: normalizedCoord(packed[1]),
+    style: reverbStyleUnmap[packed[0]] ?? 'glow',
   };
 }
 
@@ -244,30 +271,35 @@ function unpackReverb(packed: PackedReverb | undefined): Reverb | null {
 
 function packFill(f: Fill): PackedFill {
   switch (f.mode) {
-    case 'solid':
+    case 'solid': {
       return ['s', f.h, f.s, f.l];
-    case 'linear':
+    }
+    case 'linear': {
       return ['l', f.gradAngle, f.h, f.s, f.l, f.h2, f.s2, f.l2];
+    }
   }
 }
 
 function unpackFill(f: PackedFill): Fill {
   switch (f[0]) {
-    case 's':
-      return { mode: 'solid', h: f[1], s: f[2], l: f[3] } satisfies SolidFill;
-    case 'l':
+    case 's': {
+      return { h: f[1], l: f[3], mode: 'solid', s: f[2] } satisfies SolidFill;
+    }
+    case 'l': {
       return {
-        mode: 'linear',
         gradAngle: f[1],
         h: f[2],
-        s: f[3],
-        l: f[4],
         h2: f[5],
-        s2: f[6],
+        l: f[4],
         l2: f[7],
+        mode: 'linear',
+        s: f[3],
+        s2: f[6],
       } satisfies LinearFill;
-    default:
-      return { mode: 'solid', h: 200, s: 80, l: 50 };
+    }
+    default: {
+      return { h: 200, l: 50, mode: 'solid', s: 80 };
+    }
   }
 }
 

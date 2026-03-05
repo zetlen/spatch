@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import path from 'path';
 
 async function getDecayRadius(page) {
   return page.evaluate(() => {
-    const frame = document.getElementById('canvas-frame');
+    const frame = document.querySelector('#canvas-frame');
     return parseFloat(getComputedStyle(frame).borderTopLeftRadius);
   });
 }

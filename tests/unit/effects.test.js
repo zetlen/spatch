@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { computeOverlap, computeTotalOverlap } from '../../js/effects.ts';
 
 describe('computeOverlap', () => {
@@ -36,14 +36,14 @@ describe('computeOverlap', () => {
 
 describe('computeTotalOverlap', () => {
   test('single voice has 0 overlap', () => {
-    const voices = [{ x: 0.5, y: 0.5, size: 0.2 }];
+    const voices = [{ size: 0.2, x: 0.5, y: 0.5 }];
     expect(computeTotalOverlap(0, voices)).toBe(0);
   });
 
   test('two distant voices have 0 overlap', () => {
     const voices = [
-      { x: 0.1, y: 0.1, size: 0.1 },
-      { x: 0.9, y: 0.9, size: 0.1 },
+      { size: 0.1, x: 0.1, y: 0.1 },
+      { size: 0.1, x: 0.9, y: 0.9 },
     ];
     expect(computeTotalOverlap(0, voices)).toBe(0);
     expect(computeTotalOverlap(1, voices)).toBe(0);
@@ -51,15 +51,15 @@ describe('computeTotalOverlap', () => {
 
   test('two overlapping voices produce non-zero total', () => {
     const voices = [
-      { x: 0.5, y: 0.5, size: 0.3 },
-      { x: 0.55, y: 0.5, size: 0.3 },
+      { size: 0.3, x: 0.5, y: 0.5 },
+      { size: 0.3, x: 0.55, y: 0.5 },
     ];
     expect(computeTotalOverlap(0, voices)).toBeGreaterThan(0);
   });
 
   test('total overlap is clamped to 1', () => {
     // Many voices stacked on top of each other
-    const voices = Array.from({ length: 10 }, () => ({ x: 0.5, y: 0.5, size: 0.3 }));
+    const voices = Array.from({ length: 10 }, () => ({ size: 0.3, x: 0.5, y: 0.5 }));
     expect(computeTotalOverlap(0, voices)).toBe(1);
   });
 });

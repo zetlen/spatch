@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 test.describe('First-load splash', () => {
   test('splash class is present on first visit', async ({ page }) => {

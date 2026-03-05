@@ -1,27 +1,27 @@
-import { describe, test, expect } from 'bun:test';
-import { serializeState, deserializeState, _serializeToJSON } from '../../js/serialize.ts';
+import { describe, expect, test } from 'bun:test';
+import { _serializeToJSON, deserializeState, serializeState } from '../../js/serialize.ts';
 
 function makeState(overrides = {}) {
   return {
-    envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
-    voices: [],
+    envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
+    reverb: undefined,
     texts: [],
-    reverb: null,
+    voices: [],
     ...overrides,
   };
 }
 
 function makeVoice(overrides = {}) {
   return {
+    blend: 'soft-light',
+    border: undefined,
+    effect: undefined,
+    fill: { h: 200, l: 50, mode: 'solid', s: 80 },
     id: 'test1',
+    size: 0.12,
     waveform: 'sine',
     x: 0.5,
     y: 0.5,
-    size: 0.12,
-    fill: { mode: 'solid', h: 200, s: 80, l: 50 },
-    effect: null,
-    blend: 'soft-light',
-    border: null,
     ...overrides,
   };
 }
@@ -32,7 +32,7 @@ describe('serializeState / deserializeState round-trip', () => {
     const encoded = serializeState(state);
     const decoded = deserializeState(encoded);
 
-    expect(decoded).not.toBeNull();
+    expect(decoded).not.toBeUndefined();
     expect(decoded.envelope.attack).toBeCloseTo(state.envelope.attack);
     expect(decoded.envelope.decay).toBeCloseTo(state.envelope.decay);
     expect(decoded.envelope.sustain).toBeCloseTo(state.envelope.sustain);
@@ -44,14 +44,14 @@ describe('serializeState / deserializeState round-trip', () => {
   test('state with voices round-trips (values preserved, IDs regenerated)', () => {
     const state = makeState({
       voices: [
-        makeVoice({ waveform: 'sine', x: 0.3, y: 0.7, size: 0.15 }),
+        makeVoice({ size: 0.15, waveform: 'sine', x: 0.3, y: 0.7 }),
         makeVoice({
+          effect: 'stripes',
+          size: 0.2,
+          timbre: 0.5,
           waveform: 'pulse',
           x: 0.8,
           y: 0.2,
-          size: 0.2,
-          timbre: 0.5,
-          effect: 'stripes',
         }),
       ],
     });
@@ -78,8 +78,8 @@ describe('serializeState / deserializeState round-trip', () => {
   test('all waveform types survive round-trip', () => {
     const state = makeState({
       voices: [
-        makeVoice({ waveform: 'blend', timbre: 0.3 }),
-        makeVoice({ waveform: 'pulse', timbre: 0.7 }),
+        makeVoice({ timbre: 0.3, waveform: 'blend' }),
+        makeVoice({ timbre: 0.7, waveform: 'pulse' }),
         makeVoice({ waveform: 'sine' }),
       ],
     });
@@ -90,10 +90,10 @@ describe('serializeState / deserializeState round-trip', () => {
 
   test('all fill modes survive round-trip', () => {
     const solidVoice = makeVoice({
-      fill: { mode: 'solid', h: 120, s: 50, l: 60 },
+      fill: { h: 120, l: 60, mode: 'solid', s: 50 },
     });
     const linearVoice = makeVoice({
-      fill: { mode: 'linear', gradAngle: 90, h: 100, s: 50, l: 40, h2: 200, s2: 70, l2: 60 },
+      fill: { gradAngle: 90, h: 100, h2: 200, l: 40, l2: 60, mode: 'linear', s: 50, s2: 70 },
     });
 
     const state = makeState({ voices: [solidVoice, linearVoice] });
@@ -129,21 +129,21 @@ describe('serializeState / deserializeState round-trip', () => {
   test('borders survive round-trip', () => {
     const state = makeState({
       voices: [
-        makeVoice({ border: null }),
+        makeVoice({ border: undefined }),
         makeVoice({ border: { color: 'white', double: false, thickness: 0.5 } }),
         makeVoice({ border: { color: 'black', double: true, thickness: 0.8 } }),
       ],
     });
 
     const decoded = deserializeState(serializeState(state));
-    expect(decoded.voices[0].border).toBeNull();
+    expect(decoded.voices[0].border).toBeUndefined();
 
-    expect(decoded.voices[1].border).not.toBeNull();
+    expect(decoded.voices[1].border).not.toBeUndefined();
     expect(decoded.voices[1].border.color).toBe('white');
     expect(decoded.voices[1].border.double).toBe(false);
     expect(decoded.voices[1].border.thickness).toBeCloseTo(0.5);
 
-    expect(decoded.voices[2].border).not.toBeNull();
+    expect(decoded.voices[2].border).not.toBeUndefined();
     expect(decoded.voices[2].border.color).toBe('black');
     expect(decoded.voices[2].border.double).toBe(true);
     expect(decoded.voices[2].border.thickness).toBeCloseTo(0.8);
@@ -162,7 +162,7 @@ describe('serializeState / deserializeState round-trip', () => {
 
   test('text decorations round-trip', () => {
     const state = makeState({
-      texts: [{ id: 't1', text: 'Hello World', x: 0.5, y: 0.5, size: 0.06 }],
+      texts: [{ id: 't1', size: 0.06, text: 'Hello World', x: 0.5, y: 0.5 }],
     });
 
     const decoded = deserializeState(serializeState(state));
@@ -173,40 +173,40 @@ describe('serializeState / deserializeState round-trip', () => {
 
   test('max envelope values round-trip', () => {
     const state = makeState({
-      envelope: { attack: 2.0, decay: 2.0, sustain: 1.0, release: 3.0 },
+      envelope: { attack: 2, decay: 2, release: 3, sustain: 1 },
     });
     const decoded = deserializeState(serializeState(state));
-    expect(decoded.envelope.attack).toBe(2.0);
-    expect(decoded.envelope.decay).toBe(2.0);
-    expect(decoded.envelope.sustain).toBe(1.0);
-    expect(decoded.envelope.release).toBe(3.0);
+    expect(decoded.envelope.attack).toBe(2);
+    expect(decoded.envelope.decay).toBe(2);
+    expect(decoded.envelope.sustain).toBe(1);
+    expect(decoded.envelope.release).toBe(3);
   });
 });
 
 describe('deserializeState edge cases', () => {
   test('returns null for invalid input', () => {
-    expect(deserializeState('')).toBeNull();
-    expect(deserializeState('garbage')).toBeNull();
+    expect(deserializeState('')).toBeUndefined();
+    expect(deserializeState('garbage')).toBeUndefined();
   });
 
   test('returns null for empty string', () => {
-    expect(deserializeState('')).toBeNull();
+    expect(deserializeState('')).toBeUndefined();
   });
 });
 
 describe('reverb serialization', () => {
   test('null reverb round-trips', () => {
-    const state = makeState({ reverb: null });
+    const state = makeState({ reverb: undefined });
     const encoded = serializeState(state);
     const decoded = deserializeState(encoded);
-    expect(decoded.reverb).toBeNull();
+    expect(decoded.reverb).toBeUndefined();
   });
 
   test('glow reverb round-trips', () => {
     const state = makeState({ reverb: { depth: 0.6, style: 'glow' } });
     const encoded = serializeState(state);
     const decoded = deserializeState(encoded);
-    expect(decoded.reverb).not.toBeNull();
+    expect(decoded.reverb).not.toBeUndefined();
     expect(decoded.reverb.style).toBe('glow');
     expect(decoded.reverb.depth).toBeCloseTo(0.6);
   });
@@ -223,7 +223,7 @@ describe('reverb serialization', () => {
     const state = makeState();
     const encoded = serializeState(state);
     const decoded = deserializeState(encoded);
-    expect(decoded.reverb).toBeNull();
+    expect(decoded.reverb).toBeUndefined();
   });
 });
 
@@ -236,8 +236,8 @@ describe('serializeState output', () => {
   test('output is URL-safe (no special chars needing encoding)', () => {
     const encoded = serializeState(
       makeState({
+        texts: [{ id: 't1', size: 0.06, text: 'Test!@#', x: 0, y: 0 }],
         voices: [makeVoice()],
-        texts: [{ id: 't1', text: 'Test!@#', x: 0, y: 0, size: 0.06 }],
       }),
     );
     // LZ-string compressToEncodedURIComponent uses A-Z, a-z, 0-9, +, -, =
@@ -254,9 +254,9 @@ describe('serializeState output', () => {
     expect(packed[0]).toEqual([0.1, 0.2, 0.7, 0.4]);
     // Voice is [waveform, x, y, size, fill, effect, blend, border]
     expect(packed[1]).toHaveLength(1);
-    expect(packed[1][0][0]).toBe('s'); // sine
-    expect(packed[1][0][6]).toBe('S'); // soft-light blend
-    expect(packed[1][0][7]).toBe(0); // no border
+    expect(packed[1][0][0]).toBe('s'); // Sine
+    expect(packed[1][0][6]).toBe('S'); // Soft-light blend
+    expect(packed[1][0][7]).toBe(0); // No border
     // No keys, no IDs anywhere
     expect(json).not.toContain('"id"');
     expect(json).not.toContain('"waveform"');

@@ -753,7 +753,7 @@ stays the same.
 In `setSelection()`, add `toolbar.updateBottomBar()`:
 
 ```ts
-function setSelection(shapeId: string | null, decoId: string | null = null): void {
+function setSelection(shapeId: string | undefined, decoId: string | undefined = null): void {
   selectedId = shapeId;
   selectedDecoId = decoId;
   toolbar.selectedId = shapeId;

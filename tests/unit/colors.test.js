@@ -1,10 +1,10 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
-  hslToString,
-  getSwatchColor,
   getSolidFillColor,
-  hslToHex,
+  getSwatchColor,
   hexToHsl,
+  hslToHex,
+  hslToString,
 } from '../../js/colors.ts';
 
 describe('hslToString', () => {
@@ -23,20 +23,20 @@ describe('hslToString', () => {
 
 describe('getSwatchColor', () => {
   test('solid fill returns hsl string', () => {
-    const fill = { mode: 'solid', h: 200, s: 80, l: 50 };
+    const fill = { h: 200, l: 50, mode: 'solid', s: 80 };
     expect(getSwatchColor(fill)).toBe('hsl(200, 80%, 50%)');
   });
 
   test('linear fill returns linear-gradient string', () => {
     const fill = {
-      mode: 'linear',
       gradAngle: 45,
       h: 320,
-      s: 90,
-      l: 55,
       h2: 180,
-      s2: 80,
+      l: 55,
       l2: 45,
+      mode: 'linear',
+      s: 90,
+      s2: 80,
     };
     const result = getSwatchColor(fill);
     expect(result).toContain('linear-gradient(');
@@ -44,17 +44,17 @@ describe('getSwatchColor', () => {
   });
 
   // Unknown fill mode test removed: Fill is now a discriminated union,
-  // so only valid modes can be constructed.
+  // So only valid modes can be constructed.
 });
 
 describe('getSolidFillColor', () => {
   test('returns hsl string for solid fill', () => {
-    const fill = { mode: 'solid', h: 200, s: 80, l: 50 };
+    const fill = { h: 200, l: 50, mode: 'solid', s: 80 };
     expect(getSolidFillColor(fill)).toBe('hsl(200, 80%, 50%)');
   });
 
   test('returns first color hsl for linear fill', () => {
-    const fill = { mode: 'linear', h: 320, s: 90, l: 55, h2: 180, s2: 70, l2: 40, gradAngle: 45 };
+    const fill = { gradAngle: 45, h: 320, h2: 180, l: 55, l2: 40, mode: 'linear', s: 90, s2: 70 };
     expect(getSolidFillColor(fill)).toBe('hsl(320, 90%, 55%)');
   });
 });

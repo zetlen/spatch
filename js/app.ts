@@ -1,36 +1,37 @@
-// app.ts — Entry point, event wiring, render loop
+// App.ts — Entry point, event wiring, render loop
 
 import { SigilStore, UndoManager } from './state.ts';
 import { render } from './canvas.ts';
 import {
-  hitTestADSRCorner,
-  isInClippedCorner,
   calcResize,
   calcRotation,
   clampSize,
+  hitTestADSRCorner,
+  isInClippedCorner,
   voiceRotation,
 } from './shapes.ts';
 import { Toolbar } from './toolbar.ts';
-import { AudioEngine, snapYToNote, rotationToTimbre } from './audio.ts';
-import { updateCanvasBorderRadius, dragToEnvelopeValue } from './envelope.ts';
-import { saveToURL, loadFromURL } from './serialize.ts';
-import { generateEmbedSnippet, copyToClipboard } from './embed.ts';
+import { AudioEngine, rotationToTimbre, snapYToNote } from './audio.ts';
+import { dragToEnvelopeValue, updateCanvasBorderRadius } from './envelope.ts';
+import { loadFromURL, saveToURL } from './serialize.ts';
+import { copyToClipboard, generateEmbedSnippet } from './embed.ts';
 import { IDLE, type InteractionState } from './interaction.ts';
 import { initStage, setAudioLevel } from './stage.ts';
 import {
-  normalizedCoord,
-  type Voice,
-  type TextDecoration,
-  type WaveformType,
   type ADSRCorner,
   type HandleType,
   type Reverb,
+  type TextDecoration,
+  type Voice,
+  type WaveformType,
+  normalizedCoord,
 } from './types.ts';
+import { qel } from './dom.ts';
 
 // ---- Init ----
 
-const svg = document.getElementById('sigil-canvas') as unknown as SVGSVGElement;
-const canvasFrame = document.getElementById('canvas-frame')!;
+const svgCanvas = qel<SVGSVGElement>('#sigil-canvas');
+const canvasFrame = qel('#canvas-frame');
 
 const store = new SigilStore();
 const undo = new UndoManager(store);
@@ -38,22 +39,26 @@ const toolbar = new Toolbar(store, undo);
 const audio = new AudioEngine();
 
 // Pre-warm AudioContext on first user gesture. iOS Safari only allows audio
-// from touchend, click, doubleclick, or keydown — NOT pointerdown/mousedown.
+// From touchend, click, doubleclick, or keydown — NOT pointerdown/mousedown.
 {
   const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
   function onFirstGesture(): void {
     audio.warmUp();
-    for (const evt of warmUpEvents) document.removeEventListener(evt, onFirstGesture);
+    for (const evt of warmUpEvents) {
+      document.removeEventListener(evt, onFirstGesture);
+    }
   }
-  for (const evt of warmUpEvents) document.addEventListener(evt, onFirstGesture);
+  for (const evt of warmUpEvents) {
+    document.addEventListener(evt, onFirstGesture);
+  }
 }
 
 // ---- Selection state (app-level, not in store) ----
 
-let selectedId: string | null = null;
-let selectedDecoId: string | null = null;
+let selectedId: string | undefined;
+let selectedDecoId: string | undefined;
 
-function setSelection(shapeId: string | null, decoId: string | null = null): void {
+function setSelection(shapeId: string | undefined, decoId: string | undefined = undefined): void {
   selectedId = shapeId;
   selectedDecoId = decoId;
   toolbar.selectedId = shapeId;
@@ -61,12 +66,12 @@ function setSelection(shapeId: string | null, decoId: string | null = null): voi
   toolbar.updateBottomBar();
 }
 
-function getSelected(): Voice | null {
-  return selectedId ? (store.getVoice(selectedId) ?? null) : null;
+function getSelected(): Voice | undefined {
+  return selectedId ? (store.getVoice(selectedId) ?? undefined) : undefined;
 }
 
-function getSelectedDeco(): TextDecoration | null {
-  return selectedDecoId ? (store.getText(selectedDecoId) ?? null) : null;
+function getSelectedDeco(): TextDecoration | undefined {
+  return selectedDecoId ? (store.getText(selectedDecoId) ?? undefined) : undefined;
 }
 
 // ---- Check for saved state in URL ----
@@ -88,7 +93,7 @@ if (splashActive) {
 
 function updateFrameShadow(
   frameEl: HTMLElement,
-  reverb: Reverb | null,
+  reverb: Reverb | undefined,
   canvasSize: number,
   audioLevel: number,
 ): void {
@@ -106,7 +111,7 @@ function updateFrameShadow(
   }
 
   if (audioLevel > 0.001) {
-    // sqrt curve keeps shadow visible longer during fade-out
+    // Sqrt curve keeps shadow visible longer during fade-out
     const t = Math.sqrt(Math.min(1, audioLevel * 3));
     const blur = 12 + t * 36;
     const spread = 2 + t * 14;
@@ -124,12 +129,12 @@ function updateFrameShadow(
 let needsRender = true;
 
 function resizeCanvas(): void {
-  const area = document.getElementById('canvas-area')!;
+  const area = qel('#canvas-area');
   const maxH = area.clientHeight - 24;
   const maxW = area.clientWidth - 24;
   const size = Math.min(maxH, maxW, 800);
 
-  const wrap = document.getElementById('canvas-wrap')!;
+  const wrap = qel('#canvas-wrap');
   wrap.style.width = size + 'px';
   wrap.style.height = size + 'px';
 
@@ -144,24 +149,24 @@ initStage();
 
 // ---- Play state (hoisted for renderLoop / keyboard handler) ----
 
-const playBtn = document.getElementById('btn-play')!;
-const playFan = document.getElementById('play-fan')!;
-const fanLock = playFan.querySelector('.fan-lock')!;
-const fanLoop = playFan.querySelector('.fan-loop')! as HTMLElement;
+const playBtn = qel('#btn-play');
+const playFan = qel('#play-fan');
+const fanLock = qel('.fan-lock', playFan);
+const fanLoop = qel('.fan-loop', playFan);
 
-const playModeLock = document.getElementById('play-mode-lock')!;
-const playModeLoop = document.getElementById('play-mode-loop')!;
+const playModeLock = qel('#play-mode-lock');
+const playModeLoop = qel('#play-mode-loop');
 
 let playState = 'idle'; // 'idle' | 'latched' | 'looping'
 let gestureActive = false;
-let gestureTimerId: ReturnType<typeof setTimeout> | null = null;
-let gesturePointerId: number | null = null;
-let lastFanInfo: { zone: string; ms?: number; pull?: number } | null = null;
+let gestureTimerId: ReturnType<typeof setTimeout> | undefined;
+let gesturePointerId: number | undefined;
+let lastFanInfo: { zone: string; ms?: number; pull?: number } | undefined;
 let loopHoldMs = 500;
-let loopTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let loopTimeoutId: ReturnType<typeof setTimeout> | undefined;
 let loopCycleStart = 0;
 let loopCycleDuration = 0;
-let releaseGlowTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let releaseGlowTimeoutId: ReturnType<typeof setTimeout> | undefined;
 let playGeneration = 0;
 
 // ---- Render loop ----
@@ -177,9 +182,9 @@ store.onChange(() => {
 
 function renderLoop(): void {
   if (needsRender || audio.isPlaying) {
-    render(svg, store.data, selectedId, selectedDecoId);
+    render(svgCanvas, store.data, selectedId, selectedDecoId);
 
-    const wrap = document.getElementById('canvas-wrap')!;
+    const wrap = qel('#canvas-wrap');
     const displaySize = parseInt(wrap.style.width) || 800;
     updateCanvasBorderRadius(canvasFrame, store.data.envelope, displaySize);
     updateFrameShadow(canvasFrame, store.data.reverb, displaySize, audio.getLevel());
@@ -207,11 +212,13 @@ interface NormCoords {
 }
 
 function svgCoordsFromClient(clientX: number, clientY: number): NormCoords {
-  const pt = svg.createSVGPoint();
+  const pt = svgCanvas.createSVGPoint();
   pt.x = clientX;
   pt.y = clientY;
-  const ctm = svg.getScreenCTM();
-  if (!ctm) return { nx: 0, ny: 0 };
+  const ctm = svgCanvas.getScreenCTM();
+  if (!ctm) {
+    return { nx: 0, ny: 0 };
+  }
   const svgPt = pt.matrixTransform(ctm.inverse());
   return { nx: svgPt.x, ny: svgPt.y };
 }
@@ -241,32 +248,41 @@ const INV_SQRT2 = 1 / Math.sqrt(2);
 
 function cornerDiagonal(corner: ADSRCorner): { dx: number; dy: number } {
   switch (corner) {
-    case 'attack':
+    case 'attack': {
       return { dx: 1, dy: -1 };
-    case 'decay':
+    }
+    case 'decay': {
       return { dx: 1, dy: 1 };
-    case 'sustain':
+    }
+    case 'sustain': {
       return { dx: -1, dy: 1 };
-    case 'release':
+    }
+    case 'release': {
       return { dx: -1, dy: -1 };
+    }
   }
 }
 
 function envelopeValueToDist(corner: ADSRCorner, val: number, canvasSize: number): number {
-  const maxR = canvasSize * 0.15; // matches MAX_RADIUS_RATIO in envelope.ts
+  const maxR = canvasSize * 0.15; // Matches MAX_RADIUS_RATIO in envelope.ts
   switch (corner) {
     case 'attack':
-    case 'decay':
-      return (val / 2.0) * maxR;
-    case 'sustain':
+    case 'decay': {
+      return (val / 2) * maxR;
+    }
+    case 'sustain': {
       return val * maxR;
-    case 'release':
-      return (val / 3.0) * maxR;
+    }
+    case 'release': {
+      return (val / 3) * maxR;
+    }
   }
 }
 
 function handleADSRDrag(nx: number, ny: number): void {
-  if (interaction.mode !== 'adsr') return;
+  if (interaction.mode !== 'adsr') {
+    return;
+  }
   const diag = cornerDiagonal(interaction.corner);
   const moveDx = nx - interaction.startPx;
   const moveDy = ny - interaction.startPy;
@@ -285,7 +301,7 @@ function handleADSRDrag(nx: number, ny: number): void {
 
 toolbar.onToolChange = (tool: string) => {
   if (tool === 'deselect') {
-    setSelection(null);
+    setSelection(undefined);
     needsRender = true;
   }
 };
@@ -314,21 +330,23 @@ function pointerAngle(a: { x: number; y: number }, b: { x: number; y: number }):
 
 // ---- Click stage background to deselect ----
 
-const canvasArea = document.getElementById('canvas-area')!;
+const canvasArea = qel('#canvas-area');
 canvasArea.addEventListener('pointerdown', (e: PointerEvent) => {
   const target = e.target as HTMLElement;
   if (target === canvasArea) {
-    setSelection(null);
+    setSelection(undefined);
     needsRender = true;
   }
 });
 
 // ---- Pointer events (all on canvasWrap) ----
 
-const canvasWrap = document.getElementById('canvas-wrap')!;
+const canvasWrap = qel('#canvas-wrap');
 
 canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
-  if (splashActive) return;
+  if (splashActive) {
+    return;
+  }
   e.preventDefault();
 
   const { nx, ny } = svgCoords(e);
@@ -346,24 +364,28 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
 
     // For pinch, use the currently selected voice as target
     const shapeId = selectedId;
-    if (!shapeId) return;
+    if (!shapeId) {
+      return;
+    }
 
     const voice = store.getVoice(shapeId);
-    if (!voice) return;
+    if (!voice) {
+      return;
+    }
 
     setSelection(shapeId);
     undo.snapshot();
 
     const initRotation = voiceRotation(voice);
     interaction = {
+      initAngle: pointerAngle(posA, posB),
+      initDist: pointerDist(posA, posB),
+      initRotation,
+      initSize: voice.size,
       mode: 'pinch-rotate',
       pointerA: idA,
       pointerB: idB,
       positions: new Map(activePointers),
-      initDist: pointerDist(posA, posB),
-      initAngle: pointerAngle(posA, posB),
-      initSize: voice.size,
-      initRotation,
       shapeId,
     };
     canvasWrap.setPointerCapture(idA);
@@ -394,8 +416,8 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
     // 1. Check handles on selected voice (SVG native hit testing)
     const handleEl = (e.target as Element).closest?.('[data-handle]');
     const handle = handleEl
-      ? (((handleEl as HTMLElement).dataset.handle as HandleType) ?? null)
-      : null;
+      ? (((handleEl as HTMLElement).dataset.handle as HandleType) ?? undefined)
+      : undefined;
 
     if (handle) {
       const selVoice = getSelected();
@@ -408,10 +430,10 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
         }
         undo.snapshot();
         interaction = {
-          mode: 'resizing',
-          pointerId: e.pointerId,
           handle,
+          mode: 'resizing',
           origin: { size: selVoice.size },
+          pointerId: e.pointerId,
           startPx: nx,
           startPy: ny,
         };
@@ -423,25 +445,25 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
       const selDeco = getSelectedDeco();
       if (selDeco) {
         undo.snapshot();
-        const textEl = svg.querySelector(`text[data-deco-id="${selDeco.id}"]`);
+        const textEl = svgCanvas.querySelector(`text[data-deco-id="${selDeco.id}"]`);
         let bounds;
         if (textEl) {
           try {
             const bbox = (textEl as SVGTextElement).getBBox();
-            bounds = { x: bbox.x, y: bbox.y, w: bbox.width, h: bbox.height };
+            bounds = { h: bbox.height, w: bbox.width, x: bbox.x, y: bbox.y };
           } catch {
-            bounds = null;
+            bounds = undefined;
           }
         }
         if (bounds) {
           interaction = {
-            mode: 'deco-resizing',
-            pointerId: e.pointerId,
             handle,
+            mode: 'deco-resizing',
             origin: {
-              size: selDeco.size,
               bounds,
+              size: selDeco.size,
             },
+            pointerId: e.pointerId,
           };
           canvasWrap.setPointerCapture(e.pointerId);
           return;
@@ -451,7 +473,7 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
 
     // 2. Hit test voices (SVG native)
     const voiceEl = (e.target as Element).closest?.('[data-voice-id]');
-    const hitId = voiceEl ? ((voiceEl as HTMLElement).dataset.voiceId ?? null) : null;
+    const hitId = voiceEl ? ((voiceEl as HTMLElement).dataset.voiceId ?? undefined) : undefined;
     if (hitId) {
       setSelection(hitId);
       toolbar.syncToSelectedShape();
@@ -459,8 +481,8 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
       const voice = store.getVoice(hitId)!;
       interaction = {
         mode: 'dragging',
-        pointerId: e.pointerId,
         origin: { x: voice.x, y: voice.y },
+        pointerId: e.pointerId,
         startNx: nx,
         startNy: ny,
       };
@@ -471,15 +493,15 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
 
     // 3. Hit test text decorations (SVG native)
     const decoEl = (e.target as Element).closest?.('[data-deco-id]');
-    const hitDecoId = decoEl ? ((decoEl as HTMLElement).dataset.decoId ?? null) : null;
+    const hitDecoId = decoEl ? ((decoEl as HTMLElement).dataset.decoId ?? undefined) : undefined;
     if (hitDecoId) {
-      setSelection(null, hitDecoId);
+      setSelection(undefined, hitDecoId);
       undo.snapshot();
       const deco = store.getText(hitDecoId)!;
       interaction = {
         mode: 'deco-dragging',
-        pointerId: e.pointerId,
         origin: { x: deco.x, y: deco.y },
+        pointerId: e.pointerId,
         startNx: nx,
         startNy: ny,
       };
@@ -494,10 +516,10 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
   if (adsrCorner) {
     undo.snapshot();
     interaction = {
-      mode: 'adsr',
-      pointerId: e.pointerId,
       corner: adsrCorner,
+      mode: 'adsr',
       origin: { ...store.data.envelope },
+      pointerId: e.pointerId,
       startPx: nx,
       startPy: ny,
     };
@@ -507,7 +529,7 @@ canvasWrap.addEventListener('pointerdown', (e: PointerEvent) => {
 
   // 6. Deselect
   if (!inClippedCorner) {
-    setSelection(null);
+    setSelection(undefined);
     needsRender = true;
   }
 });
@@ -520,7 +542,9 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
     interaction.positions.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const posA = interaction.positions.get(interaction.pointerA);
     const posB = interaction.positions.get(interaction.pointerB);
-    if (!posA || !posB) return;
+    if (!posA || !posB) {
+      return;
+    }
 
     const dist = pointerDist(posA, posB);
     const angle = pointerAngle(posA, posB);
@@ -528,7 +552,9 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
     const newSize = clampSize(interaction.initSize * scale);
 
     const voice = store.getVoice(interaction.shapeId);
-    if (!voice) return;
+    if (!voice) {
+      return;
+    }
 
     if (voice.waveform === 'sine') {
       store.updateVoice(interaction.shapeId, { size: newSize });
@@ -549,14 +575,17 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
     interaction.mode !== 'idle' &&
     'pointerId' in interaction &&
     interaction.pointerId !== e.pointerId
-  )
+  ) {
     return;
+  }
 
   const { nx, ny } = svgCoords(e);
 
   if (interaction.mode === 'dragging') {
     const voice = getSelected();
-    if (!voice) return;
+    if (!voice) {
+      return;
+    }
     const dx = nx - interaction.startNx;
     const dy = ny - interaction.startNy;
     store.updateVoice(voice.id, {
@@ -568,7 +597,9 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
 
   if (interaction.mode === 'resizing') {
     const voice = getSelected();
-    if (!voice) return;
+    if (!voice) {
+      return;
+    }
     const rotDeg = voiceRotation(voice);
     const rotRad = (rotDeg * Math.PI) / 180;
     const dnx = nx - interaction.startPx;
@@ -590,8 +621,12 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
 
   if (interaction.mode === 'rotating') {
     const voice = getSelected();
-    if (!voice) return;
-    if (voice.waveform === 'sine') return;
+    if (!voice) {
+      return;
+    }
+    if (voice.waveform === 'sine') {
+      return;
+    }
     const rotation = calcRotation(voice, nx, ny, 1);
     const timbre = rotationToTimbre(rotation, voice.waveform);
     store.updateVoice(voice.id, { timbre: normalizedCoord(timbre) });
@@ -605,7 +640,9 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
 
   if (interaction.mode === 'deco-dragging') {
     const deco = getSelectedDeco();
-    if (!deco) return;
+    if (!deco) {
+      return;
+    }
     const dnx = nx - interaction.startNx;
     const dny = ny - interaction.startNy;
     store.updateText(deco.id, {
@@ -617,7 +654,9 @@ canvasWrap.addEventListener('pointermove', (e: PointerEvent) => {
 
   if (interaction.mode === 'deco-resizing') {
     const deco = getSelectedDeco();
-    if (!deco) return;
+    if (!deco) {
+      return;
+    }
     const { bounds, size } = interaction.origin;
     const cx = bounds.x + bounds.w / 2;
     const cy = bounds.y + bounds.h / 2;
@@ -647,8 +686,9 @@ function handlePointerEnd(e: PointerEvent): void {
     interaction.mode !== 'idle' &&
     'pointerId' in interaction &&
     interaction.pointerId !== e.pointerId
-  )
+  ) {
     return;
+  }
 
   interaction = IDLE;
 }
@@ -658,12 +698,12 @@ canvasWrap.addEventListener('pointercancel', handlePointerEnd);
 
 // ---- Clipboard for copy/paste ----
 
-let clipboard: Voice | null = null;
+let clipboard: Voice | undefined;
 
 // ---- Share menu (hoisted for keyboard handler) ----
 
-const shareBtn = document.getElementById('btn-share')!;
-const shareMenu = document.getElementById('share-menu')!;
+const shareBtn = qel('#btn-share');
+const shareMenu = qel('#share-menu');
 
 // ---- Keyboard shortcuts ----
 
@@ -672,8 +712,9 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   if (
     (e.target as HTMLElement).tagName === 'INPUT' ||
     (e.target as HTMLElement).tagName === 'TEXTAREA'
-  )
+  ) {
     return;
+  }
 
   const mod = e.ctrlKey || e.metaKey;
 
@@ -681,17 +722,19 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (selectedId) {
       undo.snapshot();
       store.removeVoice(selectedId);
-      setSelection(null);
+      setSelection(undefined);
     } else if (selectedDecoId) {
       undo.snapshot();
       store.removeText(selectedDecoId);
-      setSelection(null);
+      setSelection(undefined);
     }
   }
   if (e.key === 'c' && mod) {
     if (selectedId) {
       const voice = store.getVoice(selectedId);
-      if (voice) clipboard = JSON.parse(JSON.stringify(voice));
+      if (voice) {
+        clipboard = structuredClone(voice);
+      }
     }
   }
   if (e.key === 'v' && mod) {
@@ -720,15 +763,18 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   }
   if (e.key === 'z' && mod) {
     e.preventDefault();
-    if (e.shiftKey) undo.redo();
-    else undo.undo();
+    if (e.shiftKey) {
+      undo.redo();
+    } else {
+      undo.undo();
+    }
   }
   if (e.key === 'y' && mod) {
     e.preventDefault();
     undo.redo();
   }
   if (e.key === 'Escape') {
-    setSelection(null);
+    setSelection(undefined);
     toolbar.currentTool = 'select';
     toolbar._updateToolActive();
     shareMenu.classList.add('hidden');
@@ -740,7 +786,9 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   }
   if (e.key === ' ') {
     e.preventDefault();
-    if (e.repeat || splashActive) return;
+    if (e.repeat || splashActive) {
+      return;
+    }
     if (playState !== 'idle') {
       stopPlayback();
     } else if (store.data.voices.length > 0) {
@@ -768,14 +816,14 @@ function setPlayIcon(playing: boolean): void {
   svg.setAttribute('height', '20');
   const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
   use.setAttribute('href', `#${symbol}`);
-  svg.appendChild(use);
+  svg.append(use);
   playBtn.querySelector('.play-icon')!.replaceWith(svg);
 }
 
 async function startPlayback(): Promise<void> {
-  if (releaseGlowTimeoutId != null) {
+  if (releaseGlowTimeoutId != undefined) {
     clearTimeout(releaseGlowTimeoutId);
-    releaseGlowTimeoutId = null;
+    releaseGlowTimeoutId = undefined;
   }
   const gen = playGeneration;
   await audio.play(store.data, store.data.envelope);
@@ -791,9 +839,9 @@ async function startPlayback(): Promise<void> {
 
 function stopPlayback(): void {
   playGeneration++;
-  if (loopTimeoutId != null) {
+  if (loopTimeoutId != undefined) {
     clearTimeout(loopTimeoutId);
-    loopTimeoutId = null;
+    loopTimeoutId = undefined;
   }
   audio.release(store.data.envelope);
   playBtn.classList.remove('playing', 'looping');
@@ -803,7 +851,7 @@ function stopPlayback(): void {
   updatePlayIndicators();
   const releaseMs = store.data.envelope.release * 1000 + 100;
   releaseGlowTimeoutId = setTimeout(() => {
-    releaseGlowTimeoutId = null;
+    releaseGlowTimeoutId = undefined;
     needsRender = true;
   }, releaseMs);
 }
@@ -840,12 +888,16 @@ const FAN_DELAY_MS = 250;
 
 function fanZone(clientY: number): { zone: string; ms?: number; pull?: number } {
   const r = playBtn.getBoundingClientRect();
-  const dy = clientY - (r.top + r.height / 2); // positive = below button
-  if (dy < LOCK_MIN) return { zone: 'button' };
-  if (dy < LOCK_MAX) return { zone: 'lock' };
+  const dy = clientY - (r.top + r.height / 2); // Positive = below button
+  if (dy < LOCK_MIN) {
+    return { zone: 'button' };
+  }
+  if (dy < LOCK_MAX) {
+    return { zone: 'lock' };
+  }
   const t = Math.min(1, Math.max(0, (dy - LOOP_MIN) / LOOP_RANGE));
   const ms = Math.round((LOOP_MS_MIN + t * (LOOP_MS_MAX - LOOP_MS_MIN)) / 50) * 50;
-  return { zone: 'loop', ms, pull: Math.max(0, dy - LOOP_MIN) };
+  return { ms, pull: Math.max(0, dy - LOOP_MIN), zone: 'loop' };
 }
 
 function openFan(): void {
@@ -855,7 +907,7 @@ function openFan(): void {
 
 function closeFan(): void {
   gestureActive = false;
-  lastFanInfo = null;
+  lastFanInfo = undefined;
   playFan.classList.remove('open');
   fanLock.classList.remove('hot');
   fanLoop.classList.remove('hot', 'dragging');
@@ -865,8 +917,8 @@ function closeFan(): void {
 playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
   e.preventDefault();
   // Eagerly warm up AudioContext — even though pointerdown isn't a qualifying
-  // gesture on iOS Safari, creating the context now means it's ready when
-  // touchend/click fires and actually unlocks it.
+  // Gesture on iOS Safari, creating the context now means it's ready when
+  // Touchend/click fires and actually unlocks it.
   audio.warmUp();
 
   // If already playing (latched or looping), stop
@@ -875,26 +927,32 @@ playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
     return;
   }
 
-  if (store.data.voices.length === 0) return;
+  if (store.data.voices.length === 0) {
+    return;
+  }
 
   gesturePointerId = e.pointerId;
-  lastFanInfo = null;
+  lastFanInfo = undefined;
   playBtn.setPointerCapture(e.pointerId);
 
   // Set up gesture tracking synchronously -- before audio init
   gestureTimerId = setTimeout(() => {
-    gestureTimerId = null;
-    if (gesturePointerId != null) openFan();
+    gestureTimerId = undefined;
+    if (gesturePointerId != undefined) {
+      openFan();
+    }
   }, FAN_DELAY_MS);
 
   // Track early drag to open fan immediately
   const earlyMove = (me: PointerEvent) => {
-    if (me.pointerId !== gesturePointerId) return;
+    if (me.pointerId !== gesturePointerId) {
+      return;
+    }
     const r = playBtn.getBoundingClientRect();
-    const dy = me.clientY - (r.top + r.height / 2); // positive = below button
-    if (dy > 10 && gestureTimerId != null) {
+    const dy = me.clientY - (r.top + r.height / 2); // Positive = below button
+    if (dy > 10 && gestureTimerId != undefined) {
       clearTimeout(gestureTimerId);
-      gestureTimerId = null;
+      gestureTimerId = undefined;
       openFan();
       playBtn.removeEventListener('pointermove', earlyMove);
     }
@@ -915,7 +973,9 @@ playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
 });
 
 playBtn.addEventListener('pointermove', (e: PointerEvent) => {
-  if (!gestureActive || e.pointerId !== gesturePointerId) return;
+  if (!gestureActive || e.pointerId !== gesturePointerId) {
+    return;
+  }
 
   const info = fanZone(e.clientY);
   lastFanInfo = info;
@@ -932,18 +992,20 @@ playBtn.addEventListener('pointermove', (e: PointerEvent) => {
 });
 
 playBtn.addEventListener('pointerup', (e: PointerEvent) => {
-  if (e.pointerId !== gesturePointerId) return;
+  if (e.pointerId !== gesturePointerId) {
+    return;
+  }
 
-  if (gestureTimerId != null) {
+  if (gestureTimerId != undefined) {
     clearTimeout(gestureTimerId);
-    gestureTimerId = null;
+    gestureTimerId = undefined;
   }
 
   if (!gestureActive) {
     // Quick click -- normal release
     stopPlayback();
     closeFan();
-    gesturePointerId = null;
+    gesturePointerId = undefined;
     return;
   }
 
@@ -965,38 +1027,41 @@ playBtn.addEventListener('pointerup', (e: PointerEvent) => {
   }
 
   closeFan();
-  gesturePointerId = null;
+  gesturePointerId = undefined;
 });
 
 playBtn.addEventListener('lostpointercapture', (e: PointerEvent) => {
-  // pointerup already handled this gesture
-  if (gesturePointerId == null) return;
-  if (e.pointerId !== gesturePointerId) return;
+  // Pointerup already handled this gesture
+  if (gesturePointerId == undefined) {
+    return;
+  }
+  if (e.pointerId !== gesturePointerId) {
+    return;
+  }
 
-  if (gestureTimerId != null) {
+  if (gestureTimerId != undefined) {
     clearTimeout(gestureTimerId);
-    gestureTimerId = null;
+    gestureTimerId = undefined;
   }
 
   if (audio.isPlaying && playState === 'idle') {
     stopPlayback();
   }
   closeFan();
-  gesturePointerId = null;
+  gesturePointerId = undefined;
 });
 
 // ---- Splash interaction ----
 
 if (splashActive) {
-  const canvasArea = document.getElementById('canvas-area')!;
   const MIN_SUSTAIN_MS = 2000;
   let splashDownTime = 0;
   let splashPointerDown = false;
 
   function splashReveal(delayAudioRelease: number, playReady: Promise<void>): void {
     const FADE_DURATION = 0.5;
-    const topBar = document.getElementById('toolbar-top')!;
-    const botBar = document.getElementById('toolbar-bottom')!;
+    const topBar = qel('#toolbar-top');
+    const botBar = qel('#toolbar-bottom');
 
     // Fast fixed fade — starts immediately, eases out
     topBar.style.transitionDuration = `${FADE_DURATION}s`;
@@ -1010,7 +1075,7 @@ if (splashActive) {
     localStorage.setItem(splashKey, '1');
 
     // Release audio: wait for play() to finish first, otherwise release()
-    // fires while isPlaying is still false and becomes a no-op.
+    // Fires while isPlaying is still false and becomes a no-op.
     const doRelease = async () => {
       try {
         await playReady;
@@ -1029,7 +1094,7 @@ if (splashActive) {
       playState = 'idle';
       const releaseMs = store.data.envelope.release * 1000 + 100;
       releaseGlowTimeoutId = setTimeout(() => {
-        releaseGlowTimeoutId = null;
+        releaseGlowTimeoutId = undefined;
         needsRender = true;
       }, releaseMs);
     };
@@ -1054,21 +1119,25 @@ if (splashActive) {
   }
 
   function splashDown(_e: PointerEvent): void {
-    if (splashPointerDown) return; // Ignore multi-touch
+    if (splashPointerDown) {
+      return;
+    } // Ignore multi-touch
     splashPointerDown = true;
     splashDownTime = Date.now();
     // Do NOT preventDefault() — iOS Safari cancels click/touchend if we do,
-    // and those are the only events that can unlock audio.
+    // And those are the only events that can unlock audio.
   }
 
   function splashUp(): void {
-    if (!splashPointerDown) return;
+    if (!splashPointerDown) {
+      return;
+    }
     splashPointerDown = false;
     removeSplashListeners();
 
-    // iOS Safari only unlocks audio from touchend/click — NOT pointerup.
+    // IOS Safari only unlocks audio from touchend/click — NOT pointerup.
     // Warm up + start playback here so AudioContext init happens in a
-    // gesture that Safari accepts.
+    // Gesture that Safari accepts.
     audio.warmUp();
     const playReady = startPlayback();
 
@@ -1087,19 +1156,21 @@ if (splashActive) {
   }
 
   canvasArea.addEventListener('pointerdown', splashDown);
-  // iOS Safari: touchend is the qualifying gesture for audio unlock.
+  // IOS Safari: touchend is the qualifying gesture for audio unlock.
   // Desktop fallback: click fires after pointerup on non-touch devices.
   // Do NOT use pointerup — it fires before touchend on iOS, racing the
-  // audio unlock and leaving the AudioContext suspended.
+  // Audio unlock and leaving the AudioContext suspended.
   canvasArea.addEventListener('touchend', splashUp);
   canvasArea.addEventListener('click', splashUp);
 }
 
 // ---- Auto-save to URL (debounced) ----
 
-let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+let saveTimeout: ReturnType<typeof setTimeout> | undefined;
 function debouncedSave(): void {
-  if (saveTimeout) clearTimeout(saveTimeout);
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+  }
   saveTimeout = setTimeout(() => {
     if (store.data.voices.length > 0 || store.data.texts.length > 0) {
       saveToURL(store.data);
@@ -1129,13 +1200,15 @@ document.addEventListener('click', (e: MouseEvent) => {
 });
 
 shareMenu.addEventListener('click', async (e: MouseEvent) => {
-  const btn = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
-  if (!btn) return;
+  const btn = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | undefined;
+  if (!btn) {
+    return;
+  }
 
-  const action = btn.dataset.action;
+  const { action } = btn.dataset;
 
   if (action === 'share') {
-    await copyToClipboard(window.location.href);
+    await copyToClipboard(globalThis.location.href);
   } else if (action === 'embed') {
     const snippet = generateEmbedSnippet(store.data);
     await copyToClipboard(snippet);
@@ -1148,7 +1221,7 @@ shareMenu.addEventListener('click', async (e: MouseEvent) => {
   checkSvg.setAttribute('height', '20');
   const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
   use.setAttribute('href', '#tabler-check');
-  checkSvg.appendChild(use);
+  checkSvg.append(use);
   origSvg.replaceWith(checkSvg);
   setTimeout(() => {
     checkSvg.replaceWith(origSvg);
@@ -1157,22 +1230,24 @@ shareMenu.addEventListener('click', async (e: MouseEvent) => {
 
 // ---- New button ----
 
-document.getElementById('btn-new')!.addEventListener('click', () => {
-  if (store.data.voices.length === 0 && store.data.texts.length === 0) return;
+qel('#btn-new').addEventListener('click', () => {
+  if (store.data.voices.length === 0 && store.data.texts.length === 0) {
+    return;
+  }
   undo.snapshot();
-  for (const v of store.data.voices.slice()) {
+  for (const v of store.data.voices) {
     store.removeVoice(v.id);
   }
-  for (const d of store.data.texts.slice()) {
+  for (const d of store.data.texts) {
     store.removeText(d.id);
   }
-  setSelection(null);
+  setSelection(undefined);
   needsRender = true;
 });
 
 // ---- Splash preview button ----
 
-document.getElementById('btn-splash')!.addEventListener('click', () => {
+qel('#btn-splash').addEventListener('click', () => {
   localStorage.removeItem(splashKey);
   location.reload();
 });

@@ -1,18 +1,18 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { AudioEngine } from '../../js/audio.ts';
 
 // Minimal Web Audio API stubs for testing voice reconciliation logic.
 // We only need enough to let _buildVoice wire up nodes and updateVoices
-// track shape IDs — no actual audio output.
+// Track shape IDs — no actual audio output.
 
 function createStubAudioParam(initial = 0) {
   return {
-    value: initial,
+    cancelScheduledValues() {},
+    linearRampToValueAtTime() {},
     setValueAtTime(v) {
       this.value = v;
     },
-    linearRampToValueAtTime() {},
-    cancelScheduledValues() {},
+    value: initial,
   };
 }
 
@@ -26,74 +26,31 @@ function createStubNode(extraProps = {}) {
 
 function createStubOscillator() {
   return {
-    type: 'sine',
-    frequency: createStubAudioParam(440),
-    detune: createStubAudioParam(0),
     connect() {},
+    detune: createStubAudioParam(0),
     disconnect() {},
+    frequency: createStubAudioParam(440),
     start() {},
     stop() {},
+    type: 'sine',
   };
 }
 
 function createStubAudioContext() {
   return {
-    currentTime: 0,
-    sampleRate: 44100,
-    state: 'running',
-    destination: createStubNode(),
-    resume() {
-      return Promise.resolve();
-    },
-    createGain() {
-      return createStubNode({ gain: createStubAudioParam(1) });
-    },
-    createOscillator() {
-      return createStubOscillator();
-    },
-    createBiquadFilter() {
-      return createStubNode({
-        type: 'lowpass',
-        frequency: createStubAudioParam(350),
-        Q: createStubAudioParam(1),
-        gain: createStubAudioParam(0),
-      });
-    },
-    createStereoPanner() {
-      return createStubNode({ pan: createStubAudioParam(0) });
-    },
-    createDynamicsCompressor() {
-      return createStubNode({
-        threshold: createStubAudioParam(-24),
-        knee: createStubAudioParam(30),
-        ratio: createStubAudioParam(12),
-        attack: createStubAudioParam(0.003),
-        release: createStubAudioParam(0.25),
-      });
-    },
-    createConstantSource() {
-      return {
-        offset: createStubAudioParam(0),
-        connect() {},
-        disconnect() {},
-        start() {},
-        stop() {},
-      };
-    },
-    createWaveShaper() {
-      return createStubNode({ curve: null, oversample: 'none' });
-    },
-    createDelay() {
-      return createStubNode({ delayTime: createStubAudioParam(0) });
-    },
     createAnalyser() {
       return createStubNode({
         fftSize: 256,
         getFloatTimeDomainData() {},
       });
     },
-    createConvolver() {
-      return createStubNode({ buffer: null });
+    createBiquadFilter() {
+      return createStubNode({
+        Q: createStubAudioParam(1),
+        frequency: createStubAudioParam(350),
+        gain: createStubAudioParam(0),
+        type: 'lowpass',
+      });
     },
     createBuffer(channels, length, sampleRate) {
       const channelData = [];
@@ -101,28 +58,71 @@ function createStubAudioContext() {
         channelData.push(new Float32Array(length));
       }
       return {
-        numberOfChannels: channels,
-        length,
-        sampleRate,
         getChannelData(ch) {
           return channelData[ch];
         },
+        length,
+        numberOfChannels: channels,
+        sampleRate,
       };
     },
+    createConstantSource() {
+      return {
+        connect() {},
+        disconnect() {},
+        offset: createStubAudioParam(0),
+        start() {},
+        stop() {},
+      };
+    },
+    createConvolver() {
+      return createStubNode({ buffer: undefined });
+    },
+    createDelay() {
+      return createStubNode({ delayTime: createStubAudioParam(0) });
+    },
+    createDynamicsCompressor() {
+      return createStubNode({
+        attack: createStubAudioParam(0.003),
+        knee: createStubAudioParam(30),
+        ratio: createStubAudioParam(12),
+        release: createStubAudioParam(0.25),
+        threshold: createStubAudioParam(-24),
+      });
+    },
+    createGain() {
+      return createStubNode({ gain: createStubAudioParam(1) });
+    },
+    createOscillator() {
+      return createStubOscillator();
+    },
+    createStereoPanner() {
+      return createStubNode({ pan: createStubAudioParam(0) });
+    },
+    createWaveShaper() {
+      return createStubNode({ curve: undefined, oversample: 'none' });
+    },
+    currentTime: 0,
+    destination: createStubNode(),
+    resume() {
+      return Promise.resolve();
+    },
+    sampleRate: 44_100,
+    state: 'running',
   };
 }
 
 function makeVoice(id, waveform = 'sine', overrides = {}) {
   const base = {
+    blend: 'soft-light',
+    border: undefined,
+    effect: undefined,
+    fill: { h: 200, l: 50, mode: 'solid', s: 80 },
     id,
+    size: 0.12,
     waveform,
     x: 0.5,
     y: 0.5,
-    size: 0.12,
-    fill: { mode: 'solid', h: 200, s: 80, l: 50 },
-    effect: null,
-    blend: 'soft-light',
-    border: null,
     ...overrides,
   };
   if (waveform === 'pulse' || waveform === 'blend') {
@@ -133,10 +133,10 @@ function makeVoice(id, waveform = 'sine', overrides = {}) {
 
 function makeSigilState(voices) {
   return {
-    voices,
+    envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
+    reverb: undefined,
     texts: [],
-    envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
-    reverb: null,
+    voices,
   };
 }
 
@@ -168,7 +168,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine.updateVoices(makeSigilState([voiceA, voiceB]));
 
     expect(engine.activeVoices.length).toBe(2);
-    expect(engine.activeVoices.map((v) => v.shapeId).sort()).toEqual(['a', 'b']);
+    expect(engine.activeVoices.map((v) => v.shapeId).toSorted()).toEqual(['a', 'b']);
   });
 
   test('deleted shapes lose voices during playback', async () => {
@@ -195,7 +195,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine.updateVoices(makeSigilState([voiceB, voiceC]));
 
     expect(engine.activeVoices.length).toBe(2);
-    const ids = engine.activeVoices.map((v) => v.shapeId).sort();
+    const ids = engine.activeVoices.map((v) => v.shapeId).toSorted();
     expect(ids).toEqual(['b', 'c']);
     expect(ids).not.toContain('a');
   });
@@ -227,7 +227,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine.updateVoices(makeSigilState(voices));
 
     expect(engine.activeVoices.length).toBe(3);
-    expect(engine.activeVoices.map((v) => v.shapeId).sort()).toEqual(['circ', 'sq', 'tri']);
+    expect(engine.activeVoices.map((v) => v.shapeId).toSorted()).toEqual(['circ', 'sq', 'tri']);
   });
 
   test('does nothing when not playing', () => {
@@ -259,7 +259,7 @@ describe('AudioEngine — blend effects', () => {
     await startWith([voiceA]);
 
     const audioVoice = engine.activeVoices[0];
-    expect(audioVoice.blendEffect).not.toBeNull();
+    expect(audioVoice.blendEffect).not.toBeUndefined();
     expect(audioVoice.currentBlend).toBe('soft-light');
   });
 
@@ -315,12 +315,12 @@ describe('AudioEngine — border / octave doubling', () => {
   }
 
   test('voice without border has null octaveOsc', async () => {
-    const voice = makeVoice('a', 'sine', { border: null });
+    const voice = makeVoice('a', 'sine', { border: undefined });
     await startWith([voice]);
 
     const audioVoice = engine.activeVoices[0];
-    expect(audioVoice.octaveOsc).toBeNull();
-    expect(audioVoice.currentBorder).toBeNull();
+    expect(audioVoice.octaveOsc).toBeUndefined();
+    expect(audioVoice.currentBorder).toBeUndefined();
   });
 
   test('voice with border has octaveOsc', async () => {
@@ -330,7 +330,7 @@ describe('AudioEngine — border / octave doubling', () => {
     await startWith([voice]);
 
     const audioVoice = engine.activeVoices[0];
-    expect(audioVoice.octaveOsc).not.toBeNull();
+    expect(audioVoice.octaveOsc).not.toBeUndefined();
     expect(audioVoice.currentBorder).toBe('white:0');
   });
 
@@ -354,7 +354,7 @@ describe('AudioEngine — border / octave doubling', () => {
   });
 
   test('adding border triggers voice rebuild', async () => {
-    const voice = makeVoice('a', 'sine', { border: null });
+    const voice = makeVoice('a', 'sine', { border: undefined });
     await startWith([voice]);
 
     const originalVoice = engine.activeVoices[0];
@@ -367,7 +367,7 @@ describe('AudioEngine — border / octave doubling', () => {
 
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice).not.toBe(originalVoice);
-    expect(newVoice.octaveOsc).not.toBeNull();
+    expect(newVoice.octaveOsc).not.toBeUndefined();
     expect(newVoice.currentBorder).toBe('white:1');
   });
 
@@ -378,12 +378,12 @@ describe('AudioEngine — border / octave doubling', () => {
     await startWith([voice]);
 
     // Remove border
-    const updated = makeVoice('a', 'sine', { border: null });
+    const updated = makeVoice('a', 'sine', { border: undefined });
     engine.updateVoices(makeSigilState([updated]));
 
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(newVoice.octaveOsc).toBeNull();
-    expect(newVoice.currentBorder).toBeNull();
+    expect(newVoice.octaveOsc).toBeUndefined();
+    expect(newVoice.currentBorder).toBeUndefined();
   });
 
   test('thickness change updates gain smoothly without rebuild', async () => {
@@ -407,8 +407,8 @@ describe('AudioEngine — border / octave doubling', () => {
 
   test('octave gain updates when shape size changes', async () => {
     const voice = makeVoice('a', 'sine', {
-      size: 0.3,
       border: { color: 'white', double: false, thickness: 0.5 },
+      size: 0.3,
     });
     await startWith([voice]);
 
@@ -417,8 +417,8 @@ describe('AudioEngine — border / octave doubling', () => {
 
     // Increase size
     const updated = makeVoice('a', 'sine', {
-      size: 0.7,
       border: { color: 'white', double: false, thickness: 0.5 },
+      size: 0.7,
     });
     engine.updateVoices(makeSigilState([updated]));
 
@@ -435,7 +435,7 @@ describe('AudioEngine — border / octave doubling', () => {
     await startWith(voices);
 
     for (const av of engine.activeVoices) {
-      expect(av.octaveOsc).not.toBeNull();
+      expect(av.octaveOsc).not.toBeUndefined();
     }
   });
 });
@@ -449,7 +449,7 @@ describe('AudioEngine — master reverb', () => {
     engine.masterGain = engine.audioCtx.createGain();
   });
 
-  async function startWith(voices, reverb = null) {
+  async function startWith(voices, reverb = undefined) {
     const state = makeSigilState(voices);
     state.reverb = reverb;
     await engine.play(state, state.envelope);
@@ -457,67 +457,67 @@ describe('AudioEngine — master reverb', () => {
   }
 
   test('play with null reverb creates no convolver', async () => {
-    await startWith([makeVoice('a')], null);
+    await startWith([makeVoice('a')], undefined);
 
-    expect(engine._reverbConvolver).toBeNull();
-    expect(engine._reverbWet).toBeNull();
-    expect(engine._reverbStyle).toBeNull();
+    expect(engine._reverbConvolver).toBeUndefined();
+    expect(engine._reverbWet).toBeUndefined();
+    expect(engine._reverbStyle).toBeUndefined();
   });
 
   test('play with reverb creates convolver and wet gain', async () => {
-    await startWith([makeVoice('a')], { style: 'dim', depth: 0.5 });
+    await startWith([makeVoice('a')], { depth: 0.5, style: 'dim' });
 
-    expect(engine._reverbConvolver).not.toBeNull();
-    expect(engine._reverbWet).not.toBeNull();
+    expect(engine._reverbConvolver).not.toBeUndefined();
+    expect(engine._reverbWet).not.toBeUndefined();
     expect(engine._reverbStyle).toBe('dim');
   });
 
   test('reverb wet gain matches depth', async () => {
-    await startWith([makeVoice('a')], { style: 'glow', depth: 0.75 });
+    await startWith([makeVoice('a')], { depth: 0.75, style: 'glow' });
 
     expect(engine._reverbWet.gain.value).toBe(0.75);
   });
 
   test('cleanup nulls reverb nodes', async () => {
-    await startWith([makeVoice('a')], { style: 'dim', depth: 0.5 });
+    await startWith([makeVoice('a')], { depth: 0.5, style: 'dim' });
 
-    expect(engine._reverbConvolver).not.toBeNull();
+    expect(engine._reverbConvolver).not.toBeUndefined();
 
     engine.stop();
 
-    expect(engine._reverbConvolver).toBeNull();
-    expect(engine._reverbWet).toBeNull();
-    expect(engine._reverbStyle).toBeNull();
+    expect(engine._reverbConvolver).toBeUndefined();
+    expect(engine._reverbWet).toBeUndefined();
+    expect(engine._reverbStyle).toBeUndefined();
   });
 
   test('updateReverb changes wet gain during playback', async () => {
-    await startWith([makeVoice('a')], { style: 'dim', depth: 0.3 });
+    await startWith([makeVoice('a')], { depth: 0.3, style: 'dim' });
 
     expect(engine._reverbWet.gain.value).toBe(0.3);
 
-    engine.updateReverb({ style: 'dim', depth: 0.8 });
+    engine.updateReverb({ depth: 0.8, style: 'dim' });
 
     expect(engine._reverbWet.gain.value).toBe(0.8);
   });
 
   test('updateReverb with null removes reverb nodes', async () => {
-    await startWith([makeVoice('a')], { style: 'glow', depth: 0.5 });
+    await startWith([makeVoice('a')], { depth: 0.5, style: 'glow' });
 
-    expect(engine._reverbConvolver).not.toBeNull();
+    expect(engine._reverbConvolver).not.toBeUndefined();
 
-    engine.updateReverb(null);
+    engine.updateReverb(undefined);
 
-    expect(engine._reverbConvolver).toBeNull();
-    expect(engine._reverbWet).toBeNull();
-    expect(engine._reverbStyle).toBeNull();
+    expect(engine._reverbConvolver).toBeUndefined();
+    expect(engine._reverbWet).toBeUndefined();
+    expect(engine._reverbStyle).toBeUndefined();
   });
 
   test('updateReverb with different style rebuilds convolver', async () => {
-    await startWith([makeVoice('a')], { style: 'glow', depth: 0.5 });
+    await startWith([makeVoice('a')], { depth: 0.5, style: 'glow' });
 
     const originalConvolver = engine._reverbConvolver;
 
-    engine.updateReverb({ style: 'dim', depth: 0.6 });
+    engine.updateReverb({ depth: 0.6, style: 'dim' });
 
     expect(engine._reverbConvolver).not.toBe(originalConvolver);
     expect(engine._reverbStyle).toBe('dim');
@@ -558,7 +558,9 @@ describe('AudioEngine — getLevel()', () => {
     buf.fill(0.5);
     engine._analyserBuf = buf;
     engine._analyser.getFloatTimeDomainData = (arr) => {
-      for (let i = 0; i < arr.length; i++) arr[i] = buf[i];
+      for (let i = 0; i < arr.length; i++) {
+        arr[i] = buf[i];
+      }
     };
 
     const level = engine.getLevel();

@@ -12,7 +12,7 @@ New optional field on `SigilData` (alongside `envelope`):
 reverb: {
   depth: NormalizedCoord;   // 0 = dry, 1 = full wet
   style: 'glow' | 'dim';   // small room vs arena
-} | null;
+} | undefined;
 ```
 
 `null` = no reverb, no shadow.

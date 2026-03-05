@@ -12,10 +12,10 @@
     "test:unit": "bun test",
     "test:e2e": "bunx playwright test",
     "check": "tsc --noEmit",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint --fix .",
-    "fmt": "oxfmt .",
-    "fmt:check": "oxfmt --check ."
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check"
   },
   "dependencies": {
     "lz-string": "^1.5.0"

@@ -1,17 +1,17 @@
-// state.ts — Sigil data model, undo/redo, state management
+// State.ts — Sigil data model, undo/redo, state management
 
 import {
-  normalizedCoord,
-  createRandomFill,
-  type WaveformType,
-  type Voice,
-  type TextDecoration,
-  type SigilData,
+  type BlendMode,
   type Envelope,
   type Fill,
   type NormalizedCoord,
-  type BlendMode,
   type Reverb,
+  type SigilData,
+  type TextDecoration,
+  type Voice,
+  type WaveformType,
+  createRandomFill,
+  normalizedCoord,
 } from './types.ts';
 
 let _idCounter = 0;
@@ -21,10 +21,10 @@ export function genId(prefix = 's'): string {
 
 export function createDefaultState(): SigilData {
   return {
-    envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.4 },
-    voices: [],
+    envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
+    reverb: undefined,
     texts: [],
-    reverb: null,
+    voices: [],
   };
 }
 
@@ -32,32 +32,35 @@ const DEFAULT_BLEND: BlendMode = 'soft-light';
 
 function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCoord): Voice {
   const base = {
+    blend: DEFAULT_BLEND,
+    border: undefined as Voice['border'],
+    effect: undefined as Voice['effect'],
+    fill: createRandomFill(),
     id: genId('v'),
+    size: normalizedCoord(0.2),
     x,
     y,
-    size: normalizedCoord(0.2),
-    fill: createRandomFill(),
-    effect: null as Voice['effect'],
-    blend: DEFAULT_BLEND,
-    border: null as Voice['border'],
   };
   switch (waveform) {
-    case 'sine':
+    case 'sine': {
       return { ...base, waveform: 'sine' };
-    case 'pulse':
-      return { ...base, waveform: 'pulse', timbre: normalizedCoord(0) };
-    case 'blend':
-      return { ...base, waveform: 'blend', timbre: normalizedCoord(0) };
+    }
+    case 'pulse': {
+      return { ...base, timbre: normalizedCoord(0), waveform: 'pulse' };
+    }
+    case 'blend': {
+      return { ...base, timbre: normalizedCoord(0), waveform: 'blend' };
+    }
   }
 }
 
 function createTextDeco(text: string, x: NormalizedCoord, y: NormalizedCoord): TextDecoration {
   return {
     id: genId('t'),
+    size: normalizedCoord(0.06),
     text,
     x,
     y,
-    size: normalizedCoord(0.06),
   };
 }
 
@@ -77,11 +80,13 @@ export class SigilStore {
   }
 
   _notify(): void {
-    for (const fn of this.listeners) fn(this.data);
+    for (const fn of this.listeners) {
+      fn(this.data);
+    }
   }
 
   _snapshot(): SigilData {
-    return JSON.parse(JSON.stringify(this.data));
+    return structuredClone(this.data);
   }
 
   addVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCoord): Voice {
@@ -92,7 +97,7 @@ export class SigilStore {
   }
 
   pasteVoice(voiceData: Voice, offsetX = 0, offsetY = 0): Voice {
-    const clone: Voice = JSON.parse(JSON.stringify(voiceData));
+    const clone: Voice = structuredClone(voiceData);
     clone.id = genId('v');
     clone.x = normalizedCoord(clone.x + offsetX);
     clone.y = normalizedCoord(clone.y + offsetY);
@@ -101,29 +106,37 @@ export class SigilStore {
     return clone;
   }
 
-  duplicateVoice(id: string, offsetX = 0, offsetY = 0): Voice | null {
+  duplicateVoice(id: string, offsetX = 0, offsetY = 0): Voice | undefined {
     const source = this.getVoice(id);
-    if (!source) return null;
+    if (!source) {
+      return;
+    }
     return this.pasteVoice(source, offsetX, offsetY);
   }
 
   removeVoice(id: string): void {
     const idx = this.data.voices.findIndex((s) => s.id === id);
-    if (idx === -1) return;
+    if (idx === -1) {
+      return;
+    }
     this.data.voices.splice(idx, 1);
     this._notify();
   }
 
   updateVoice(id: string, updates: Partial<Voice>): void {
     const voice = this.data.voices.find((s) => s.id === id);
-    if (!voice) return;
+    if (!voice) {
+      return;
+    }
     Object.assign(voice, updates);
     this._notify();
   }
 
   updateFill(id: string, fill: Fill): void {
     const voice = this.data.voices.find((s) => s.id === id);
-    if (!voice) return;
+    if (!voice) {
+      return;
+    }
     voice.fill = fill;
     this._notify();
   }
@@ -137,7 +150,7 @@ export class SigilStore {
     this._notify();
   }
 
-  updateReverb(reverb: Reverb | null): void {
+  updateReverb(reverb: Reverb | undefined): void {
     this.data.reverb = reverb;
     this._notify();
   }
@@ -155,7 +168,9 @@ export class SigilStore {
 
   removeText(id: string): void {
     const idx = this.data.texts.findIndex((d) => d.id === id);
-    if (idx === -1) return;
+    if (idx === -1) {
+      return;
+    }
     this.data.texts.splice(idx, 1);
     this._notify();
   }
@@ -166,7 +181,9 @@ export class SigilStore {
 
   updateText(id: string, updates: Partial<TextDecoration>): void {
     const deco = this.getText(id);
-    if (!deco) return;
+    if (!deco) {
+      return;
+    }
     Object.assign(deco, updates);
     this._notify();
   }
@@ -194,19 +211,25 @@ export class UndoManager {
 
   snapshot(): void {
     this.undoStack.push(this.store._snapshot());
-    if (this.undoStack.length > MAX_UNDO) this.undoStack.shift();
+    if (this.undoStack.length > MAX_UNDO) {
+      this.undoStack.shift();
+    }
     this.redoStack.length = 0;
   }
 
   undo(): void {
-    if (!this.undoStack.length) return;
+    if (this.undoStack.length === 0) {
+      return;
+    }
     this.redoStack.push(this.store._snapshot());
     this.store.data = this.undoStack.pop()!;
     this.store._notify();
   }
 
   redo(): void {
-    if (!this.redoStack.length) return;
+    if (this.redoStack.length === 0) {
+      return;
+    }
     this.undoStack.push(this.store._snapshot());
     this.store.data = this.redoStack.pop()!;
     this.store._notify();

@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'bun:test';
-import { normalizedCoord, degrees, cents } from '../../js/types.ts';
+import { describe, expect, test } from 'bun:test';
+import { cents, degrees, normalizedCoord } from '../../js/types.ts';
 
 describe('normalizedCoord', () => {
   test('passes through in-range values', () => {

@@ -1,4 +1,4 @@
-// colors.ts — Color conversions (HSL, RGB) and color picker logic
+// Colors.ts — Color conversions (HSL, RGB) and color picker logic
 
 import type { Fill, LinearFill } from './types.ts';
 
@@ -20,7 +20,7 @@ export function ensureLinearGradient(
   fill: LinearFill,
   shapeRotationDeg: number,
 ): void {
-  let grad = defs.querySelector(`#${id}`) as SVGLinearGradientElement | null;
+  let grad = defs.querySelector(`#${id}`) as SVGLinearGradientElement | undefined;
   if (!grad) {
     grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
     grad.id = id;
@@ -29,9 +29,9 @@ export function ensureLinearGradient(
     stop1.setAttribute('offset', '0%');
     const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
     stop2.setAttribute('offset', '100%');
-    grad.appendChild(stop1);
-    grad.appendChild(stop2);
-    defs.appendChild(grad);
+    grad.append(stop1);
+    grad.append(stop2);
+    defs.append(grad);
   }
 
   const angle = ((fill.gradAngle - shapeRotationDeg) * Math.PI) / 180;
@@ -52,10 +52,12 @@ export function ensureLinearGradient(
 
 export function getSwatchColor(fill: Fill): string {
   switch (fill.mode) {
-    case 'solid':
+    case 'solid': {
       return hslToString(fill.h, fill.s, fill.l);
-    case 'linear':
+    }
+    case 'linear': {
       return `linear-gradient(${fill.gradAngle + 90}deg, ${hslToString(fill.h, fill.s, fill.l)}, ${hslToString(fill.h2, fill.s2, fill.l2)})`;
+    }
   }
 }
 
@@ -73,13 +75,19 @@ export function hexToHsl(hex: string): [number, number, number] {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const l = (max + min) / 2;
-  if (max === min) return [0, 0, Math.round(l * 100)];
+  if (max === min) {
+    return [0, 0, Math.round(l * 100)];
+  }
   const d = max - min;
   const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
   let h: number;
-  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-  else if (max === g) h = ((b - r) / d + 2) / 6;
-  else h = ((r - g) / d + 4) / 6;
+  if (max === r) {
+    h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  } else if (max === g) {
+    h = ((b - r) / d + 2) / 6;
+  } else {
+    h = ((r - g) / d + 4) / 6;
+  }
   return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
 }
 

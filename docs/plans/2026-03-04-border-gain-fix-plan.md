@@ -142,7 +142,7 @@ feat(audio): add borderOctaveGain with direction-dependent loudness coefficients
 
 In `AudioVoiceBase` interface, add:
 ```ts
-octaveGainNode: GainNode | null;
+octaveGainNode: GainNode | undefined;
 ```
 
 **Step 2: Update `_buildVoice` to use `borderOctaveGain` and store the node**
@@ -179,7 +179,7 @@ octaveGainNode: voice.border ? octaveGainNode : null,
 
 Note: `octaveGainNode` is only defined inside the `if (voice.border)` block,
 so set it to `null` in the else case. The cleanest way: declare
-`let octaveGainNode: GainNode | null = null;` before the `if (voice.border)`
+`let octaveGainNode: GainNode | undefined = null;` before the `if (voice.border)`
 block, and assign inside.
 
 **Step 4: Run existing tests to verify nothing broke**

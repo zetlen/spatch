@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import path from 'path';
 
 test.describe('Play fan gesture', () => {
@@ -66,7 +66,7 @@ test.describe('Play fan gesture', () => {
     // Should still be playing (latched)
     await page.waitForTimeout(200);
     await expect(page.locator('#btn-play')).toHaveClass(/playing/);
-    const isPlaying = await page.evaluate(() => window.__audioTap?.isPlaying());
+    const isPlaying = await page.evaluate(() => globalThis.__audioTap?.isPlaying());
     expect(isPlaying).toBe(true);
 
     // Click play to stop
@@ -106,7 +106,7 @@ test.describe('Play fan gesture', () => {
     await expect(page.locator('#btn-play')).toHaveClass(/playing/);
 
     await page.waitForTimeout(300);
-    const isPlaying = await page.evaluate(() => window.__audioTap?.isPlaying());
+    const isPlaying = await page.evaluate(() => globalThis.__audioTap?.isPlaying());
     expect(isPlaying).toBe(true);
 
     // Press Space to stop

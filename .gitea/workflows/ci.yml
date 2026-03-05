@@ -1,0 +1,18 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: mise-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - run: mise install
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run lint
+      - run: bun run fmt:check
+      - run: bun run test:unit
+      - run: bun run test:e2e
+      - run: bun run build

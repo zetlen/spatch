@@ -34,7 +34,7 @@ Direction coefficients (psychoacoustic equal-loudness compensation):
 
 ### 2. Store octave gain node
 
-Add `octaveGainNode: GainNode | null` to `AudioVoiceBase`. Populated in
+Add `octaveGainNode: GainNode | undefined` to `AudioVoiceBase`. Populated in
 `_buildVoice`, used in `updateVoices` for smooth parameter updates.
 
 ### 3. Split border key

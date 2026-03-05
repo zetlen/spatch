@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import path from 'path';
 
 test.describe('Playback', () => {
@@ -24,7 +24,7 @@ test.describe('Playback', () => {
     await page.waitForTimeout(200);
 
     // Check audio tap shows non-zero amplitude
-    const isPlaying = await page.evaluate(() => window.__audioTap?.isPlaying());
+    const isPlaying = await page.evaluate(() => globalThis.__audioTap?.isPlaying());
     expect(isPlaying).toBe(true);
 
     // Press Space again to stop

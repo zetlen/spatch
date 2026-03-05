@@ -1,4 +1,5 @@
 import IMAGES from 'virtual:scene-images';
+import { qel } from './dom.ts';
 
 const STAGE_CLASS = 'stage-florid';
 
@@ -20,7 +21,7 @@ function load(): StageState {
       };
     }
   } catch {
-    /* ignore */
+    /* Ignore */
   }
   return { florid: false, imageIndex: 0 };
 }
@@ -43,7 +44,7 @@ function apply(): void {
     app.style.setProperty('--stage-bg', bgUrl);
   }
 
-  const btn = document.getElementById('btn-stage');
+  const btn = document.querySelector<HTMLElement>('#btn-stage');
   if (btn) {
     btn.title = state.florid
       ? `Stage: Image (${state.imageIndex + 1}/${IMAGES.length})`
@@ -52,12 +53,12 @@ function apply(): void {
 }
 
 export function initStage(): void {
-  app = document.getElementById('app')!;
-  area = document.getElementById('canvas-area')!;
+  app = qel('#app');
+  area = qel('#canvas-area');
   state = load();
   apply();
 
-  const btn = document.getElementById('btn-stage');
+  const btn = document.querySelector<HTMLElement>('#btn-stage');
   if (btn) {
     btn.addEventListener('click', () => {
       if (state.florid) {

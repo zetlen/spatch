@@ -51,7 +51,7 @@ interface VoiceBase {
   y: NormalizedCoord;
   size: NormalizedCoord;
   fill: Fill;
-  effect: PatternType | null;
+  effect: PatternType | undefined;
 }
 
 export interface SineVoice extends VoiceBase {
@@ -590,7 +590,7 @@ The class becomes:
 export class DecorationTool {
   store: SigilStore;
   undo: UndoManager;
-  currentTool: string | null;
+  currentTool: string | undefined;
 
   constructor(store: SigilStore, undo: UndoManager) {
     this.store = store;
@@ -598,11 +598,11 @@ export class DecorationTool {
     this.currentTool = null;
   }
 
-  setTool(tool: string | null): void {
+  setTool(tool: string | undefined): void {
     this.currentTool = tool;
   }
 
-  handleMouseDown(nx: NormalizedCoord, ny: NormalizedCoord): { placed: string } | null {
+  handleMouseDown(nx: NormalizedCoord, ny: NormalizedCoord): { placed: string } | undefined {
     if (this.currentTool !== 'text') return null;
     const text = (document.getElementById('text-input') as HTMLInputElement).value.trim();
     if (!text) return null;
@@ -640,7 +640,7 @@ Delete these lines from `index.html`:
 
 **Step 2: Update toolbar.ts**
 
-Change `Shape` import to `Voice`. Update `getSelected()` to return `Voice | null`
+Change `Shape` import to `Voice`. Update `getSelected()` to return `Voice | undefined`
 and call `this.store.getVoice()`. Update all `store.updateShape` calls to
 `store.updateVoice`. Update `store.updateFill` to `store.updateVoice` with fill.
 

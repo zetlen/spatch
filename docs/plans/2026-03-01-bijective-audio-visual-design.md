@@ -73,7 +73,7 @@ SineVoice { waveform: 'sine' }
   y: NormalizedCoord     visual: vertical position      audio: pitch (pentatonic)
   size: NormalizedCoord  visual: shape area              audio: gain
   fill: Fill             visual: color / gradient        audio: formant filter
-  effect: Effect | null  visual: pattern overlay         audio: effect chain
+  effect: Effect | undefined  visual: pattern overlay         audio: effect chain
 
 PulseVoice { waveform: 'pulse' }
   ...all SineVoice fields, plus:

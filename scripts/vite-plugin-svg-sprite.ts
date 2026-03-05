@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, globSync } from 'fs';
+import { existsSync, globSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import type { Plugin } from 'vite';
 
@@ -45,8 +45,10 @@ export function scanSourceFiles(root: string, globs: string[], prefix: string): 
   for (const glob of globs) {
     const files = globSync(glob, { cwd: root });
     for (const file of files) {
-      if (file.includes('node_modules') || file.includes('dist')) continue;
-      const content = readFileSync(join(root, file), 'utf-8');
+      if (file.includes('node_modules') || file.includes('dist')) {
+        continue;
+      }
+      const content = readFileSync(join(root, file), 'utf8');
       for (const match of content.matchAll(pattern)) {
         names.add(match[1]!);
       }
@@ -134,12 +136,6 @@ export default function svgSpritePlugin(options: SvgSpriteOptions): Plugin {
   let cachedSprite = '';
 
   return {
-    name: 'vite-plugin-svg-sprite',
-
-    configResolved(config) {
-      root = config.root;
-    },
-
     buildStart() {
       const resolvedIconsDir = resolve(root, iconsDir);
 
@@ -161,7 +157,7 @@ export default function svgSpritePlugin(options: SvgSpriteOptions): Plugin {
       const symbols: string[] = [];
       const missing: string[] = [];
 
-      for (const name of [...names].sort()) {
+      for (const name of [...names].toSorted()) {
         const resolution = resolveIcon(name);
         const svgPath = join(resolvedIconsDir, resolution.path);
 
@@ -170,7 +166,7 @@ export default function svgSpritePlugin(options: SvgSpriteOptions): Plugin {
           continue;
         }
 
-        const svgContent = readFileSync(svgPath, 'utf-8');
+        const svgContent = readFileSync(svgPath, 'utf8');
         symbols.push(buildSymbol(name, svgContent, prefix, resolution, transformContent));
       }
 
@@ -180,13 +176,21 @@ export default function svgSpritePlugin(options: SvgSpriteOptions): Plugin {
 
       cachedSprite = symbols.join('');
 
-      const byteSize = Buffer.byteLength(cachedSprite, 'utf-8');
+      const byteSize = Buffer.byteLength(cachedSprite, 'utf8');
       const sizeStr = byteSize < 1024 ? `${byteSize} B` : `${(byteSize / 1024).toFixed(1)} KB`;
       console.log(`SVG sprite: ${names.size} icon(s), ${sizeStr}`);
     },
 
+    configResolved(config) {
+      ({ root } = config);
+    },
+
+    name: 'vite-plugin-svg-sprite',
+
     transformIndexHtml(html) {
-      if (!cachedSprite) return html;
+      if (!cachedSprite) {
+        return html;
+      }
       return rewriteHtml(html, placeholder, cachedSprite);
     },
   };
@@ -197,5 +201,5 @@ export default function svgSpritePlugin(options: SvgSpriteOptions): Plugin {
 // ---------------------------------------------------------------------------
 
 function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return str.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }

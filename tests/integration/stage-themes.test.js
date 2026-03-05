@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import path from 'path';
 
 test.describe('Stage themes', () => {
@@ -55,12 +55,12 @@ test.describe('Stage themes', () => {
     const btn = page.locator('#btn-stage');
 
     // Get to florid (image 1)
-    await btn.click(); // florid
+    await btn.click(); // Florid
     const bg1 = await area.evaluate((el) => getComputedStyle(el).getPropertyValue('--stage-bg'));
 
     // Cycle: florid → white → florid (image 2)
-    await btn.click(); // white
-    await btn.click(); // florid
+    await btn.click(); // White
+    await btn.click(); // Florid
     const bg2 = await area.evaluate((el) => getComputedStyle(el).getPropertyValue('--stage-bg'));
 
     expect(bg1).not.toEqual(bg2);

@@ -3,15 +3,14 @@ pre-commit:
   commands:
     format:
       glob: '*.{js,ts,json,css,html}'
-      run: bunx oxfmt {staged_files}
+      run: bun run fmt {staged_files}
       stage_fixed: true
     lint:
       glob: '*.{js,ts}'
-      run: bunx oxlint --fix {staged_files}
+      run: bun run lint:fix {staged_files}
       stage_fixed: true
     typecheck:
-      glob: '*.ts'
-      run: bunx tsc --noEmit
+      run: bun run check
 
 pre-push:
   commands:

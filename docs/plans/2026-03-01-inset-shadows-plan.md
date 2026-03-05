@@ -40,7 +40,7 @@ export interface SigilData {
   envelope: Envelope;
   voices: Voice[];
   texts: TextDecoration[];
-  reverb: Reverb | null;
+  reverb: Reverb | undefined;
 }
 ```
 
@@ -68,7 +68,7 @@ export function createDefaultState(): SigilData {
 Also add `Reverb` to the imports from `types.ts`, and add methods to `SigilStore`:
 
 ```ts
-updateReverb(reverb: Reverb | null): void {
+updateReverb(reverb: Reverb | undefined): void {
   this.data.reverb = reverb;
   this._notify();
 }
@@ -195,12 +195,12 @@ type PackedReverb = 0 | [string, number];
 const reverbStyleMap: Record<string, string> = { glow: 'G', dim: 'D' };
 const reverbStyleUnmap: Record<string, ReverbStyle> = { G: 'glow', D: 'dim' };
 
-function packReverb(reverb: Reverb | null): PackedReverb {
+function packReverb(reverb: Reverb | undefined): PackedReverb {
   if (!reverb) return 0;
   return [reverbStyleMap[reverb.style]!, round3(reverb.depth)];
 }
 
-function unpackReverb(packed: PackedReverb | undefined): Reverb | null {
+function unpackReverb(packed: PackedReverb | undefined): Reverb | undefined {
   if (!packed || !Array.isArray(packed)) return null;
   return {
     style: reverbStyleUnmap[packed[0]] ?? 'glow',
@@ -445,7 +445,7 @@ git commit -m "Split canvas into frame div + transparent canvas for inset shadow
 Add a function to apply the inset shadow CSS:
 
 ```ts
-function updateReverbShadow(frameEl: HTMLElement, reverb: Reverb | null, canvasSize: number): void {
+function updateReverbShadow(frameEl: HTMLElement, reverb: Reverb | undefined, canvasSize: number): void {
   if (!reverb) {
     frameEl.style.boxShadow = 'none';
     return;
@@ -545,15 +545,15 @@ Import `ReverbStyle` from `types.ts`.
 Add fields to the `AudioEngine` class constructor:
 
 ```ts
-private _reverbConvolver: ConvolverNode | null = null;
-private _reverbWet: GainNode | null = null;
-private _reverbStyle: ReverbStyle | null = null;
+private _reverbConvolver: ConvolverNode | undefined = null;
+private _reverbWet: GainNode | undefined = null;
+private _reverbStyle: ReverbStyle | undefined = null;
 ```
 
 **Step 3: Add updateReverb method**
 
 ```ts
-updateReverb(reverb: Reverb | null): void {
+updateReverb(reverb: Reverb | undefined): void {
   if (!this.audioCtx || !this.isPlaying) return;
   const ctx = this.audioCtx;
 
@@ -925,7 +925,7 @@ _bindReverbPanel(): void {
   }
 
   // Depth slider
-  const slider = document.getElementById('reverb-depth') as HTMLInputElement | null;
+  const slider = document.getElementById('reverb-depth') as HTMLInputElement | undefined;
   if (slider) {
     slider.addEventListener('input', () => {
       const rev = this.store.data.reverb;
@@ -951,7 +951,7 @@ _updateReverbPanel(): void {
     b.classList.toggle('active', b.dataset.reverbStyle === reverb.style);
   });
 
-  const slider = document.getElementById('reverb-depth') as HTMLInputElement | null;
+  const slider = document.getElementById('reverb-depth') as HTMLInputElement | undefined;
   if (slider) {
     slider.value = String(Math.round(reverb.depth * 100));
   }

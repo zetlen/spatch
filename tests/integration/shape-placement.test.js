@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import path from 'path';
 
 test.describe('Shape placement', () => {
@@ -22,7 +22,9 @@ test.describe('Shape placement', () => {
 
     // Canvas should render the shape — take a screenshot to verify non-empty
     // We verify via the URL hash which updates after 1s debounce
-    await page.waitForFunction(() => window.location.hash.length > 1, null, { timeout: 3000 });
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
   });
 
   test('clicking square tool then canvas places a square', async ({ page }) => {
@@ -33,7 +35,9 @@ test.describe('Shape placement', () => {
     await canvas.click({ position: { x: box.width * 0.3, y: box.height * 0.3 } });
 
     await expect(page.locator('[data-tool="select"]')).toHaveClass(/active/);
-    await page.waitForFunction(() => window.location.hash.length > 1, null, { timeout: 3000 });
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
   });
 
   test('clicking circle tool then canvas places a circle', async ({ page }) => {
@@ -44,7 +48,9 @@ test.describe('Shape placement', () => {
     await canvas.click({ position: { x: box.width * 0.7, y: box.height * 0.7 } });
 
     await expect(page.locator('[data-tool="select"]')).toHaveClass(/active/);
-    await page.waitForFunction(() => window.location.hash.length > 1, null, { timeout: 3000 });
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
   });
 
   test('multiple shapes can be placed sequentially', async ({ page }) => {
@@ -63,8 +69,10 @@ test.describe('Shape placement', () => {
     await canvas.click({ position: { x: box.width * 0.7, y: box.height * 0.7 } });
 
     // Verify hash contains serialized state with both shapes
-    await page.waitForFunction(() => window.location.hash.length > 1, null, { timeout: 3000 });
-    const hash = await page.evaluate(() => window.location.hash);
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
+    const hash = await page.evaluate(() => globalThis.location.hash);
     expect(hash.length).toBeGreaterThan(5);
   });
 });

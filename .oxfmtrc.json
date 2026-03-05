@@ -3,5 +3,5 @@
   "singleQuote": true,
   "semi": true,
   "tabWidth": 2,
-  "ignorePatterns": ["dist"]
+  "ignorePatterns": ["dist", "*.md"]
 }

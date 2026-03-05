@@ -1,10 +1,10 @@
-// interaction.ts — Typed interaction state machine
+// Interaction.ts — Typed interaction state machine
 //
 // Replaces the scattered interactionMode/dragOriginal/activeHandle/etc.
-// variables with a single discriminated union. Each mode carries its own
-// data — no more accessing fields that might not exist.
+// Variables with a single discriminated union. Each mode carries its own
+// Data — no more accessing fields that might not exist.
 
-import type { HandleType, ADSRCorner, Envelope, DecoBounds } from './types.ts';
+import type { ADSRCorner, DecoBounds, Envelope, HandleType } from './types.ts';
 
 export type InteractionState =
   | { mode: 'idle' }

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import path from 'path';
 
 test.describe('Share menu', () => {
@@ -45,7 +45,9 @@ test.describe('Share menu', () => {
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
     // Wait for URL hash to be set (debounced serialization)
-    await page.waitForFunction(() => window.location.hash.length > 1, null, { timeout: 3000 });
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
 
     await page.click('#btn-share');
     await page.click('[data-action="share"]');

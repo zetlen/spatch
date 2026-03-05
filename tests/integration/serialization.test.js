@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import path from 'path';
 
 test.describe('Serialization round-trip', () => {
@@ -11,7 +11,7 @@ test.describe('Serialization round-trip', () => {
     await page.waitForSelector('#sigil-canvas');
 
     // Initially no hash
-    const initialHash = await page.evaluate(() => window.location.hash);
+    const initialHash = await page.evaluate(() => globalThis.location.hash);
     expect(initialHash).toBe('');
 
     // Place a shape
@@ -21,8 +21,10 @@ test.describe('Serialization round-trip', () => {
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
     // Wait for debounced save (1s + buffer)
-    await page.waitForFunction(() => window.location.hash.length > 1, null, { timeout: 3000 });
-    const hash = await page.evaluate(() => window.location.hash);
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
+    const hash = await page.evaluate(() => globalThis.location.hash);
     expect(hash.length).toBeGreaterThan(1);
   });
 
@@ -43,8 +45,10 @@ test.describe('Serialization round-trip', () => {
     await canvas.click({ position: { x: box.width * 0.7, y: box.height * 0.7 } });
 
     // Wait for URL to update
-    await page.waitForFunction(() => window.location.hash.length > 1, null, { timeout: 3000 });
-    const hash = await page.evaluate(() => window.location.hash);
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
+    const hash = await page.evaluate(() => globalThis.location.hash);
 
     // Step 2: Navigate to a new page with the same hash
     await page.goto('/' + hash);
@@ -54,7 +58,7 @@ test.describe('Serialization round-trip', () => {
     await page.waitForTimeout(500);
 
     // Verify the state was loaded by checking the hash persists
-    const restoredHash = await page.evaluate(() => window.location.hash);
+    const restoredHash = await page.evaluate(() => globalThis.location.hash);
     expect(restoredHash).toBe(hash);
   });
 
@@ -75,8 +79,10 @@ test.describe('Serialization round-trip', () => {
     const screenshot1 = await canvas.screenshot();
 
     // Step 2: Get hash and reload
-    await page.waitForFunction(() => window.location.hash.length > 1, null, { timeout: 3000 });
-    const hash = await page.evaluate(() => window.location.hash);
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
+    const hash = await page.evaluate(() => globalThis.location.hash);
 
     await page.goto('/' + hash);
     await page.waitForSelector('#sigil-canvas');
@@ -91,6 +97,6 @@ test.describe('Serialization round-trip', () => {
     // Allow 20% size variance for compression differences
     const ratio = screenshot1.length / screenshot2.length;
     expect(ratio).toBeGreaterThan(0.5);
-    expect(ratio).toBeLessThan(2.0);
+    expect(ratio).toBeLessThan(2);
   });
 });
