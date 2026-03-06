@@ -44,7 +44,7 @@ function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCo
     effect: undefined as Voice['effect'],
     fill: createRandomFill(),
     id: genId('v'),
-    size: normalizedCoord(0.2),
+    size: normalizedCoord(0.25),
     x,
     y,
   };

@@ -200,7 +200,8 @@ design rationale and enumeration of past violations.
   (saw/tri blend). Each voice is a discriminated union on `waveform`. Every field
   maps to both a visual property and an audio parameter:
   - `x` → horizontal position + stereo pan
-  - `y` → vertical position + pitch (pentatonic with micro-detuning)
+  - `y` → vertical position + pitch (chromatic, 3 octaves G2–G5, magnetic
+    snap during drag, hard snap to nearest note on release)
   - `size` → shape area + gain
   - `fill` → color/gradient + formant filter (hue→vowel, sat→Q, light→brightness)
   - `effect` → pattern overlay + audio effect chain

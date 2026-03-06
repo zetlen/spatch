@@ -293,9 +293,9 @@ body {
   pointer-events: none;
   transition: opacity 0.2s;
   touch-action: none;
-  /* Portrait default: centered below tile, vertically centered in gap */
+  /* Portrait default: centered below tile, above expansion panel clearance */
   left: 50%;
-  bottom: max(4px, calc((100cqh - min(100cqh - 24px, 100cqw - 24px, 800px)) / 4 + 12px));
+  bottom: max(60px, calc((100cqh - min(100cqh - 24px, 100cqw - 24px, 800px)) / 4 + 68px));
   transform: translateX(-50%);
 }
 
@@ -303,7 +303,7 @@ body {
   .stage-play-btn {
     /* Landscape: bottom-left corner */
     left: 12px;
-    bottom: 12px;
+    bottom: 68px;
     transform: none;
   }
 }
@@ -533,12 +533,14 @@ body {
 
 /* ---- Expansion row controls ---- */
 
-/* Color input in expansion row — small swatch */
+/* Color input in expansion row — button-height, double-wide */
 .expansion-color-input {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--border);
+  width: 79px;
+  height: 44px;
+  padding: 4px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
   border-radius: 2px;
   cursor: pointer;
   background: none;

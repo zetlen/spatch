@@ -4,7 +4,7 @@
 // multi-touch pinch-rotate, shape hit testing, handle interactions,
 // and ADSR corner dragging. Dependencies are injected via the constructor.
 
-import { rotationToTimbre, snapYToNote } from '../audio/mapping.ts';
+import { hardSnapYToNote, rotationToTimbre, snapYToNote } from '../audio/mapping.ts';
 import {
   calcResize,
   calcRotation,
@@ -310,7 +310,7 @@ export class CanvasInteractionController {
     // Shape (voice) placement tools
     const waveform = toolToWaveform[tool];
     if (waveform) {
-      this.addVoiceFromTool(tool, normalizedCoord(nx), snapYToNote(normalizedCoord(ny)));
+      this.addVoiceFromTool(tool, normalizedCoord(nx), hardSnapYToNote(normalizedCoord(ny)));
       return;
     }
 
@@ -519,6 +519,14 @@ export class CanvasInteractionController {
       this.interaction.pointerId !== e.pointerId
     ) {
       return;
+    }
+
+    // Hard-snap to nearest note on drag release
+    if (this.interaction.mode === 'dragging') {
+      const voice = this.selection.getSelectedVoice();
+      if (voice) {
+        this.store.updateVoice(voice.id, { y: hardSnapYToNote(voice.y) });
+      }
     }
 
     this.interaction = IDLE;

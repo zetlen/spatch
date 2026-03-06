@@ -57,7 +57,7 @@ export function yToFrequency(y: NormalizedCoord): number {
 /**
  * Magnetically snap a Y coordinate toward the nearest chromatic note position.
  *
- * Uses a cubic curve so positions near note centers are "sticky" while
+ * Uses a quintic curve so positions near note centers are "sticky" while
  * positions between notes are compressed but still reachable. The result
  * is monotonic: increasing Y never decreases the snapped value.
  *
@@ -78,11 +78,25 @@ export function snapYToNote(y: NormalizedCoord): NormalizedCoord {
   const rawOffset = normalized - notePos;
   const t = Math.max(-1, Math.min(1, rawOffset / halfZone));
 
-  // Cubic pull: t^3 preserves sign, creates wide sticky center
-  const pulled = t * t * t;
+  // Quintic pull: t^5 preserves sign, creates wider sticky center than cubic
+  const t2 = t * t;
+  const pulled = t2 * t2 * t;
 
   const snappedNormalized = notePos + pulled * halfZone;
   return normalizedCoord(1 - snappedNormalized);
+}
+
+/**
+ * Hard-snap a Y coordinate to the exact nearest chromatic note position.
+ * Used on drag release to ensure shapes always land on a note.
+ */
+export function hardSnapYToNote(y: NormalizedCoord): NormalizedCoord {
+  const noteCount = CHROMATIC_SEMITONES.length;
+  const normalized = 1 - y;
+  const spacing = 1 / (noteCount - 1);
+  const nearestIndex = Math.round(normalized / spacing);
+  const clamped = Math.max(0, Math.min(noteCount - 1, nearestIndex));
+  return normalizedCoord(1 - clamped * spacing);
 }
 
 /**

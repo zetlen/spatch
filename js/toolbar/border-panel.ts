@@ -194,15 +194,22 @@ function openPanel(ctx: BorderPanelCtx, syncMenuActive: () => void): void {
 
   ctx.area.append(buildColorButton('white', 'Octave up'));
   ctx.area.append(buildColorButton('black', 'Octave down'));
-  ctx.area.append(htmlEl('div', { className: 'separator' }));
-  ctx.area.append(buildStyleButton(false, 'Single'));
-  ctx.area.append(buildStyleButton(true, 'Double'));
-  ctx.area.append(htmlEl('div', { className: 'separator' }));
+
+  const styleSep = htmlEl('div', { className: 'separator border-extra' });
+  ctx.area.append(styleSep);
+  const singleBtn = buildStyleButton(false, 'Single');
+  singleBtn.classList.add('border-extra');
+  ctx.area.append(singleBtn);
+  const doubleBtn = buildStyleButton(true, 'Double');
+  doubleBtn.classList.add('border-extra');
+  ctx.area.append(doubleBtn);
+  const sliderSep = htmlEl('div', { className: 'separator border-extra' });
+  ctx.area.append(sliderSep);
 
   const slider = document.createElement('input');
   slider.type = 'range';
   slider.id = 'border-thickness';
-  slider.className = 'expansion-slider';
+  slider.className = 'expansion-slider border-extra';
   slider.min = '1';
   slider.max = '100';
   slider.value = '1';
@@ -260,6 +267,11 @@ export function createBorderPanel(deps: {
         'active',
         border != undefined && (b.dataset.borderDouble === '1') === border.double,
       );
+    });
+
+    // Hide style buttons and thickness slider when no border is active
+    area.querySelectorAll<HTMLElement>('.border-extra').forEach((el) => {
+      el.classList.toggle('hidden', border == undefined);
     });
 
     const slider = document.querySelector<HTMLInputElement>('#border-thickness');
