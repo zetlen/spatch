@@ -1,72 +1,57 @@
-// Serialize.ts — URL encode/decode sigil state with lz-string
+// Serialize.ts — URL encode/decode sigil state with a custom Base64 format
 //
-// Wire format: positional arrays, no keys, no IDs.
+// Wire format: A single Base64 string
+// The layout packs variables into 64-char dictionary indices (A-Z, a-z, 0-9, -, _)
 //
-//   [envelope, voices, reverb?]
+//   [Envelope] (8 chars): attack, decay, sustain, release (2 chars each, 12-bit, x1000)
+//   [Reverb] (1-3 chars): 0 = none. 1 = glow, 2 = dim. If >0, followed by depth (2 chars).
+//   [Voices] (variable length):
+//      Flags (2 chars): 12-bit bitfield storing waveform, effect, blend, fillMode, borderMode
+//      x, y, size (2 chars each)
+//      [Optional] timbre (2 chars, iff waveform > 0)
+//      [Optional] border thickness (2 chars, iff borderMode > 0)
+//      Fill (4 or 10 chars): solid (4) vs linear (10 chars + gradient angle)
 //
-//   Envelope = [attack, decay, sustain, release]
-//
-//   Voice (sine)        = ["s", x, y, size, fill, effect, blend, border]
-//   Voice (pulse/blend) = ["p"|"b", x, y, size, fill, effect, blend, border, timbre]
-//
-//   Border = 0 (none) | ["W"|"B", 0|1, thickness]
-//
-//   Fill (solid)   = ["s", h, s, l]
-//   Fill (linear)  = ["l", gradAngle, h, s, l, h2, s2, l2]
-//
-//   Effect = "s"|"c"|"n"|"g" | 0
-//
-//   Reverb = 0 (none) | ["G"|"D", depth]
+// Note: HSL and all normalized values are quantized to integers/12-bit maxes during packing.
 
-import LZString from 'lz-string';
 import { genId } from './state.ts';
 import {
-  type BlendMode,
   type Border,
-  type BorderColor,
   type Fill,
   type LinearFill,
   type PatternType,
+  PATTERN_TYPES,
+  BLEND_MODES,
   type Reverb,
-  type ReverbStyle,
   type SigilData,
   type SolidFill,
   type Voice,
   type WaveformType,
   normalizedCoord,
 } from './types.ts';
+import { DEFAULT_BLEND } from './effects.ts';
 
 /**
- * Serialize sigil state to a compressed URI-safe string via LZ-string.
+ * Serialize sigil state to a compressed URI-safe string via bespoke Base64 encoding.
  * @param state - The sigil state to serialize
  * @returns Compressed string suitable for use as a URL hash fragment
  */
 export function serializeState(state: SigilData): string {
-  const packed = pack(state);
-  const json = JSON.stringify(packed);
-  return LZString.compressToEncodedURIComponent(json);
-}
-
-/** Expose the raw packed JSON for testing. */
-export function _serializeToJSON(state: SigilData): string {
-  return JSON.stringify(pack(state));
+  return packB64(state);
 }
 
 /**
- * Deserialize sigil state from a compressed hash string.
- * @param hash - LZ-string compressed state (from URL hash fragment)
+ * Deserialize sigil state from our bespoke Base64 hash string.
+ * @param hash - Base64 compressed state (from URL hash fragment)
  * @returns Parsed SigilData, or undefined if decompression/parsing fails
  */
 export function deserializeState(hash: string): SigilData | undefined {
+  if (!hash) return undefined;
   try {
-    const json = LZString.decompressFromEncodedURIComponent(hash);
-    if (!json) {
-      return;
-    }
-    return unpack(JSON.parse(json));
+    return unpackB64(hash);
   } catch (error) {
-    console.warn('Failed to deserialize state:', error);
-    return;
+    console.warn('Failed to deserialize b64 state:', error);
+    return undefined;
   }
 }
 
@@ -85,223 +70,219 @@ export function loadFromURL(): SigilData | undefined {
   return deserializeState(hash);
 }
 
-// ---- Pack ----
+// ---- Base64 Custom Packing ----
 
-type PackedFill =
-  | ['s', number, number, number]
-  | ['l', number, number, number, number, number, number, number];
+const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const B64_MAP = new Map(B64_CHARS.split('').map((c, i) => [c, i]));
 
-type PackedBorder = 0 | [string, number, number];
-
-// Voice positions: [waveform, x, y, size, fill, effect, blend, border, timbre?]
-type PackedVoice =
-  | [string, number, number, number, PackedFill, string | 0, string, PackedBorder]
-  | [string, number, number, number, PackedFill, string | 0, string, PackedBorder, number];
-
-type PackedReverb = 0 | [string, number];
-
-type PackedState = [
-  [number, number, number, number], // Envelope
-  PackedVoice[], // Voices
-  PackedReverb?, // Reverb (optional)
-];
-
-function pack(state: SigilData): PackedState {
-  const packed: PackedState = [
-    [
-      round2(state.envelope.attack),
-      round2(state.envelope.decay),
-      round2(state.envelope.sustain),
-      round2(state.envelope.release),
-    ],
-    state.voices.map((v): PackedVoice => {
-      const w = v.waveform[0]!;
-      const f = packFill(v.fill);
-      const e: string | 0 = v.effect ? v.effect[0]! : 0;
-      const b = packBlend(v.blend);
-      const bdr = packBorder(v.border);
-      if ('timbre' in v) {
-        return [w, round3(v.x), round3(v.y), round3(v.size), f, e, b, bdr, round3(v.timbre)];
-      }
-      return [w, round3(v.x), round3(v.y), round3(v.size), f, e, b, bdr];
-    }),
-  ];
-  const rv = packReverb(state.reverb);
-  if (rv !== 0) {
-    packed.push(rv);
-  }
-  return packed;
-}
-
-// ---- Unpack ----
-
-const waveformMap: Record<string, WaveformType> = { b: 'blend', p: 'pulse', s: 'sine' };
-const effectMap: Record<string, PatternType> = {
-  c: 'checker',
-  g: 'gradient',
-  n: 'noise',
-  s: 'stripes',
-};
-
-function unpack(packed: PackedState): SigilData {
-  const [env, voices] = packed;
-  return {
-    envelope: {
-      attack: env[0],
-      decay: env[1],
-      release: env[3],
-      sustain: env[2],
-    },
-    reverb: unpackReverb(packed[2] as PackedReverb | undefined),
-    voices: (voices || []).map((pv): Voice => {
-      const waveform: WaveformType = waveformMap[pv[0]] || 'sine';
-      const effect: PatternType | undefined = pv[5]
-        ? (effectMap[pv[5] as string] ?? undefined)
-        : undefined;
-      const blend: BlendMode = unpackBlend(pv[6] as string);
-      const border = unpackBorder(pv[7] as PackedBorder);
-      const base = {
-        blend,
-        border,
-        effect,
-        fill: unpackFill(pv[4]),
-        id: genId('v'),
-        size: normalizedCoord(pv[3]),
-        x: normalizedCoord(pv[1]),
-        y: normalizedCoord(pv[2]),
-      };
-      switch (waveform) {
-        case 'sine': {
-          return Object.assign(base, { waveform: 'sine' as const });
-        }
-        case 'pulse': {
-          return Object.assign(base, {
-            timbre: normalizedCoord((pv[8] as number) ?? 0),
-            waveform: 'pulse' as const,
-          });
-        }
-        case 'blend': {
-          return Object.assign(base, {
-            timbre: normalizedCoord((pv[8] as number) ?? 0),
-            waveform: 'blend' as const,
-          });
-        }
-      }
-    }),
-  };
-}
-
-// ---- Blend pack/unpack ----
-
-const blendPackMap: Record<BlendMode, string> = {
-  'color-burn': 'B',
-  difference: 'D',
-  exclusion: 'X',
-  multiply: 'M',
-  overlay: 'O',
-  screen: 'R',
-  'soft-light': 'S',
-};
-
-const blendUnpackMap: Record<string, BlendMode> = Object.fromEntries(
-  Object.entries(blendPackMap).map(([k, v]) => [v, k as BlendMode]),
-);
-
-function packBlend(blend: BlendMode): string {
-  return blendPackMap[blend];
-}
-
-function unpackBlend(packed: string | undefined): BlendMode {
-  if (packed && packed in blendUnpackMap) {
-    return blendUnpackMap[packed]!;
-  }
-  return 'soft-light';
-}
-
-// ---- Border pack/unpack ----
-
-const borderColorMap: Record<BorderColor, string> = { black: 'B', white: 'W' };
-const borderColorUnmap: Record<string, BorderColor> = { B: 'black', W: 'white' };
-
-function packBorder(border: Border | undefined): PackedBorder {
-  if (!border) {
-    return 0;
-  }
-  return [borderColorMap[border.color], border.double ? 1 : 0, round3(border.thickness)];
-}
-
-function unpackBorder(packed: PackedBorder | undefined): Border | undefined {
-  if (!packed || !Array.isArray(packed)) {
-    return;
-  }
-  return {
-    color: borderColorUnmap[packed[0]] ?? 'white',
-    double: packed[1] === 1,
-    thickness: normalizedCoord(packed[2]),
-  };
-}
-
-// ---- Reverb pack/unpack ----
-
-const reverbStyleMap: Record<string, string> = { dim: 'D', glow: 'G' };
-const reverbStyleUnmap: Record<string, ReverbStyle> = { D: 'dim', G: 'glow' };
-
-function packReverb(reverb: Reverb | undefined): PackedReverb {
-  if (!reverb) {
-    return 0;
-  }
-  return [reverbStyleMap[reverb.style]!, round3(reverb.depth)];
-}
-
-function unpackReverb(packed: PackedReverb | undefined): Reverb | undefined {
-  if (!packed || !Array.isArray(packed)) {
-    return;
-  }
-  return {
-    depth: normalizedCoord(packed[1]),
-    style: reverbStyleUnmap[packed[0]] ?? 'glow',
-  };
-}
-
-// ---- Fill pack/unpack ----
-
-function packFill(f: Fill): PackedFill {
-  switch (f.mode) {
-    case 'solid': {
-      return ['s', f.h, f.s, f.l];
-    }
-    case 'linear': {
-      return ['l', f.gradAngle, f.h, f.s, f.l, f.h2, f.s2, f.l2];
-    }
-  }
-}
-
-function unpackFill(f: PackedFill): Fill {
-  switch (f[0]) {
-    case 's': {
-      return { h: f[1], l: f[3], mode: 'solid', s: f[2] } satisfies SolidFill;
-    }
-    case 'l': {
-      return {
-        gradAngle: f[1],
-        h: f[2],
-        h2: f[5],
-        l: f[4],
-        l2: f[7],
-        mode: 'linear',
-        s: f[3],
-        s2: f[6],
-      } satisfies LinearFill;
-    }
-    default: {
-      return { h: 200, l: 50, mode: 'solid', s: 80 };
-    }
-  }
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
 function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
+}
+
+function encodeInt(val: number, chars: number): string {
+  let res = '';
+  val = Math.max(0, Math.floor(val || 0));
+  for (let i = 0; i < chars; i++) {
+    res = B64_CHARS[val & 0x3f] + res;
+    val = Math.floor(val / 64);
+  }
+  return res;
+}
+
+function decodeInt(str: string, startIndex: number, chars: number): number {
+  if (startIndex + chars > str.length) {
+    throw new Error('Unexpected end of input during parsing');
+  }
+  let val = 0;
+  for (let i = 0; i < chars; i++) {
+    val = val * 64 + (B64_MAP.get(str.charAt(startIndex + i)) || 0);
+  }
+  return val;
+}
+
+const EFFECT_KEYS: (PatternType | undefined)[] = [undefined, ...PATTERN_TYPES].sort();
+
+function packB64(state: SigilData): string {
+  let out = '';
+  // Env (8 chars)
+  out += encodeInt(round3(state.envelope.attack) * 1000, 2);
+  out += encodeInt(round3(state.envelope.decay) * 1000, 2);
+  out += encodeInt(round3(state.envelope.sustain) * 1000, 2);
+  out += encodeInt(round3(state.envelope.release) * 1000, 2);
+
+  // Reverb
+  if (!state.reverb) {
+    out += encodeInt(0, 1);
+  } else {
+    out += encodeInt(state.reverb.style === 'dim' ? 2 : 1, 1);
+    out += encodeInt(round3(state.reverb.depth) * 1000, 2);
+  }
+
+  // Voices
+  for (const v of state.voices) {
+    let flags = 0;
+    const wf = v.waveform === 'blend' ? 2 : v.waveform === 'pulse' ? 1 : 0;
+    flags |= (wf & 0x3) << 10;
+
+    const eff = Math.max(0, EFFECT_KEYS.indexOf(v.effect));
+    flags |= (eff & 0x7) << 7;
+
+    const bl = Math.max(0, BLEND_MODES.indexOf(v.blend));
+    flags |= (bl & 0x7) << 4;
+
+    const fm = v.fill.mode === 'linear' ? 1 : 0;
+    flags |= (fm & 0x1) << 3;
+
+    let bm = 0;
+    if (v.border) {
+      if (v.border.color === 'white') bm = v.border.double ? 3 : 1;
+      else bm = v.border.double ? 4 : 2;
+    }
+    flags |= bm & 0x7;
+
+    out += encodeInt(flags, 2);
+    out += encodeInt(round3(v.x) * 1000, 2);
+    out += encodeInt(round3(v.y) * 1000, 2);
+    out += encodeInt(round3(v.size) * 1000, 2);
+
+    if (wf > 0 && 'timbre' in v) {
+      out += encodeInt(round3(v.timbre) * 1000, 2);
+    }
+
+    if (bm > 0 && v.border) {
+      out += encodeInt(round3(v.border.thickness) * 1000, 2);
+    }
+
+    if (fm === 0) {
+      // solid
+      const f = v.fill as SolidFill;
+      const fInt = (Math.round(f.h) << 14) | (Math.round(f.s) << 7) | Math.round(f.l);
+      out += encodeInt(fInt, 4);
+    } else {
+      // linear
+      const f = v.fill as LinearFill;
+      out += encodeInt(Math.round(f.gradAngle), 2);
+      const f1 = (Math.round(f.h) << 14) | (Math.round(f.s) << 7) | Math.round(f.l);
+      out += encodeInt(f1, 4);
+      const f2 = (Math.round(f.h2) << 14) | (Math.round(f.s2) << 7) | Math.round(f.l2);
+      out += encodeInt(f2, 4);
+    }
+  }
+
+  return out;
+}
+
+function unpackB64(str: string): SigilData {
+  let idx = 0;
+
+  // Env (8 chars)
+  const attack = decodeInt(str, idx, 2) / 1000;
+  idx += 2;
+  const decay = decodeInt(str, idx, 2) / 1000;
+  idx += 2;
+  const sustain = decodeInt(str, idx, 2) / 1000;
+  idx += 2;
+  const release = decodeInt(str, idx, 2) / 1000;
+  idx += 2;
+
+  // Reverb
+  let reverb: Reverb | undefined = undefined;
+  const revFlag = decodeInt(str, idx, 1);
+  idx += 1;
+  if (revFlag > 0) {
+    const depth = decodeInt(str, idx, 2) / 1000;
+    idx += 2;
+    reverb = { style: revFlag === 2 ? 'dim' : 'glow', depth: normalizedCoord(depth) };
+  }
+
+  // Voices
+  const voices: Voice[] = [];
+  while (idx < str.length) {
+    try {
+      const flags = decodeInt(str, idx, 2);
+      idx += 2;
+      const wf = (flags >> 10) & 0x3;
+      const eff = (flags >> 7) & 0x7;
+      const bl = (flags >> 4) & 0x7;
+      const fm = (flags >> 3) & 0x1;
+      const bm = flags & 0x7;
+
+      const x = normalizedCoord(decodeInt(str, idx, 2) / 1000);
+      idx += 2;
+      const y = normalizedCoord(decodeInt(str, idx, 2) / 1000);
+      idx += 2;
+      const size = normalizedCoord(decodeInt(str, idx, 2) / 1000);
+      idx += 2;
+
+      let timbre = 0;
+      if (wf > 0) {
+        timbre = decodeInt(str, idx, 2) / 1000;
+        idx += 2;
+      }
+
+      let border: Border | undefined = undefined;
+      if (bm > 0) {
+        const thickness = normalizedCoord(decodeInt(str, idx, 2) / 1000);
+        idx += 2;
+        border = {
+          color: bm === 2 || bm === 4 ? 'black' : 'white',
+          double: bm > 2,
+          thickness,
+        };
+      }
+
+      let fill: Fill;
+      if (fm === 0) {
+        const fInt = decodeInt(str, idx, 4);
+        idx += 4;
+        fill = {
+          mode: 'solid',
+          h: (fInt >> 14) & 0x1ff,
+          s: (fInt >> 7) & 0x7f,
+          l: fInt & 0x7f,
+        } satisfies SolidFill;
+      } else {
+        const gradAngle = decodeInt(str, idx, 2);
+        idx += 2;
+        const f1 = decodeInt(str, idx, 4);
+        idx += 4;
+        const f2 = decodeInt(str, idx, 4);
+        idx += 4;
+        fill = {
+          mode: 'linear',
+          gradAngle,
+          h: (f1 >> 14) & 0x1ff,
+          s: (f1 >> 7) & 0x7f,
+          l: f1 & 0x7f,
+          h2: (f2 >> 14) & 0x1ff,
+          s2: (f2 >> 7) & 0x7f,
+          l2: f2 & 0x7f,
+        } satisfies LinearFill;
+      }
+
+      const effect = EFFECT_KEYS[eff];
+      const blend = BLEND_MODES[bl] || DEFAULT_BLEND;
+      const waveform: WaveformType = wf === 2 ? 'blend' : wf === 1 ? 'pulse' : 'sine';
+
+      const base = { id: genId('v'), x, y, size, fill, effect, blend, border };
+
+      if (waveform === 'sine') {
+        voices.push(Object.assign(base, { waveform } as const) as Voice);
+      } else {
+        voices.push(
+          Object.assign(base, { waveform, timbre: normalizedCoord(timbre) } as const) as Voice,
+        );
+      }
+    } catch {
+      // If we encounter truncated data or garbage, we just drop the
+      // incomplete voice and stop processing, returning what we have.
+      break;
+    }
+  }
+
+  return {
+    envelope: { attack, decay, sustain, release },
+    reverb,
+    voices,
+  };
 }

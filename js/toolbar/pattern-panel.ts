@@ -5,7 +5,8 @@
 
 import { qel } from '../dom.ts';
 import type { SigilStore, UndoManager } from '../state.ts';
-import type { PatternType, Voice } from '../types.ts';
+import type { Voice } from '../types.ts';
+import { PATTERN_TYPES, type PatternType } from '../types.ts';
 
 // ---- Shared context ----
 
@@ -23,12 +24,10 @@ interface PatternPanelCtx {
 
 function populateDropdown(): void {
   const dropdown = qel('#pattern-dropdown');
-  const patterns = [
-    { title: 'Stripes', value: 'stripes' },
-    { title: 'Checker', value: 'checker' },
-    { title: 'Noise', value: 'noise' },
-    { title: 'Gradient', value: 'gradient' },
-  ];
+  const patterns = PATTERN_TYPES.map((p) => ({
+    title: p.charAt(0).toUpperCase() + p.slice(1),
+    value: p,
+  }));
   for (const p of patterns) {
     const btn = document.createElement('button');
     btn.className = 'dropdown-item';

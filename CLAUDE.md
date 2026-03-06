@@ -81,7 +81,7 @@ js/
                      overlap computation
   envelope.ts        ADSR ↔ canvas corner radius conversion
   share.ts           Share menu binding + embed snippet generator
-  serialize.ts       LZ-string URL serialization (positional arrays, no keys)
+  serialize.ts       Bespoke Base64 URL serialization (bitfield-packed, no keys)
   stage.ts           Stage theme cycling (white / florid background images)
 dist/                Build output (gitignored)
 docs/plans/              Design docs and implementation plans
@@ -248,8 +248,9 @@ design rationale and enumeration of past violations.
   app-level in `SelectionManager` (js/state/selection.ts), backed by
   @preact/signals-core signals.
 
-- **Serialization** uses positional arrays + LZ-string compression →
-  URL hash fragment. No keys, no IDs in wire format. **No backwards compatibility
+- **Serialization** uses a bespoke Base64 encoding with bitfield-packed flags →
+  URL hash fragment. No keys, no IDs in wire format. HSL and normalized values
+  are quantized to integers during packing. **No backwards compatibility
   until v1.** Old URLs will break. Do not write migration code, version checks,
   or legacy deserializers. Just change the format and move on.
 

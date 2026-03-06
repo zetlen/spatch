@@ -5,6 +5,7 @@
 
 import type { SigilStore, UndoManager } from '../state.ts';
 import type { BlendMode } from '../types.ts';
+import { DEFAULT_BLEND } from '../effects.ts';
 import { createIconButton } from './dom-helpers.ts';
 
 /** Generic interface for bottom-bar expansion panels. */
@@ -52,7 +53,7 @@ export function createBlendPanel(deps: {
     area.replaceChildren();
 
     const sel = getSelected();
-    const current = sel ? sel.blend : 'soft-light';
+    const current = sel ? sel.blend : DEFAULT_BLEND;
 
     for (const m of modes) {
       const btn = createIconButton({
@@ -88,7 +89,7 @@ export function createBlendPanel(deps: {
 
   function update(): void {
     const sel = getSelected();
-    const current = sel ? sel.blend : 'soft-light';
+    const current = sel ? sel.blend : DEFAULT_BLEND;
     area.querySelectorAll<HTMLElement>('.action-btn[data-blend]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.blend === current);
     });

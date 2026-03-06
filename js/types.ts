@@ -39,17 +39,20 @@ export function cents(n: number): Cents {
 export type WaveformType = 'sine' | 'pulse' | 'blend';
 
 /** Pattern overlay type applied to a voice shape for visual texture and audio effect. */
-export type PatternType = 'stripes' | 'checker' | 'noise' | 'gradient';
+export const PATTERN_TYPES = ['stripes', 'checker', 'noise', 'gradient'] as const;
+export type PatternType = (typeof PATTERN_TYPES)[number];
 
 /** CSS mix-blend-mode value that maps to an overlap-driven audio effect. */
-export type BlendMode =
-  | 'soft-light'
-  | 'multiply'
-  | 'screen'
-  | 'overlay'
-  | 'color-burn'
-  | 'difference'
-  | 'exclusion';
+export const BLEND_MODES = [
+  'soft-light',
+  'multiply',
+  'screen',
+  'overlay',
+  'color-burn',
+  'difference',
+  'exclusion',
+] as const;
+export type BlendMode = (typeof BLEND_MODES)[number];
 
 /** Fill mode discriminant for the Fill union. */
 export type FillMode = 'solid' | 'linear';
