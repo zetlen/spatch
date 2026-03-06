@@ -15,6 +15,7 @@ import { PlaybackController } from './playback.ts';
 import { CanvasInteractionController } from './canvas/interaction.ts';
 import { bindKeyboardShortcuts } from './keyboard.ts';
 import { SplashController } from './splash.ts';
+import { initCredits } from './credits.ts';
 
 // ---- Init ----
 
@@ -218,6 +219,21 @@ function debouncedSave(): void {
 // ---- Share menu ----
 
 bindShareMenu({ shareBtn, shareMenu, store });
+
+// ---- Credits overlay ----
+
+initCredits(audio);
+
+// ---- Pause audio when tab is hidden ----
+
+document.addEventListener('visibilitychange', () => {
+  if (!audio.audioCtx) return;
+  if (document.hidden) {
+    audio.audioCtx.suspend();
+  } else {
+    audio.audioCtx.resume();
+  }
+});
 
 // ---- New button ----
 

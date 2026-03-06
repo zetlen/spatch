@@ -37,6 +37,8 @@ export class AudioEngine {
   _streamDest: MediaStreamAudioDestinationNode | undefined;
   _audioEl: HTMLAudioElement | undefined;
   _irCache: Map<ReverbStyle, AudioBuffer>;
+  _muffleFilter: BiquadFilterNode | undefined;
+  _muffled: boolean;
 
   constructor() {
     this.activeVoices = [];
@@ -53,6 +55,8 @@ export class AudioEngine {
     this._streamDest = undefined;
     this._audioEl = undefined;
     this._irCache = new Map();
+    this._muffleFilter = undefined;
+    this._muffled = false;
   }
 
   /** Synchronously create and unlock the AudioContext.
@@ -141,12 +145,19 @@ export class AudioEngine {
     this.masterGain.connect(this.envelopeGain);
     this.envelopeGain.connect(this.compressor);
     this.compressor.connect(this._analyser);
+    // Muffle filter: low-pass that's normally transparent (20 kHz cutoff)
+    // but drops to ~600 Hz when muffled (e.g. credits overlay).
+    this._muffleFilter = ctx.createBiquadFilter();
+    this._muffleFilter.type = 'lowpass';
+    this._muffleFilter.frequency.value = this._muffled ? 600 : 20000;
+    this._muffleFilter.Q.value = 0.7;
+    this._analyser.connect(this._muffleFilter);
     // Actual audio output goes through ctx.destination as normal.
-    this._analyser.connect(ctx.destination);
+    this._muffleFilter.connect(ctx.destination);
     // Also feed the stream destination — its <audio> element keeps Safari
     // From suspending the AudioContext, but doesn't produce audible output.
     if (this._streamDest) {
-      this._analyser.connect(this._streamDest);
+      this._muffleFilter.connect(this._streamDest);
       // Resume keep-alive <audio> if it was paused after a previous stop.
       // May fail outside a user gesture (e.g. loop restart) — that's OK,
       // The AudioContext is already running and the permanent touchend/click
@@ -422,6 +433,26 @@ export class AudioEngine {
     return Math.sqrt(sum / this._analyserBuf.length);
   }
 
+  muffle(): void {
+    this._muffled = true;
+    if (this._muffleFilter && this.audioCtx) {
+      const now = this.audioCtx.currentTime;
+      this._muffleFilter.frequency.cancelScheduledValues(now);
+      this._muffleFilter.frequency.setValueAtTime(this._muffleFilter.frequency.value, now);
+      this._muffleFilter.frequency.linearRampToValueAtTime(600, now + 0.15);
+    }
+  }
+
+  unmuffle(): void {
+    this._muffled = false;
+    if (this._muffleFilter && this.audioCtx) {
+      const now = this.audioCtx.currentTime;
+      this._muffleFilter.frequency.cancelScheduledValues(now);
+      this._muffleFilter.frequency.setValueAtTime(this._muffleFilter.frequency.value, now);
+      this._muffleFilter.frequency.linearRampToValueAtTime(20000, now + 0.15);
+    }
+  }
+
   _updateBlendOverlaps(voices: readonly Voice[]): void {
     for (const audioVoice of this.activeVoices) {
       const blendFx = audioVoice.blendEffect;
@@ -487,6 +518,10 @@ export class AudioEngine {
       this._reverbWet = undefined;
     }
     this._reverbStyle = undefined;
+    if (this._muffleFilter) {
+      safeDisconnect(this._muffleFilter);
+      this._muffleFilter = undefined;
+    }
 
     // Pause the keep-alive <audio> element so iOS drops the audio session
     // Indicator (speaker icon in status bar / Control Center). It will be

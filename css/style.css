@@ -273,6 +273,69 @@ body {
   opacity: 1;
 }
 
+.credits-btn {
+  top: auto;
+  right: 8px;
+  bottom: 8px;
+}
+
+/* ---- Credits overlay ---- */
+
+.credits-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.credits-overlay.hidden {
+  display: none !important;
+}
+
+.credits-content {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  padding: 32px;
+  text-align: right;
+  color: #fff;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  line-height: 1.8;
+  pointer-events: none;
+}
+
+.credits-list {
+  list-style: none;
+  font-size: 20px;
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.credits-tagline {
+  font-size: 30px;
+  letter-spacing: 0.03em;
+  margin-top: 12px;
+  opacity: 0.9;
+}
+
+.credits-list a {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  pointer-events: auto;
+}
+
+.credits-list a:hover {
+  opacity: 0.8;
+}
+
 /* ---- Stage play button ---- */
 
 .stage-play-btn {
