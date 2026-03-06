@@ -1,9 +1,9 @@
 // Embed-entry.ts — entry point for the embed viewer
-import { render } from './canvas.ts';
-import { AudioEngine } from './audio.ts';
+import { render } from './canvas/render.ts';
+import { AudioEngine } from './audio/engine.ts';
 import { deserializeState } from './serialize.ts';
-import { updateCanvasBorderRadius } from './envelope.ts';
-import { qel } from './dom.ts';
+import { updateCanvasBorderRadius } from './shapes.ts';
+import { qel, svgEl } from './dom.ts';
 
 const hash = globalThis.location.hash.slice(1);
 if (!hash) {
@@ -18,8 +18,8 @@ if (!hash) {
       '<p style="color:#2a2a2a;text-align:center;padding:2em;">Invalid sigil data.</p>';
   } else {
     const sigil = state; // Narrow for closures
-    const svgEl = qel<SVGSVGElement>('#c');
-    const frame = qel('#canvas-frame');
+    const svgRoot = qel<SVGSVGElement>('#c');
+    const frame = qel('#tile');
     const audio = new AudioEngine();
 
     // Pre-warm AudioContext on first user gesture. iOS Safari only allows
@@ -38,23 +38,11 @@ if (!hash) {
     }
 
     // Apply ADSR border radius to frame (static in embed — only needs to run once)
-    updateCanvasBorderRadius(frame, sigil.envelope, 800);
-
-    // Apply reverb shadow to frame
-    if (sigil.reverb) {
-      const maxBlur = 800 * 0.15;
-      const blur = sigil.reverb.depth * maxBlur;
-      const alpha = 0.3 + sigil.reverb.depth * 0.5;
-      const color =
-        sigil.reverb.style === 'glow'
-          ? `rgba(255,255,255,${alpha.toFixed(2)})`
-          : `rgba(0,0,0,${alpha.toFixed(2)})`;
-      frame.style.boxShadow = `inset 0 0 ${blur.toFixed(1)}px ${color}`;
-    }
+    updateCanvasBorderRadius(frame, sigil.envelope);
 
     // Render loop: continuously re-render so playback glow effects animate
     function renderLoop(): void {
-      render(svgEl, sigil, undefined);
+      render(svgRoot, sigil, undefined);
       requestAnimationFrame(renderLoop);
     }
     renderLoop();
@@ -64,13 +52,13 @@ if (!hash) {
 
     function setEmbedPlayIcon(playing: boolean): void {
       const symbol = playing ? 'tabler-player-stop-filled' : 'tabler-player-play-filled';
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('width', '20');
-      svg.setAttribute('height', '20');
-      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-      use.setAttribute('href', `tabler-sprite.svg#${symbol}`);
-      svg.append(use);
-      btn.replaceChildren(svg);
+      btn.replaceChildren(
+        svgEl(
+          'svg',
+          { width: 20, height: 20 },
+          svgEl('use', { href: `tabler-sprite.svg#${symbol}` }),
+        ),
+      );
     }
 
     btn.addEventListener('click', async () => {

@@ -5,7 +5,6 @@ describe('SigilStore CRUD', () => {
   test('starts with default state (empty voices, default envelope)', () => {
     const store = new SigilStore();
     expect(store.data.voices).toHaveLength(0);
-    expect(store.data.texts).toHaveLength(0);
     expect(store.data.envelope.attack).toBe(0.1);
   });
 
@@ -302,29 +301,74 @@ describe('SigilStore onChange listener', () => {
   });
 });
 
-describe('SigilStore text decorations', () => {
-  test('addTextDeco adds and notifies', () => {
+describe('SigilStore signal reactivity', () => {
+  test('onChange returns a dispose function that stops notifications', () => {
     const store = new SigilStore();
-    let notified = false;
-    store.onChange(() => {
-      notified = true;
+    let callCount = 0;
+    const dispose = store.onChange(() => {
+      callCount++;
     });
-    const deco = store.addTextDeco('Hello', 0.5, 0.5);
-    expect(store.data.texts).toHaveLength(1);
-    expect(deco.text).toBe('Hello');
-    expect(notified).toBe(true);
+    store.addVoice('sine', 0.5, 0.5);
+    expect(callCount).toBe(1);
+
+    dispose();
+    store.addVoice('pulse', 0.3, 0.3);
+    expect(callCount).toBe(1); // No additional call after dispose
   });
 
-  test('removeText removes and notifies', () => {
+  test('immutable updates create new state references', () => {
     const store = new SigilStore();
-    const deco = store.addTextDeco('Hello', 0.5, 0.5);
-    let notified = false;
-    store.onChange(() => {
-      notified = true;
-    });
-    store.removeText(deco.id);
-    expect(store.data.texts).toHaveLength(0);
-    expect(notified).toBe(true);
+    const dataBefore = store.data;
+    store.addVoice('sine', 0.5, 0.5);
+    const dataAfter = store.data;
+
+    expect(dataBefore).not.toBe(dataAfter);
+    expect(dataBefore.voices).toHaveLength(0);
+    expect(dataAfter.voices).toHaveLength(1);
+  });
+
+  test('voices array is a new reference after mutation', () => {
+    const store = new SigilStore();
+    store.addVoice('sine', 0.5, 0.5);
+    const voicesBefore = store.data.voices;
+    store.addVoice('pulse', 0.3, 0.3);
+    const voicesAfter = store.data.voices;
+
+    expect(voicesBefore).not.toBe(voicesAfter);
+    expect(voicesBefore).toHaveLength(1);
+    expect(voicesAfter).toHaveLength(2);
+  });
+
+  test('updateVoice creates new voice reference but preserves other voices', () => {
+    const store = new SigilStore();
+    const v1 = store.addVoice('sine', 0.1, 0.1);
+    const v2 = store.addVoice('pulse', 0.5, 0.5);
+    store.updateVoice(v1.id, { x: 0.9 });
+
+    // Updated voice is a new object
+    const updatedV1 = store.getVoice(v1.id);
+    expect(updatedV1.x).toBe(0.9);
+
+    // Other voice is the same reference (not copied unnecessarily)
+    const sameV2 = store.getVoice(v2.id);
+    expect(sameV2).toBe(v2);
+  });
+
+  test('UndoManager snapshot captures immutable state without structuredClone', () => {
+    const store = new SigilStore();
+    const undo = new UndoManager(store);
+    store.addVoice('sine', 0.5, 0.5);
+    const stateBeforeUpdate = store.data;
+
+    undo.snapshot();
+    store.updateVoice(store.data.voices[0].id, { x: 0.9 });
+
+    // The snapshot should be the exact reference we captured
+    expect(undo.undoStack[0]).toBe(stateBeforeUpdate);
+
+    undo.undo();
+    expect(store.data).toBe(stateBeforeUpdate);
+    expect(store.data.voices[0].x).toBe(0.5);
   });
 });
 

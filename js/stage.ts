@@ -54,7 +54,7 @@ function apply(): void {
 
 export function initStage(): void {
   app = qel('#app');
-  area = qel('#canvas-area');
+  area = qel('#stage');
   state = load();
   apply();
 

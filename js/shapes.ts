@@ -1,4 +1,4 @@
-// Shapes.ts — Resize/rotate math, ADSR corner testing
+// Shapes.ts — Resize/rotate math, ADSR corners, envelope geometry
 
 import {
   type ADSRCorner,
@@ -10,6 +10,56 @@ import {
   degrees,
   normalizedCoord,
 } from './types.ts';
+
+// ---- ADSR envelope ↔ canvas geometry ----
+
+const MAX_RADIUS_PCT = 15; // Max corner radius as percentage of canvas size
+
+/**
+ * Apply ADSR-derived corner radii (as %) to the canvas frame element and its parent wrapper.
+ * @param frameEl - The canvas frame HTML element
+ * @param envelope - The ADSR envelope
+ */
+export function updateCanvasBorderRadius(frameEl: HTMLElement, envelope: Envelope): void {
+  const tl = ((envelope.decay / 2) * MAX_RADIUS_PCT).toFixed(2);
+  const tr = (envelope.sustain * MAX_RADIUS_PCT).toFixed(2);
+  const br = ((envelope.release / 3) * MAX_RADIUS_PCT).toFixed(2);
+  const bl = ((envelope.attack / 2) * MAX_RADIUS_PCT).toFixed(2);
+  const borderRadius = `${tl}% ${tr}% ${br}% ${bl}%`;
+  frameEl.style.borderRadius = borderRadius;
+  if (frameEl.parentElement) {
+    frameEl.parentElement.style.borderRadius = borderRadius;
+  }
+}
+
+/**
+ * Convert a corner drag distance (normalized 0–1) to an ADSR parameter value.
+ * Each corner has a different scale: attack/decay max at 2s, sustain at 1, release at 3s.
+ * @param cornerName - Which ADSR corner is being dragged
+ * @param dragDistance - Drag distance in normalized units from the corner
+ * @returns Clamped envelope parameter value
+ */
+export function dragToEnvelopeValue(cornerName: ADSRCorner, dragDistance: number): number {
+  const maxR = MAX_RADIUS_PCT / 100;
+  const normalizedDist = dragDistance / maxR;
+
+  switch (cornerName) {
+    case 'attack': {
+      return Math.max(0.01, Math.min(2, normalizedDist * 2));
+    }
+    case 'decay': {
+      return Math.max(0.01, Math.min(2, normalizedDist * 2));
+    }
+    case 'sustain': {
+      return Math.max(0, Math.min(1, normalizedDist));
+    }
+    case 'release': {
+      return Math.max(0.01, Math.min(3, normalizedDist * 3));
+    }
+  }
+}
+
+// ---- Shape geometry ----
 
 const MIN_SIZE = 0.025;
 const MAX_SIZE = 0.9;

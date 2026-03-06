@@ -149,7 +149,6 @@ body {
 
 /* LED dot — property-active indicator */
 .has-border::before,
-.has-reverb::before,
 .has-pattern::before {
   content: '';
   position: absolute;
@@ -219,7 +218,7 @@ body {
 
 /* ---- Canvas Area ---- */
 
-#canvas-area {
+#stage {
   flex: 1;
   display: flex;
   align-items: center;
@@ -229,6 +228,7 @@ body {
   background: var(--bg-body);
   position: relative;
   isolation: isolate;
+  container-type: size;
   --audio-level: 0;
   --stage-bg: none;
 }
@@ -238,13 +238,14 @@ body {
   overflow: hidden;
   touch-action: none;
   z-index: 1;
+  width: min(100cqh - 24px, 100cqw - 24px, 800px);
+  aspect-ratio: 1;
 }
 
-#canvas-frame {
+#tile {
   position: absolute;
   inset: 0;
   background: #2a2a2a;
-  transition: box-shadow 0.08s ease-out;
 }
 
 @keyframes march {
@@ -288,8 +289,8 @@ body {
   opacity: 1;
 }
 
-#canvas-area::before,
-#canvas-area::after {
+#stage::before,
+#stage::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -307,12 +308,12 @@ body {
   background-position: center;
 }
 
-#app.stage-florid #canvas-area {
+#app.stage-florid #stage {
   background: transparent;
 }
 
 /* Scan lines base (florid ::after overrides background) */
-#canvas-area::after {
+#stage::after {
   background: repeating-linear-gradient(
     to bottom,
     transparent 0px,
@@ -324,14 +325,14 @@ body {
 }
 
 /* Florid: background image + gradient tint + scan lines */
-#canvas-area.stage-florid::before {
+#stage.stage-florid::before {
   opacity: 1;
   background-image: var(--stage-bg);
   background-size: cover;
   background-position: center;
 }
 
-#canvas-area.stage-florid::after {
+#stage.stage-florid::after {
   opacity: 1;
   background:
     repeating-linear-gradient(
@@ -524,40 +525,6 @@ body {
   background: var(--active-bg);
 }
 
-.border-slider {
-  flex: 1;
-  height: 4px;
-}
-
-/* ---- Reverb Controls ---- */
-
-.reverb-style-btn {
-  background: var(--bg-toolbar);
-  border-width: 1px;
-  border-style: solid;
-  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
-  color: var(--text-muted);
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 2px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.reverb-style-btn.active {
-  color: var(--text-primary);
-  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
-  background: var(--active-bg);
-}
-
-.reverb-slider {
-  flex: 1;
-  height: 4px;
-}
-
 /* ---- Scene-active toolbar transparency ---- */
 
 #app.stage-florid #toolbar-top,
@@ -608,13 +575,19 @@ body {
   }
 }
 
-/* ---- First-load splash ---- */
+/* ---- Toolbar visibility ---- */
 
-body.splash #toolbar-top,
-body.splash #toolbar-bottom {
+#toolbar-top,
+#toolbar-bottom {
   opacity: 0;
   pointer-events: none;
   transition-property: opacity;
   transition-timing-function: ease-out;
   /* transition-duration set dynamically by JS at reveal time */
+}
+
+body.is-editing #toolbar-top,
+body.is-editing #toolbar-bottom {
+  opacity: 1;
+  pointer-events: auto;
 }

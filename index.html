@@ -45,14 +45,6 @@
 
           <div class="separator"></div>
 
-          <div class="toolbar-group reverb-group">
-            <button id="btn-reverb" class="action-btn" title="Reverb">
-              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-ripple" /></svg>
-            </button>
-          </div>
-
-          <div class="separator"></div>
-
           <div class="toolbar-group actions-group">
             <button id="btn-undo" class="action-btn" title="Undo (Ctrl+Z)">
               <svg width="20" height="20">
@@ -89,37 +81,14 @@
             <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-code" /></svg>
           </button>
         </div>
-
-        <div id="reverb-panel" class="toolbar-row toolbar-expansion hidden">
-          <button class="reverb-style-btn active" data-reverb-style="glow" title="Glow">
-            <svg width="16" height="16"><use href="tabler-sprite.svg#tabler-sun" /></svg>
-          </button>
-          <button class="reverb-style-btn" data-reverb-style="dim" title="Dim">
-            <svg width="16" height="16"><use href="tabler-sprite.svg#tabler-moon" /></svg>
-          </button>
-          <div class="separator"></div>
-          <input
-            id="reverb-depth"
-            class="reverb-slider"
-            type="range"
-            min="1"
-            max="100"
-            value="50"
-            title="Reverb depth"
-          />
-          <div class="separator"></div>
-          <button id="btn-remove-reverb" class="action-btn danger" title="Remove reverb">
-            <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-trash" /></svg>
-          </button>
-        </div>
       </header>
 
-      <main id="canvas-area">
+      <main id="stage">
         <button id="btn-stage" class="stage-btn" title="Stage: Minimal">
           <svg width="16" height="16"><use href="tabler-sprite.svg#tabler-photo" /></svg>
         </button>
         <div id="canvas-wrap">
-          <div id="canvas-frame"></div>
+          <div id="tile"></div>
           <svg id="sigil-canvas" viewBox="0 0 1 1" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
       </main>

@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { hitTestADSRCorner } from '../../js/shapes.ts';
-import { dragToEnvelopeValue, envelopeToCornerRadii } from '../../js/envelope.ts';
+import { dragToEnvelopeValue, hitTestADSRCorner } from '../../js/shapes.ts';
 
 const CANVAS_SIZE = 800;
-const MAX_RADIUS = CANVAS_SIZE * 0.15; // 120px
+const MAX_RADIUS = 0.15; // Normalized (MAX_RADIUS_PCT / 100)
 const defaultEnvelope = { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 };
 
 describe('ADSR corner hit testing', () => {
@@ -58,82 +57,47 @@ describe('ADSR corner hit testing', () => {
 
 describe('ADSR drag to envelope value', () => {
   test('attack: small drag = small value', () => {
-    const value = dragToEnvelopeValue('attack', 10, CANVAS_SIZE);
+    const value = dragToEnvelopeValue('attack', 10 / CANVAS_SIZE);
     expect(value).toBeGreaterThan(0.01);
     expect(value).toBeLessThan(0.5);
   });
 
   test('attack: large drag = clamped at max (2.0)', () => {
-    const value = dragToEnvelopeValue('attack', MAX_RADIUS * 3, CANVAS_SIZE);
+    const value = dragToEnvelopeValue('attack', MAX_RADIUS * 3);
     expect(value).toBe(2);
   });
 
   test('attack: zero drag = minimum (0.01)', () => {
-    const value = dragToEnvelopeValue('attack', 0, CANVAS_SIZE);
+    const value = dragToEnvelopeValue('attack', 0);
     expect(value).toBe(0.01);
   });
 
   test('sustain: clamped between 0 and 1', () => {
-    const zero = dragToEnvelopeValue('sustain', 0, CANVAS_SIZE);
+    const zero = dragToEnvelopeValue('sustain', 0);
     expect(zero).toBe(0);
 
-    const mid = dragToEnvelopeValue('sustain', MAX_RADIUS * 0.5, CANVAS_SIZE);
+    const mid = dragToEnvelopeValue('sustain', MAX_RADIUS * 0.5);
     expect(mid).toBeCloseTo(0.5);
 
-    const maxed = dragToEnvelopeValue('sustain', MAX_RADIUS * 5, CANVAS_SIZE);
+    const maxed = dragToEnvelopeValue('sustain', MAX_RADIUS * 5);
     expect(maxed).toBe(1);
   });
 
   test('release: max drag = 3.0', () => {
-    const value = dragToEnvelopeValue('release', MAX_RADIUS, CANVAS_SIZE);
+    const value = dragToEnvelopeValue('release', MAX_RADIUS);
     expect(value).toBeCloseTo(3);
 
-    const overMax = dragToEnvelopeValue('release', MAX_RADIUS * 10, CANVAS_SIZE);
+    const overMax = dragToEnvelopeValue('release', MAX_RADIUS * 10);
     expect(overMax).toBe(3);
   });
 
   test('decay: matches attack scaling', () => {
-    const distances = [10, 30, 60, MAX_RADIUS];
+    const distances = [0.01, 0.03, 0.06, MAX_RADIUS];
     for (const dist of distances) {
-      const attackVal = dragToEnvelopeValue('attack', dist, CANVAS_SIZE);
-      const decayVal = dragToEnvelopeValue('decay', dist, CANVAS_SIZE);
+      const attackVal = dragToEnvelopeValue('attack', dist);
+      const decayVal = dragToEnvelopeValue('decay', dist);
       expect(decayVal).toBeCloseTo(attackVal);
     }
-  });
-});
-
-describe('ADSR corner radii', () => {
-  test('default envelope produces non-zero radii', () => {
-    const radii = envelopeToCornerRadii(defaultEnvelope, CANVAS_SIZE);
-    expect(radii.bottomLeft).toBeGreaterThan(0);
-    expect(radii.topLeft).toBeGreaterThan(0);
-    expect(radii.topRight).toBeGreaterThan(0);
-    expect(radii.bottomRight).toBeGreaterThan(0);
-  });
-
-  test('zero envelope produces zero radii', () => {
-    const zeroEnvelope = { attack: 0, decay: 0, release: 0, sustain: 0 };
-    const radii = envelopeToCornerRadii(zeroEnvelope, CANVAS_SIZE);
-    expect(radii.bottomLeft).toBe(0);
-    expect(radii.topLeft).toBe(0);
-    expect(radii.topRight).toBe(0);
-    expect(radii.bottomRight).toBe(0);
-  });
-
-  test('radii scale with canvas size', () => {
-    const radii400 = envelopeToCornerRadii(defaultEnvelope, 400);
-    const radii800 = envelopeToCornerRadii(defaultEnvelope, 800);
-
-    expect(radii800.bottomLeft).toBeCloseTo(radii400.bottomLeft * 2);
-    expect(radii800.topLeft).toBeCloseTo(radii400.topLeft * 2);
-    expect(radii800.topRight).toBeCloseTo(radii400.topRight * 2);
-    expect(radii800.bottomRight).toBeCloseTo(radii400.bottomRight * 2);
-  });
-
-  test('attack maps to bottomLeft', () => {
-    const radii = envelopeToCornerRadii(defaultEnvelope, CANVAS_SIZE);
-    const expectedAttackRadius = (defaultEnvelope.attack / 2) * MAX_RADIUS;
-    expect(radii.bottomLeft).toBeCloseTo(expectedAttackRadius);
   });
 });
 
@@ -147,20 +111,14 @@ describe('ADSR drag simulation (pointer event flow)', () => {
     const corner = hitTestADSRCorner(defaultEnvelope, startX, startY, CANVAS_SIZE);
     expect(corner).toBe('attack');
 
-    // Simulate drag outward from corner — compute drag distance
+    // Simulate drag outward from corner — compute drag distance (normalized)
     const dragEndX = 80;
     const dragEndY = CANVAS_SIZE - 80;
-    const dragDistance = Math.hypot(Number(dragEndX), CANVAS_SIZE - dragEndY);
+    const dragDistance = Math.hypot(Number(dragEndX), CANVAS_SIZE - dragEndY) / CANVAS_SIZE;
 
     // Get new envelope value from drag
-    const newAttack = dragToEnvelopeValue('attack', dragDistance, CANVAS_SIZE);
+    const newAttack = dragToEnvelopeValue('attack', dragDistance);
     expect(newAttack).toBeGreaterThan(defaultEnvelope.attack);
-
-    // Verify the radii update reflects increased attack
-    const updatedEnvelope = { ...defaultEnvelope, attack: newAttack };
-    const oldRadii = envelopeToCornerRadii(defaultEnvelope, CANVAS_SIZE);
-    const newRadii = envelopeToCornerRadii(updatedEnvelope, CANVAS_SIZE);
-    expect(newRadii.bottomLeft).toBeGreaterThan(oldRadii.bottomLeft);
   });
 
   test('dragging sustain corner outward increases sustain', () => {
@@ -171,29 +129,23 @@ describe('ADSR drag simulation (pointer event flow)', () => {
     const corner = hitTestADSRCorner(defaultEnvelope, startX, startY, CANVAS_SIZE);
     expect(corner).toBe('sustain');
 
-    // Drag inward from corner — distance from the corner position
+    // Drag inward from corner — distance from the corner position (normalized)
     const dragEndX = CANVAS_SIZE - 90;
     const dragEndY = 90;
-    const dragDistance = Math.hypot(CANVAS_SIZE - dragEndX, Number(dragEndY));
+    const dragDistance = Math.hypot(CANVAS_SIZE - dragEndX, Number(dragEndY)) / CANVAS_SIZE;
 
-    const newSustain = dragToEnvelopeValue('sustain', dragDistance, CANVAS_SIZE);
+    const newSustain = dragToEnvelopeValue('sustain', dragDistance);
     expect(newSustain).toBeGreaterThan(defaultEnvelope.sustain);
-
-    const updatedEnvelope = { ...defaultEnvelope, sustain: newSustain };
-    const oldRadii = envelopeToCornerRadii(defaultEnvelope, CANVAS_SIZE);
-    const newRadii = envelopeToCornerRadii(updatedEnvelope, CANVAS_SIZE);
-    expect(newRadii.topRight).toBeGreaterThan(oldRadii.topRight);
   });
 
   test('minimal drag keeps values near minimum', () => {
-    // Tiny drag distance of 1 pixel from the attack corner
-    const tinyDrag = 1;
-    const attackValue = dragToEnvelopeValue('attack', tinyDrag, CANVAS_SIZE);
-    // Should be very close to the minimum (0.01)
+    // Tiny drag distance (normalized)
+    const tinyDrag = 1 / CANVAS_SIZE;
+    const attackValue = dragToEnvelopeValue('attack', tinyDrag);
     expect(attackValue).toBeCloseTo(0.0167, 1); // (1/120)*2 = ~0.017
     expect(attackValue).toBeLessThan(0.1);
 
-    const decayValue = dragToEnvelopeValue('decay', tinyDrag, CANVAS_SIZE);
+    const decayValue = dragToEnvelopeValue('decay', tinyDrag);
     expect(decayValue).toBeLessThan(0.1);
   });
 
@@ -239,19 +191,15 @@ describe('ADSR drag simulation (pointer event flow)', () => {
 
   test('touch between two corners does not hit either (midpoint of top edge)', () => {
     // Midpoint of top edge: (400, 0) — equidistant from decay (0,0) and sustain (800,0)
-    // Distance to either corner = 400, which is >> 64px hit radius
     const result = hitTestADSRCorner(defaultEnvelope, 400, 0, CANVAS_SIZE);
     expect(result).toBeUndefined();
 
-    // Midpoint of left edge: (0, 400) — equidistant from decay (0,0) and attack (0,800)
     const leftMid = hitTestADSRCorner(defaultEnvelope, 0, 400, CANVAS_SIZE);
     expect(leftMid).toBeUndefined();
 
-    // Midpoint of bottom edge: (400, 800)
     const bottomMid = hitTestADSRCorner(defaultEnvelope, 400, CANVAS_SIZE, CANVAS_SIZE);
     expect(bottomMid).toBeUndefined();
 
-    // Midpoint of right edge: (800, 400)
     const rightMid = hitTestADSRCorner(defaultEnvelope, CANVAS_SIZE, 400, CANVAS_SIZE);
     expect(rightMid).toBeUndefined();
   });

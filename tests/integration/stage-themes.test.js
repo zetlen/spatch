@@ -15,13 +15,13 @@ test.describe('Stage themes', () => {
     await expect(btn).toBeVisible();
     await expect(btn).toHaveAttribute('title', 'Stage: White');
 
-    const area = page.locator('#canvas-area');
+    const area = page.locator('#stage');
     await expect(area).not.toHaveClass(/stage-florid/);
   });
 
   test('clicking cycles white → florid → white', async ({ page }) => {
     const btn = page.locator('#btn-stage');
-    const area = page.locator('#canvas-area');
+    const area = page.locator('#stage');
 
     // Click 1: white → florid
     await btn.click();
@@ -36,7 +36,7 @@ test.describe('Stage themes', () => {
 
   test('theme persists across reload', async ({ page }) => {
     const btn = page.locator('#btn-stage');
-    const area = page.locator('#canvas-area');
+    const area = page.locator('#stage');
 
     // Set to florid
     await btn.click();
@@ -51,7 +51,7 @@ test.describe('Stage themes', () => {
   });
 
   test('florid mode advances image on each cycle', async ({ page }) => {
-    const area = page.locator('#canvas-area');
+    const area = page.locator('#stage');
     const btn = page.locator('#btn-stage');
 
     // Get to florid (image 1)

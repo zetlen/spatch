@@ -40,14 +40,38 @@ js/
                      parameter and runtime null check
   types.ts           Shared type definitions: branded primitives, Voice
                      (discriminated union), Fill (discriminated union),
-                     TextDecoration, Envelope, branding functions
-  state.ts           SigilStore (data CRUD + change notification) and
-                     UndoManager (undo/redo wrapping a store)
+                     Envelope, branding functions
+  state.ts           SigilStore (data CRUD + @preact/signals change notification)
+                     and UndoManager (undo/redo wrapping a store)
+  state/
+    selection.ts     SelectionManager: app-level voice selection backed by signals
   interaction.ts     InteractionState discriminated union (idle, dragging,
-                     resizing, rotating, adsr, deco-*, pinch-rotate)
+                     resizing, rotating, adsr, pinch-rotate)
   app.ts             Entry point: init, event wiring, render loop, selection
   embed-entry.ts     Entry point for embed.html viewer
-  canvas.ts          SVG DOM reconciler (voices, text decorations, selection UI)
+  keyboard.ts        Global keyboard shortcut handler (delete, copy/paste,
+                     undo/redo, escape, tool switch, space play toggle)
+  playback.ts        PlaybackController: play/stop/latch/loop state machine
+  splash.ts          SplashController: first-visit splash screen
+  canvas/
+    render.ts        SVG DOM reconciler (voices, selection UI)
+    interaction.ts   CanvasInteractionController: pointer/touch input on canvas
+    frame-shadow.ts  Frame shadow computation (reverb + audio-reactive)
+  audio/
+    engine.ts        AudioEngine class: Web Audio lifecycle, voice management,
+                     reverb, analyser
+    mapping.ts       Audio mapping functions (pitch, pan, gain, timbre, formants)
+    voice-builder.ts Voice audio graph construction (oscillators, effects, borders)
+    voice-types.ts   AudioVoice interface (runtime audio graph state)
+    formants.ts      Formant filter bank for fill-driven vowel synthesis
+  toolbar/
+    toolbar.ts       Toolbar class: tool/pattern/color picker UI binding
+    blend-panel.ts   Blend mode expansion panel
+    border-panel.ts  Border settings expansion panel
+    fill-panel.ts    Fill color/gradient expansion panel
+    pattern-panel.ts Pattern effect dropdown panel
+    reverb-panel.ts  Reverb controls panel
+    dom-helpers.ts   Shared DOM construction helpers for toolbar panels
   shapes.ts          Resize/rotate math, ADSR corner testing
   colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
   patterns.ts        SVG pattern definitions (stripes, checker, noise, gradient)
@@ -55,15 +79,10 @@ js/
                      flanger, phaser) and blend effects (saturation,
                      compression, exciter, gating, comb filter, flanger) +
                      overlap computation
-  audio.ts           Web Audio engine: AudioEngine class, mapping functions
-                     (pitch, pan, gain, timbre, formants), voice building
   envelope.ts        ADSR ↔ canvas corner radius conversion
-  toolbar.ts         Toolbar class: tool/pattern/color picker UI binding
-  stage.ts           Stage theme cycling (white / florid background images)
-  decorations.ts     DecorationTool class: text placement only
-  vocoder.ts         Formant synthesis for text decorations (bandpass filter bank)
-  embed.ts           Embed snippet generator + modal UI
+  share.ts           Share menu binding + embed snippet generator
   serialize.ts       LZ-string URL serialization (positional arrays, no keys)
+  stage.ts           Stage theme cycling (white / florid background images)
 dist/                Build output (gitignored)
 docs/plans/              Design docs and implementation plans
                          Convention: YYYY-MM-DD-{topic}-{design|plan}.md
@@ -200,10 +219,6 @@ design rationale and enumeration of past violations.
     double = 2 octaves. `thickness` scales both the visual stroke width and
     the doubled oscillator's gain. Undefined = no border, no doubling.
 
-- **Text decorations** use vocoder synthesis. Fields: text (vocoder content),
-  x (pan), y (pitch), size (carrier volume). All text renders black. Every
-  field is bijective.
-
 - **Reverb** is a global effect on `SigilData` (not per-voice). The canvas
   frame gains an inset shadow (CSS `box-shadow: inset`) that maps to master
   reverb via a ConvolverNode with algorithmic impulse response. `depth`
@@ -227,15 +242,21 @@ design rationale and enumeration of past violations.
 - **Play modes**: normal (press-and-hold), latch (click to toggle), loop
   (auto-repeating).
 
-- **State** lives in `SigilStore` (js/state.ts). It holds voices, text
-  decorations, envelope, and reverb. All mutations go through this class. `UndoManager`
+- **State** lives in `SigilStore` (js/state.ts). It holds voices,
+  envelope, and reverb. All mutations go through this class. `UndoManager`
   wraps the store and provides undo/redo via JSON snapshots. Selection state is
-  app-level, not in the store.
+  app-level in `SelectionManager` (js/state/selection.ts), backed by
+  @preact/signals-core signals.
 
 - **Serialization** uses positional arrays + LZ-string compression →
   URL hash fragment. No keys, no IDs in wire format. **No backwards compatibility
   until v1.** Old URLs will break. Do not write migration code, version checks,
   or legacy deserializers. Just change the format and move on.
+
+## The Triple Sec Rule
+
+If a code pattern is **more than 3 lines** and appears **more than 3 times**,
+extract it into a shared function or helper. No exceptions. DRY it up.
 
 ## Code Conventions
 
@@ -251,8 +272,6 @@ design rationale and enumeration of past violations.
   converted via `fillToFillDraft()` / `fillDraftToFill()`.
 - **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice`),
   discriminated on the `waveform` field. Sine has no `timbre`; pulse and blend do.
-- **TextDecoration** has text, x, y, size — all bijective. No color, no
-  squiggles, no curlicues.
 - **InteractionState** is a discriminated union for the canvas interaction state
   machine (idle, dragging, resizing, rotating, etc.), replacing scattered variables.
 - **BlendMode** is a string union of the 7 supported blend modes.
@@ -266,8 +285,8 @@ design rationale and enumeration of past violations.
 - Audio pattern effects return `{ input, output, dispose }` objects. Blend effects
   return `{ input, output, wetGain, dispose }` (wetGain is externally controlled).
 - **Every new field must satisfy the bijection principle.** If you add a field
-  to a voice or text decoration, you must add both a visual rendering path and
-  an audio mapping. If you cannot identify both, the field should not exist.
+  to a voice, you must add both a visual rendering path and an audio mapping.
+  If you cannot identify both, the field should not exist.
 
 **IMPORTANT: If you need a temporary directory for scratch files, build artifacts, or
 throwaway work, use `tmp/` at the project root. It is gitignored. Do NOT create temp
@@ -321,8 +340,8 @@ The current unlock strategy (in `audio.ts:_init()`) uses three layers:
 - The render loop is driven by `needsRender` flag + `requestAnimationFrame`. Set
   `needsRender = true` or call `store._notify()` to trigger a redraw.
 - To add a new waveform/shape: add a variant to the Voice union in `types.ts`,
-  update `state.ts:createVoice`, `canvas.ts` SVG element creation,
-  `audio.ts` voice builder, and `serialize.ts`. Hit testing is handled natively
+  update `state.ts:createVoice`, `canvas/render.ts` SVG element creation,
+  `audio/voice-builder.ts`, and `serialize.ts`. Hit testing is handled natively
   by SVG pointer events. The new variant MUST map every field to both a visual
   and audio interpretation.
 - To add a new pattern/effect: update `patterns.ts` (visual), `effects.ts`
@@ -332,21 +351,21 @@ The current unlock strategy (in `audio.ts:_init()`) uses three layers:
   in `serialize.ts`, and add an `<option>` in `index.html`. The mode must
   produce a visible difference when shapes overlap and map to an audio effect.
 - To modify border behavior: update `Border` type in `types.ts`, update
-  `canvas.ts` voice reconciliation (visual rendering), `audio.ts:_buildVoice` (octave
-  oscillator), `serialize.ts` (pack/unpack), and `toolbar.ts` (border panel
-  bindings). Border changes trigger full voice rebuild via `currentBorder`
-  string comparison in `updateVoices`.
+  `canvas/render.ts` voice reconciliation (visual rendering),
+  `audio/voice-builder.ts` (octave oscillator), `serialize.ts` (pack/unpack),
+  and `toolbar/border-panel.ts` (border panel UI). Border changes trigger full
+  voice rebuild via `currentBorder` string comparison in `updateVoices`.
 - To add a new fill mode: add a variant to the `Fill` union in `types.ts`, update
-  `fillToFillDraft`/`fillDraftToFill`, `colors.ts`, `toolbar.ts` picker, `audio.ts`
-  formant mapping, and `serialize.ts`. Every fill field must affect the formant
-  filter.
+  `fillToFillDraft`/`fillDraftToFill`, `colors.ts`, `toolbar/fill-panel.ts`
+  picker, `audio/mapping.ts` formant mapping, and `serialize.ts`. Every fill
+  field must affect the formant filter.
 - To add a new field to any type: you MUST provide both a visual rendering path
   and an audio mapping. If either is missing, the field violates the bijection
   principle and must not be added.
 - To modify reverb behavior: update `Reverb` type in `types.ts`, update
-  `app.ts:updateFrameShadow` (visual rendering), `audio.ts:updateReverb`
+  `canvas/frame-shadow.ts` (visual rendering), `audio/engine.ts:updateReverb`
   (ConvolverNode + IR generation), `serialize.ts` (pack/unpack), and
-  `toolbar.ts` (reverb panel bindings). Reverb is global — not per-voice.
+  `toolbar/reverb-panel.ts` (reverb panel UI). Reverb is global — not per-voice.
 - The `embed.html` page imports the same modules as the main app but only uses
-  `canvas.ts`, `audio.ts`, `serialize.ts`, and `envelope.ts`. Both pages
-  use the same frame div + transparent SVG architecture.
+  `canvas/render.ts`, `audio/engine.ts`, `serialize.ts`, and `envelope.ts`.
+  Both pages use the same frame div + transparent SVG architecture.

@@ -35,10 +35,13 @@ export function cents(n: number): Cents {
 
 // ---- Voice types ----
 
+/** Waveform discriminant: sine (circle), pulse (square), or blend (triangle). */
 export type WaveformType = 'sine' | 'pulse' | 'blend';
 
+/** Pattern overlay type applied to a voice shape for visual texture and audio effect. */
 export type PatternType = 'stripes' | 'checker' | 'noise' | 'gradient';
 
+/** CSS mix-blend-mode value that maps to an overlap-driven audio effect. */
 export type BlendMode =
   | 'soft-light'
   | 'multiply'
@@ -48,6 +51,7 @@ export type BlendMode =
   | 'difference'
   | 'exclusion';
 
+/** Fill mode discriminant for the Fill union. */
 export type FillMode = 'solid' | 'linear';
 
 interface FillBase {
@@ -56,10 +60,12 @@ interface FillBase {
   l: number;
 }
 
+/** A single-color fill with HSL components. */
 export interface SolidFill extends FillBase {
   mode: 'solid';
 }
 
+/** A linear gradient fill with two HSL color stops and a gradient angle. */
 export interface LinearFill extends FillBase {
   mode: 'linear';
   h2: number;
@@ -68,6 +74,7 @@ export interface LinearFill extends FillBase {
   gradAngle: number;
 }
 
+/** Discriminated union of fill types (solid color or linear gradient). */
 export type Fill = SolidFill | LinearFill;
 
 /** Flat bag used internally by toolbar for mode-switching without data loss. */
@@ -82,6 +89,11 @@ export interface FillDraft {
   gradAngle: number;
 }
 
+/**
+ * Convert a Fill union to a flat FillDraft bag, filling in defaults for missing gradient fields.
+ * @param fill - The fill to convert
+ * @returns A FillDraft with all fields populated
+ */
 export function fillToFillDraft(fill: Fill): FillDraft {
   const base = { gradAngle: 0, h: fill.h, h2: 180, l: fill.l, l2: 45, s: fill.s, s2: 80 };
   switch (fill.mode) {
@@ -101,6 +113,11 @@ export function fillToFillDraft(fill: Fill): FillDraft {
   }
 }
 
+/**
+ * Convert a FillDraft bag back to a Fill union, discarding unused gradient fields for solid mode.
+ * @param draft - The draft to convert
+ * @returns A Fill matching the draft's mode
+ */
 export function fillDraftToFill(draft: FillDraft): Fill {
   switch (draft.mode) {
     case 'solid': {
@@ -121,29 +138,20 @@ export function fillDraftToFill(draft: FillDraft): Fill {
   }
 }
 
-export function createDefaultFill(): SolidFill {
-  return { h: 200, l: 50, mode: 'solid', s: 80 };
-}
-
-export function createRandomFill(): SolidFill {
-  return {
-    h: Math.floor(Math.random() * 360),
-    l: 45 + Math.floor(Math.random() * 15),
-    mode: 'solid',
-    s: 70 + Math.floor(Math.random() * 20),
-  };
-}
-
+/** Border stroke color: white shifts octave up, black shifts octave down. */
 export type BorderColor = 'white' | 'black';
 
+/** Inset stroke border on a voice shape; maps to an octave-doubled oscillator in audio. */
 export interface Border {
   color: BorderColor;
   double: boolean;
   thickness: NormalizedCoord;
 }
 
+/** Reverb impulse response style: glow (short bright) or dim (long dark). */
 export type ReverbStyle = 'glow' | 'dim';
 
+/** Global reverb effect: depth controls wet/dry mix, style selects the impulse response. */
 export interface Reverb {
   depth: NormalizedCoord;
   style: ReverbStyle;
@@ -160,34 +168,29 @@ interface VoiceBase {
   border: Border | undefined;
 }
 
+/** Sine waveform voice (circle shape). No timbre parameter. */
 export interface SineVoice extends VoiceBase {
   waveform: 'sine';
 }
 
+/** Pulse waveform voice (square shape). Timbre controls pulse width via rotation. */
 export interface PulseVoice extends VoiceBase {
   waveform: 'pulse';
   timbre: NormalizedCoord;
 }
 
+/** Blend waveform voice (triangle shape). Timbre controls saw/tri blend via rotation. */
 export interface BlendVoice extends VoiceBase {
   waveform: 'blend';
   timbre: NormalizedCoord;
 }
 
+/** Discriminated union of voice types, keyed on the `waveform` field. */
 export type Voice = SineVoice | PulseVoice | BlendVoice;
-
-// ---- Text decoration ----
-
-export interface TextDecoration {
-  id: string;
-  text: string;
-  x: NormalizedCoord;
-  y: NormalizedCoord;
-  size: NormalizedCoord;
-}
 
 // ---- Envelope ----
 
+/** ADSR amplitude envelope applied to all voices during playback. */
 export interface Envelope {
   /** Attack time in seconds (0.01–2.0) */
   attack: number;
@@ -201,13 +204,18 @@ export interface Envelope {
 
 // ---- Top-level state ----
 
+/** Complete sigil state: voices, envelope, and optional reverb. */
 export interface SigilData {
   envelope: Envelope;
   voices: Voice[];
-  texts: TextDecoration[];
   reverb: Reverb | undefined;
 }
 
+/**
+ * Map a waveform type to its corresponding geometric shape name.
+ * @param waveform - The waveform type
+ * @returns The shape name used for SVG rendering
+ */
 export function waveformShape(waveform: WaveformType): 'circle' | 'square' | 'triangle' {
   switch (waveform) {
     case 'sine': {
@@ -224,28 +232,17 @@ export function waveformShape(waveform: WaveformType): 'circle' | 'square' | 'tr
 
 // ---- Audio contracts ----
 
+/** An audio effect chain with connectable input/output nodes and cleanup. */
 export interface AudioEffect {
   input: AudioNode;
   output: AudioNode;
   dispose: () => void;
 }
 
-export interface VocoderChain {
-  input: undefined;
-  output: GainNode;
-  duration: number;
-  dispose: () => void;
-}
-
 // ---- UI types ----
 
+/** Selection handle positions: cardinal/corner resize handles or rotation handle. */
 export type HandleType = 'rotate' | 'nw' | 'ne' | 'se' | 'sw' | 'n' | 'e' | 's' | 'w';
 
+/** Canvas frame corner mapped to an ADSR envelope parameter. */
 export type ADSRCorner = 'attack' | 'decay' | 'sustain' | 'release';
-
-export interface DecoBounds {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}

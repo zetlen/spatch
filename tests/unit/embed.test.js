@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { generateEmbedSnippet } from '../../js/embed.ts';
+import { generateEmbedSnippet } from '../../js/share.ts';
 
 describe('generateEmbedSnippet', () => {
   test('returns an iframe string containing encoded state', () => {
     const state = {
       envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
       reverb: undefined,
-      texts: [],
+
       voices: [],
     };
     const snippet = generateEmbedSnippet(state, 'https://example.com/embed.html');
@@ -21,7 +21,7 @@ describe('generateEmbedSnippet', () => {
     const state = {
       envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
       reverb: undefined,
-      texts: [],
+
       voices: [],
     };
     const snippet = generateEmbedSnippet(state, 'https://my-site.com/embed.html');

@@ -3,18 +3,11 @@
 // Creates, updates, and removes SVG elements to match SigilData.
 // Elements are keyed by voice ID for efficient reconciliation.
 
-import { ensureLinearGradient, getSolidFillColor } from './colors.ts';
-import { ensurePatternDefs, getPatternOverlay } from './patterns.ts';
-import { voiceRotation } from './shapes.ts';
-import {
-  type HandleType,
-  type SigilData,
-  type TextDecoration,
-  type Voice,
-  waveformShape,
-} from './types.ts';
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
+import { setAttrs, svgEl } from '../dom.ts';
+import { ensureLinearGradient, getSolidFillColor } from '../colors.ts';
+import { ensurePatternDefs, getPatternOverlay } from '../patterns.ts';
+import { voiceRotation } from '../shapes.ts';
+import { type HandleType, type SigilData, type Voice, waveformShape } from '../types.ts';
 
 // SVG viewBox units (0-1 space)
 const HANDLE_SIZE = 0.006_25;
@@ -34,7 +27,6 @@ globalThis.addEventListener(
 // ---- Reconciler state ----
 
 let _voiceLayer: SVGGElement | undefined;
-let _textLayer: SVGGElement | undefined;
 let _selectionLayer: SVGGElement | undefined;
 let _defs: SVGDefsElement | undefined;
 let _patternDefsReady = false;
@@ -42,22 +34,9 @@ let _patternDefsReady = false;
 /** Reset internal cache — call when switching SVG roots (e.g. embed). */
 export function resetCache(): void {
   _voiceLayer = undefined;
-  _textLayer = undefined;
   _selectionLayer = undefined;
   _defs = undefined;
   _patternDefsReady = false;
-}
-
-// ---- SVG element helpers ----
-
-function svgEl<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] {
-  return document.createElementNS(SVG_NS, tag) as SVGElementTagNameMap[K];
-}
-
-function setAttrs(el: SVGElement, attrs: Record<string, string>): void {
-  for (const [k, v] of Object.entries(attrs)) {
-    el.setAttribute(k, v);
-  }
 }
 
 // ---- Layer bootstrapping ----
@@ -65,14 +44,12 @@ function setAttrs(el: SVGElement, attrs: Record<string, string>): void {
 function ensureLayers(svg: SVGSVGElement): {
   defs: SVGDefsElement;
   voiceLayer: SVGGElement;
-  textLayer: SVGGElement;
   selectionLayer: SVGGElement;
 } {
-  if (_voiceLayer && _textLayer && _selectionLayer && _defs) {
+  if (_voiceLayer && _selectionLayer && _defs) {
     return {
       defs: _defs,
       selectionLayer: _selectionLayer,
-      textLayer: _textLayer,
       voiceLayer: _voiceLayer,
     };
   }
@@ -93,14 +70,6 @@ function ensureLayers(svg: SVGSVGElement): {
     svg.append(voiceLayer);
   }
 
-  // Find or create text layer
-  let textLayer = svg.querySelector('g[data-layer="texts"]') as SVGGElement | undefined;
-  if (!textLayer) {
-    textLayer = svgEl('g');
-    textLayer.dataset.layer = 'texts';
-    svg.append(textLayer);
-  }
-
   // Find or create selection layer
   let selectionLayer = svg.querySelector('g[data-layer="selection"]') as SVGGElement | undefined;
   if (!selectionLayer) {
@@ -111,10 +80,9 @@ function ensureLayers(svg: SVGSVGElement): {
 
   _defs = defs;
   _voiceLayer = voiceLayer;
-  _textLayer = textLayer;
   _selectionLayer = selectionLayer;
 
-  return { defs, selectionLayer, textLayer, voiceLayer };
+  return { defs, selectionLayer, voiceLayer };
 }
 
 // ---- Shape geometry ----
@@ -458,42 +426,6 @@ function reconcileVoices(voiceLayer: SVGGElement, voices: Voice[], defs: SVGDefs
   }
 }
 
-// ---- Text reconciliation ----
-
-function reconcileTexts(textLayer: SVGGElement, texts: TextDecoration[]): void {
-  const textIds = new Set(texts.map((t) => t.id));
-
-  // Remove deleted texts
-  const existingTexts = textLayer.querySelectorAll<SVGTextElement>(':scope > text[data-deco-id]');
-  for (const el of existingTexts) {
-    const id = el.dataset.decoId!;
-    if (!textIds.has(id)) {
-      el.remove();
-    }
-  }
-
-  // Add or update texts
-  for (const text of texts) {
-    let el = textLayer.querySelector<SVGTextElement>(`text[data-deco-id="${text.id}"]`);
-    if (!el) {
-      el = svgEl('text');
-      el.dataset.decoId = text.id;
-      el.setAttribute('fill', 'black');
-      el.setAttribute('text-anchor', 'middle');
-      el.setAttribute('dominant-baseline', 'central');
-      el.setAttribute('font-family', "'Imbue', serif");
-      textLayer.append(el);
-    }
-
-    el.setAttribute('x', String(text.x));
-    el.setAttribute('y', String(text.y));
-    el.setAttribute('font-size', String(text.size));
-    if (el.textContent !== text.text) {
-      el.textContent = text.text;
-    }
-  }
-}
-
 // ---- Selection UI ----
 
 function createShapeOutline(voice: Voice): SVGElement {
@@ -646,76 +578,10 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
   }
 }
 
-function renderDecoSelection(
-  selectionLayer: SVGGElement,
-  text: TextDecoration,
-  isTouch: boolean,
-): void {
-  // Use the SVG text element's BBox for accurate bounds
-  const textEl = _textLayer?.querySelector<SVGTextElement>(`text[data-deco-id="${text.id}"]`);
-  if (!textEl) {
-    return;
-  }
-
-  let bbox: DOMRect;
-  try {
-    bbox = textEl.getBBox();
-  } catch {
-    // GetBBox can throw if element is not rendered
-    return;
-  }
-
-  if (bbox.width === 0 && bbox.height === 0) {
-    return;
-  }
-
-  // Dashed bounding rect
-  const dashRect = svgEl('rect');
-  setAttrs(dashRect, {
-    fill: 'none',
-    height: String(bbox.height),
-    stroke: 'rgba(255,255,255,0.5)',
-    'stroke-dasharray': isTouch ? '0.008 0.008' : '0.005 0.005',
-    'stroke-width': isTouch ? '0.002' : '0.0015',
-    width: String(bbox.width),
-    x: String(bbox.x),
-    y: String(bbox.y),
-  });
-  selectionLayer.append(dashRect);
-
-  if (isTouch) {
-    return;
-  }
-
-  // Corner resize handles
-  const corners: [HandleType, number, number][] = [
-    ['nw', bbox.x, bbox.y],
-    ['ne', bbox.x + bbox.width, bbox.y],
-    ['se', bbox.x + bbox.width, bbox.y + bbox.height],
-    ['sw', bbox.x, bbox.y + bbox.height],
-  ];
-
-  for (const [handle, hx, hy] of corners) {
-    const rect = svgEl('rect');
-    setAttrs(rect, {
-      'data-handle': handle,
-      fill: '#ffffff',
-      height: String(HANDLE_SIZE * 2),
-      stroke: '#2a2a2a',
-      'stroke-width': '0.001',
-      width: String(HANDLE_SIZE * 2),
-      x: String(hx - HANDLE_SIZE),
-      y: String(hy - HANDLE_SIZE),
-    });
-    selectionLayer.append(rect);
-  }
-}
-
 function renderSelection(
   selectionLayer: SVGGElement,
   state: SigilData,
   selectedId: string | undefined,
-  selectedDecoId: string | undefined | undefined,
 ): void {
   // Clear previous selection UI
   while (selectionLayer.firstChild) {
@@ -730,24 +596,19 @@ function renderSelection(
       renderVoiceSelection(selectionLayer, voice, isTouch);
     }
   }
-
-  if (selectedDecoId) {
-    const text = state.texts.find((t) => t.id === selectedDecoId);
-    if (text) {
-      renderDecoSelection(selectionLayer, text, isTouch);
-    }
-  }
 }
 
 // ---- Main render ----
 
-export function render(
-  svg: SVGSVGElement,
-  state: SigilData,
-  selectedId: string | undefined,
-  selectedDecoId?: string | undefined,
-): void {
-  const { defs, voiceLayer, textLayer, selectionLayer } = ensureLayers(svg);
+/**
+ * Reconcile the SVG DOM to match the given sigil state. Creates, updates, and
+ * removes voice shapes and selection UI elements.
+ * @param svg - The root SVG element (viewBox 0 0 1 1)
+ * @param state - Current sigil state to render
+ * @param selectedId - ID of the currently selected voice, or undefined
+ */
+export function render(svg: SVGSVGElement, state: SigilData, selectedId: string | undefined): void {
+  const { defs, voiceLayer, selectionLayer } = ensureLayers(svg);
 
   // Ensure shared pattern defs exist
   if (!_patternDefsReady) {
@@ -758,9 +619,6 @@ export function render(
   // Reconcile voices
   reconcileVoices(voiceLayer, state.voices, defs);
 
-  // Reconcile text decorations
-  reconcileTexts(textLayer, state.texts);
-
   // Render selection UI (rebuilt each frame — cheap for SVG)
-  renderSelection(selectionLayer, state, selectedId, selectedDecoId);
+  renderSelection(selectionLayer, state, selectedId);
 }

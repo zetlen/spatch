@@ -2,7 +2,7 @@
 //
 // Wire format: positional arrays, no keys, no IDs.
 //
-//   [envelope, voices, texts, reverb?]
+//   [envelope, voices, reverb?]
 //
 //   Envelope = [attack, decay, sustain, release]
 //
@@ -15,8 +15,6 @@
 //   Fill (linear)  = ["l", gradAngle, h, s, l, h2, s2, l2]
 //
 //   Effect = "s"|"c"|"n"|"g" | 0
-//
-//   Text = [text, x, y, size]
 //
 //   Reverb = 0 (none) | ["G"|"D", depth]
 
@@ -33,12 +31,16 @@ import {
   type ReverbStyle,
   type SigilData,
   type SolidFill,
-  type TextDecoration,
   type Voice,
   type WaveformType,
   normalizedCoord,
 } from './types.ts';
 
+/**
+ * Serialize sigil state to a compressed URI-safe string via LZ-string.
+ * @param state - The sigil state to serialize
+ * @returns Compressed string suitable for use as a URL hash fragment
+ */
 export function serializeState(state: SigilData): string {
   const packed = pack(state);
   const json = JSON.stringify(packed);
@@ -50,6 +52,11 @@ export function _serializeToJSON(state: SigilData): string {
   return JSON.stringify(pack(state));
 }
 
+/**
+ * Deserialize sigil state from a compressed hash string.
+ * @param hash - LZ-string compressed state (from URL hash fragment)
+ * @returns Parsed SigilData, or undefined if decompression/parsing fails
+ */
 export function deserializeState(hash: string): SigilData | undefined {
   try {
     const json = LZString.decompressFromEncodedURIComponent(hash);
@@ -63,11 +70,13 @@ export function deserializeState(hash: string): SigilData | undefined {
   }
 }
 
+/** Serialize state and write it to the current URL hash fragment (replaces history entry). */
 export function saveToURL(state: SigilData): void {
   const encoded = serializeState(state);
   history.replaceState(undefined, '', '#' + encoded);
 }
 
+/** Read and deserialize state from the current URL hash fragment, or undefined if empty/invalid. */
 export function loadFromURL(): SigilData | undefined {
   const hash = globalThis.location.hash.slice(1);
   if (!hash) {
@@ -89,14 +98,11 @@ type PackedVoice =
   | [string, number, number, number, PackedFill, string | 0, string, PackedBorder]
   | [string, number, number, number, PackedFill, string | 0, string, PackedBorder, number];
 
-type PackedText = [string, number, number, number];
-
 type PackedReverb = 0 | [string, number];
 
 type PackedState = [
   [number, number, number, number], // Envelope
   PackedVoice[], // Voices
-  PackedText[], // Texts
   PackedReverb?, // Reverb (optional)
 ];
 
@@ -119,7 +125,6 @@ function pack(state: SigilData): PackedState {
       }
       return [w, round3(v.x), round3(v.y), round3(v.size), f, e, b, bdr];
     }),
-    state.texts.map((t): PackedText => [t.text, round3(t.x), round3(t.y), round3(t.size)]),
   ];
   const rv = packReverb(state.reverb);
   if (rv !== 0) {
@@ -139,7 +144,7 @@ const effectMap: Record<string, PatternType> = {
 };
 
 function unpack(packed: PackedState): SigilData {
-  const [env, voices, texts] = packed;
+  const [env, voices] = packed;
   return {
     envelope: {
       attack: env[0],
@@ -147,16 +152,7 @@ function unpack(packed: PackedState): SigilData {
       release: env[3],
       sustain: env[2],
     },
-    reverb: unpackReverb(packed[3] as PackedReverb | undefined),
-    texts: (texts || []).map(
-      (pt): TextDecoration => ({
-        id: genId('t'),
-        size: normalizedCoord(pt[3]),
-        text: pt[0],
-        x: normalizedCoord(pt[1]),
-        y: normalizedCoord(pt[2]),
-      }),
-    ),
+    reverb: unpackReverb(packed[2] as PackedReverb | undefined),
     voices: (voices || []).map((pv): Voice => {
       const waveform: WaveformType = waveformMap[pv[0]] || 'sine';
       const effect: PatternType | undefined = pv[5]

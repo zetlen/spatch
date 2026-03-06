@@ -16,3 +16,9 @@ jobs:
       - run: bun run test:unit
       - run: bun run test:e2e
       - run: bun run build
+      - name: Quality summary
+        run: |
+          echo "=== File sizes (code lines, largest first) ==="
+          find js -name '*.ts' -exec grep -cvE '^\s*$|^\s*//' {} + | sort -t: -k2 -rn | head -15
+          echo ""
+          echo "If any file exceeds 800 code lines, the refactor has regressed."

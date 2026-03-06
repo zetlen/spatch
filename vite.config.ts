@@ -107,6 +107,10 @@ export default defineConfig({
     },
   },
 
+  server: {
+    allowedHosts: true,
+  },
+
   plugins: [
     svgSpritePlugin({
       iconsDir: 'node_modules/@tabler/icons/icons',

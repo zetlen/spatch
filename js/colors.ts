@@ -1,9 +1,22 @@
 // Colors.ts — Color conversions (HSL, RGB) and color picker logic
 
-import type { Fill, LinearFill } from './types.ts';
+import { svgEl } from './dom.ts';
+import type { Fill, LinearFill, SolidFill } from './types.ts';
 
 export function hslToString(h: number, s: number, l: number): string {
   return `hsl(${h}, ${s}%, ${l}%)`;
+}
+
+// ---- Fill factories ----
+
+/** Create a solid fill with a random hue and mid-range saturation/lightness. */
+export function createRandomFill(): SolidFill {
+  return {
+    h: Math.floor(Math.random() * 360),
+    l: 45 + Math.floor(Math.random() * 15),
+    mode: 'solid',
+    s: 70 + Math.floor(Math.random() * 20),
+  };
 }
 
 // ---- SVG-compatible fill helpers ----
@@ -22,15 +35,12 @@ export function ensureLinearGradient(
 ): void {
   let grad = defs.querySelector(`#${id}`) as SVGLinearGradientElement | undefined;
   if (!grad) {
-    grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-    grad.id = id;
-    grad.setAttribute('gradientUnits', 'objectBoundingBox');
-    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop1.setAttribute('offset', '0%');
-    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop2.setAttribute('offset', '100%');
-    grad.append(stop1);
-    grad.append(stop2);
+    grad = svgEl(
+      'linearGradient',
+      { id, gradientUnits: 'objectBoundingBox' },
+      svgEl('stop', { offset: '0%' }),
+      svgEl('stop', { offset: '100%' }),
+    );
     defs.append(grad);
   }
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { AudioEngine } from '../../js/audio.ts';
+import { AudioEngine } from '../../js/audio/engine.ts';
 
 // Minimal Web Audio API stubs for testing voice reconciliation logic.
 // We only need enough to let _buildVoice wire up nodes and updateVoices
@@ -131,11 +131,10 @@ function makeVoice(id, waveform = 'sine', overrides = {}) {
   return base;
 }
 
-function makeSigilState(voices) {
+function makeSigilState(voices, reverb = undefined) {
   return {
     envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
-    reverb: undefined,
-    texts: [],
+    reverb,
     voices,
   };
 }
@@ -165,7 +164,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
 
     // Add a second voice
     const voiceB = makeVoice('b');
-    engine.updateVoices(makeSigilState([voiceA, voiceB]));
+    engine.update(makeSigilState([voiceA, voiceB]));
 
     expect(engine.activeVoices.length).toBe(2);
     expect(engine.activeVoices.map((v) => v.shapeId).toSorted()).toEqual(['a', 'b']);
@@ -179,7 +178,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     expect(engine.activeVoices.length).toBe(2);
 
     // Remove voice B
-    engine.updateVoices(makeSigilState([voiceA]));
+    engine.update(makeSigilState([voiceA]));
 
     expect(engine.activeVoices.length).toBe(1);
     expect(engine.activeVoices[0].shapeId).toBe('a');
@@ -192,7 +191,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
 
     // Remove A, add C
     const voiceC = makeVoice('c');
-    engine.updateVoices(makeSigilState([voiceB, voiceC]));
+    engine.update(makeSigilState([voiceB, voiceC]));
 
     expect(engine.activeVoices.length).toBe(2);
     const ids = engine.activeVoices.map((v) => v.shapeId).toSorted();
@@ -205,7 +204,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     await startWith([voiceA]);
 
     const voicesBefore = engine.activeVoices.length;
-    engine.updateVoices(makeSigilState([voiceA]));
+    engine.update(makeSigilState([voiceA]));
 
     expect(engine.activeVoices.length).toBe(voicesBefore);
   });
@@ -215,7 +214,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     const voiceB = makeVoice('b');
     await startWith([voiceA, voiceB]);
 
-    engine.updateVoices(makeSigilState([]));
+    engine.update(makeSigilState([]));
 
     expect(engine.activeVoices.length).toBe(0);
   });
@@ -224,7 +223,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     await startWith([]);
 
     const voices = [makeVoice('circ', 'sine'), makeVoice('sq', 'pulse'), makeVoice('tri', 'blend')];
-    engine.updateVoices(makeSigilState(voices));
+    engine.update(makeSigilState(voices));
 
     expect(engine.activeVoices.length).toBe(3);
     expect(engine.activeVoices.map((v) => v.shapeId).toSorted()).toEqual(['circ', 'sq', 'tri']);
@@ -233,7 +232,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
   test('does nothing when not playing', () => {
     engine.isPlaying = false;
     const voiceA = makeVoice('a');
-    engine.updateVoices(makeSigilState([voiceA]));
+    engine.update(makeSigilState([voiceA]));
 
     expect(engine.activeVoices.length).toBe(0);
   });
@@ -271,7 +270,7 @@ describe('AudioEngine — blend effects', () => {
 
     // Change blend mode
     const updated = makeVoice('a', 'sine', { blend: 'multiply' });
-    engine.updateVoices(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]));
 
     // Voice should have been rebuilt (different object)
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
@@ -346,7 +345,7 @@ describe('AudioEngine — border / octave doubling', () => {
     const updated = makeVoice('a', 'sine', {
       border: { color: 'black', double: false, thickness: 0.5 },
     });
-    engine.updateVoices(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]));
 
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice).not.toBe(originalVoice);
@@ -363,7 +362,7 @@ describe('AudioEngine — border / octave doubling', () => {
     const updated = makeVoice('a', 'sine', {
       border: { color: 'white', double: true, thickness: 0.7 },
     });
-    engine.updateVoices(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]));
 
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice).not.toBe(originalVoice);
@@ -379,7 +378,7 @@ describe('AudioEngine — border / octave doubling', () => {
 
     // Remove border
     const updated = makeVoice('a', 'sine', { border: undefined });
-    engine.updateVoices(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]));
 
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice.octaveOsc).toBeUndefined();
@@ -398,7 +397,7 @@ describe('AudioEngine — border / octave doubling', () => {
     const updated = makeVoice('a', 'sine', {
       border: { color: 'white', double: false, thickness: 0.8 },
     });
-    engine.updateVoices(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]));
 
     // Same voice object — NOT rebuilt
     const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
@@ -420,7 +419,7 @@ describe('AudioEngine — border / octave doubling', () => {
       border: { color: 'white', double: false, thickness: 0.5 },
       size: 0.7,
     });
-    engine.updateVoices(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]));
 
     expect(audioVoice.octaveGainNode.gain.value).toBeGreaterThan(initialGain);
   });
@@ -450,8 +449,7 @@ describe('AudioEngine — master reverb', () => {
   });
 
   async function startWith(voices, reverb = undefined) {
-    const state = makeSigilState(voices);
-    state.reverb = reverb;
+    const state = makeSigilState(voices, reverb);
     await engine.play(state, state.envelope);
     return state;
   }
@@ -495,7 +493,7 @@ describe('AudioEngine — master reverb', () => {
 
     expect(engine._reverbWet.gain.value).toBe(0.3);
 
-    engine.updateReverb({ depth: 0.8, style: 'dim' });
+    engine.update(makeSigilState([makeVoice('a')], { depth: 0.8, style: 'dim' }));
 
     expect(engine._reverbWet.gain.value).toBe(0.8);
   });
@@ -505,7 +503,7 @@ describe('AudioEngine — master reverb', () => {
 
     expect(engine._reverbConvolver).not.toBeUndefined();
 
-    engine.updateReverb(undefined);
+    engine.update(makeSigilState([makeVoice('a')]));
 
     expect(engine._reverbConvolver).toBeUndefined();
     expect(engine._reverbWet).toBeUndefined();
@@ -517,7 +515,7 @@ describe('AudioEngine — master reverb', () => {
 
     const originalConvolver = engine._reverbConvolver;
 
-    engine.updateReverb({ depth: 0.6, style: 'dim' });
+    engine.update(makeSigilState([makeVoice('a')], { depth: 0.6, style: 'dim' }));
 
     expect(engine._reverbConvolver).not.toBe(originalConvolver);
     expect(engine._reverbStyle).toBe('dim');

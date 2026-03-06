@@ -1,16 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import {
   areaToGain,
-  borderOctaveGain,
-  hueToFormants,
-  lightnessToCutoff,
   rotationToTimbre,
   shapeAreaFraction,
   snapYToNote,
   waveformGain,
   xToPan,
   yToFrequency,
-} from '../../js/audio.ts';
+} from '../../js/audio/mapping.ts';
+import { borderOctaveGain, hueToFormants, lightnessToCutoff } from '../../js/audio/formants.ts';
 
 describe('yToFrequency', () => {
   test('y=0 (top) returns highest chromatic note (G5)', () => {

@@ -1,31 +1,31 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('First-load splash', () => {
-  test('splash class is present on first visit', async ({ page }) => {
+  test('toolbars are hidden on first visit', async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');
-    await expect(page.locator('body')).toHaveClass(/splash/);
+    await expect(page.locator('body')).not.toHaveClass(/is-editing/);
     const topToolbar = page.locator('#toolbar-top');
     await expect(topToolbar).toHaveCSS('opacity', '0');
   });
 
-  test('splash class is NOT present on repeat visit', async ({ page }) => {
+  test('is-editing class is present on repeat visit', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spatch-seen:/', '1');
     });
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');
-    await expect(page.locator('body')).not.toHaveClass(/splash/);
+    await expect(page.locator('body')).toHaveClass(/is-editing/);
   });
 
-  test('splash class is URL-specific', async ({ page }) => {
+  test('splash is URL-specific', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spatch-seen:/', '1');
     });
     await page.goto('/#somehash');
     await page.waitForSelector('#sigil-canvas');
-    await expect(page.locator('body')).toHaveClass(/splash/);
+    await expect(page.locator('body')).not.toHaveClass(/is-editing/);
   });
 });
 
@@ -35,8 +35,8 @@ test.describe('First-load splash interaction', () => {
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');
 
-    // Verify splash is active
-    await expect(page.locator('body')).toHaveClass(/splash/);
+    // Verify splash is active (no is-editing class)
+    await expect(page.locator('body')).not.toHaveClass(/is-editing/);
 
     const canvas = page.locator('#sigil-canvas');
     const box = await canvas.boundingBox();
@@ -47,8 +47,8 @@ test.describe('First-load splash interaction', () => {
     await page.waitForTimeout(2500);
     await page.mouse.up();
 
-    // After release, splash should be removed
-    await expect(page.locator('body')).not.toHaveClass(/splash/, { timeout: 5000 });
+    // After release, is-editing should be added
+    await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 5000 });
 
     // Toolbars should be visible
     await expect(page.locator('#toolbar-top')).toHaveCSS('opacity', '1');
@@ -59,7 +59,7 @@ test.describe('First-load splash interaction', () => {
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');
 
-    await expect(page.locator('body')).toHaveClass(/splash/);
+    await expect(page.locator('body')).not.toHaveClass(/is-editing/);
 
     const canvas = page.locator('#sigil-canvas');
     const box = await canvas.boundingBox();
@@ -67,8 +67,8 @@ test.describe('First-load splash interaction', () => {
     // Quick tap — UI should start revealing right away
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
-    // Splash class removed immediately (fade handled by CSS transition)
-    await expect(page.locator('body')).not.toHaveClass(/splash/, { timeout: 2000 });
+    // is-editing class added immediately (fade handled by CSS transition)
+    await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 2000 });
   });
 
   test('localStorage is set after splash completes', async ({ page }) => {
@@ -83,7 +83,7 @@ test.describe('First-load splash interaction', () => {
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
     // Wait for splash to complete
-    await expect(page.locator('body')).not.toHaveClass(/splash/, { timeout: 5000 });
+    await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 5000 });
 
     // Check localStorage was set
     const key = await page.evaluate(() => localStorage.getItem('spatch-seen:/'));
@@ -95,7 +95,7 @@ test.describe('First-load splash interaction', () => {
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');
 
-    await expect(page.locator('body')).toHaveClass(/splash/);
+    await expect(page.locator('body')).not.toHaveClass(/is-editing/);
 
     // Press Space — should NOT start playback
     await page.keyboard.press('Space');
@@ -104,7 +104,7 @@ test.describe('First-load splash interaction', () => {
     // Play button should not be in playing state
     await expect(page.locator('#btn-play')).not.toHaveClass(/playing/);
 
-    // Splash should still be active
-    await expect(page.locator('body')).toHaveClass(/splash/);
+    // Splash should still be active (no is-editing)
+    await expect(page.locator('body')).not.toHaveClass(/is-editing/);
   });
 });

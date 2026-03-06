@@ -1,0 +1,526 @@
+// canvas/interaction.ts — Pointer event handling for the SVG canvas.
+//
+// Owns all pointer-down/move/up/cancel handlers, the InteractionState machine,
+// multi-touch pinch-rotate, shape hit testing, handle interactions,
+// and ADSR corner dragging. Dependencies are injected via the constructor.
+
+import { rotationToTimbre, snapYToNote } from '../audio/mapping.ts';
+import {
+  calcResize,
+  calcRotation,
+  clampSize,
+  dragToEnvelopeValue,
+  hitTestADSRCorner,
+  isInClippedCorner,
+  voiceRotation,
+} from '../shapes.ts';
+import type { SelectionManager, SigilStore, UndoManager } from '../state.ts';
+import {
+  type ADSRCorner,
+  type Envelope,
+  type HandleType,
+  type NormalizedCoord,
+  type WaveformType,
+  normalizedCoord,
+} from '../types.ts';
+
+// ---- Interaction state machine ----
+//
+// Discriminated union replacing scattered mode/drag/handle variables.
+// Each mode carries its own data — no accessing fields that don't exist.
+
+export type InteractionState =
+  | { mode: 'idle' }
+  | {
+      mode: 'dragging';
+      pointerId: number;
+      origin: { x: number; y: number };
+      startNx: number;
+      startNy: number;
+    }
+  | {
+      mode: 'resizing';
+      pointerId: number;
+      handle: HandleType;
+      origin: { size: number };
+      startPx: number;
+      startPy: number;
+    }
+  | { mode: 'rotating'; pointerId: number }
+  | {
+      mode: 'adsr';
+      pointerId: number;
+      corner: ADSRCorner;
+      origin: Envelope;
+      startPx: number;
+      startPy: number;
+    }
+  | {
+      mode: 'pinch-rotate';
+      pointerA: number;
+      pointerB: number;
+      positions: Map<number, { x: number; y: number }>;
+      initDist: number;
+      initAngle: number;
+      initSize: number;
+      initRotation: number;
+      shapeId: string;
+    };
+
+const IDLE: InteractionState = { mode: 'idle' };
+
+// ---- SVG coordinate helpers ----
+
+interface NormCoords {
+  nx: number;
+  ny: number;
+}
+
+function svgCoordsFromClient(canvas: SVGSVGElement, clientX: number, clientY: number): NormCoords {
+  const pt = canvas.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  const ctm = canvas.getScreenCTM();
+  if (!ctm) {
+    return { nx: 0, ny: 0 };
+  }
+  const svgPt = pt.matrixTransform(ctm.inverse());
+  return { nx: svgPt.x, ny: svgPt.y };
+}
+
+function svgCoordsFromEvent(canvas: SVGSVGElement, e: PointerEvent): NormCoords {
+  return svgCoordsFromClient(canvas, e.clientX, e.clientY);
+}
+
+// ---- Tool-to-waveform map ----
+
+const toolToWaveform: Record<string, WaveformType> = {
+  circle: 'sine',
+  square: 'pulse',
+  triangle: 'blend',
+};
+
+// ---- ADSR corner drag helpers ----
+
+const INV_SQRT2 = 1 / Math.sqrt(2);
+
+function cornerDiagonal(corner: ADSRCorner): { dx: number; dy: number } {
+  switch (corner) {
+    case 'attack': {
+      return { dx: 1, dy: -1 };
+    }
+    case 'decay': {
+      return { dx: 1, dy: 1 };
+    }
+    case 'sustain': {
+      return { dx: -1, dy: 1 };
+    }
+    case 'release': {
+      return { dx: -1, dy: -1 };
+    }
+  }
+}
+
+function envelopeValueToDist(corner: ADSRCorner, val: number): number {
+  const maxR = 0.15; // Matches MAX_RADIUS_RATIO in envelope.ts (canvasSize=1)
+  switch (corner) {
+    case 'attack':
+    case 'decay': {
+      return (val / 2) * maxR;
+    }
+    case 'sustain': {
+      return val * maxR;
+    }
+    case 'release': {
+      return (val / 3) * maxR;
+    }
+  }
+}
+
+// ---- Pinch helpers ----
+
+function pointerDist(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function pointerAngle(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+}
+
+// ---- Dependency interfaces ----
+
+export interface ToolbarDeps {
+  readonly currentTool: string;
+}
+
+export interface InteractionDeps {
+  canvasWrap: HTMLElement;
+  stage: HTMLElement;
+  canvas: SVGSVGElement;
+  store: SigilStore;
+  undo: UndoManager;
+  selection: SelectionManager;
+  toolbar: ToolbarDeps;
+  requestRender(): void;
+  isSplashActive(): boolean;
+  addVoiceFromTool(tool: string, x: NormalizedCoord, y: NormalizedCoord): void;
+}
+
+// ---- Controller ----
+
+export class CanvasInteractionController {
+  private interaction: InteractionState = IDLE;
+  private activePointers = new Map<number, { x: number; y: number }>();
+
+  private readonly canvasWrap: HTMLElement;
+  private readonly stage: HTMLElement;
+  private readonly canvas: SVGSVGElement;
+  private readonly store: SigilStore;
+  private readonly undo: UndoManager;
+  private readonly selection: SelectionManager;
+  private readonly toolbar: ToolbarDeps;
+  private readonly requestRender: () => void;
+  private readonly isSplashActive: () => boolean;
+  private readonly addVoiceFromTool: (tool: string, x: NormalizedCoord, y: NormalizedCoord) => void;
+
+  // Bound handlers for cleanup
+  private boundPointerDown: (e: PointerEvent) => void;
+  private boundPointerMove: (e: PointerEvent) => void;
+  private boundPointerEnd: (e: PointerEvent) => void;
+  private boundAreaPointerDown: (e: PointerEvent) => void;
+
+  constructor(deps: InteractionDeps) {
+    this.canvasWrap = deps.canvasWrap;
+    this.stage = deps.stage;
+    this.canvas = deps.canvas;
+    this.store = deps.store;
+    this.undo = deps.undo;
+    this.selection = deps.selection;
+    this.toolbar = deps.toolbar;
+    this.requestRender = deps.requestRender;
+    this.isSplashActive = deps.isSplashActive;
+    this.addVoiceFromTool = deps.addVoiceFromTool;
+
+    this.boundPointerDown = this.handlePointerDown.bind(this);
+    this.boundPointerMove = this.handlePointerMove.bind(this);
+    this.boundPointerEnd = this.handlePointerEnd.bind(this);
+    this.boundAreaPointerDown = this.handleAreaPointerDown.bind(this);
+  }
+
+  bindEvents(): void {
+    this.canvasWrap.addEventListener('pointerdown', this.boundPointerDown);
+    this.canvasWrap.addEventListener('pointermove', this.boundPointerMove);
+    this.canvasWrap.addEventListener('pointerup', this.boundPointerEnd);
+    this.canvasWrap.addEventListener('pointercancel', this.boundPointerEnd);
+    this.stage.addEventListener('pointerdown', this.boundAreaPointerDown);
+  }
+
+  dispose(): void {
+    this.canvasWrap.removeEventListener('pointerdown', this.boundPointerDown);
+    this.canvasWrap.removeEventListener('pointermove', this.boundPointerMove);
+    this.canvasWrap.removeEventListener('pointerup', this.boundPointerEnd);
+    this.canvasWrap.removeEventListener('pointercancel', this.boundPointerEnd);
+    this.stage.removeEventListener('pointerdown', this.boundAreaPointerDown);
+  }
+
+  // ---- Background deselect ----
+
+  private handleAreaPointerDown(e: PointerEvent): void {
+    const target = e.target as HTMLElement;
+    if (target === this.stage) {
+      this.selection.clear();
+      this.requestRender();
+    }
+  }
+
+  // ---- ADSR drag ----
+
+  private handleADSRDrag(nx: number, ny: number): void {
+    if (this.interaction.mode !== 'adsr') {
+      return;
+    }
+    const diag = cornerDiagonal(this.interaction.corner);
+    const moveDx = nx - this.interaction.startPx;
+    const moveDy = ny - this.interaction.startPy;
+    const projectedDelta = (moveDx * diag.dx + moveDy * diag.dy) * INV_SQRT2;
+    const originDist = envelopeValueToDist(
+      this.interaction.corner,
+      this.interaction.origin[this.interaction.corner],
+    );
+    const newDist = Math.max(0, originDist + projectedDelta);
+    const val = dragToEnvelopeValue(this.interaction.corner, newDist);
+    this.store.updateEnvelope({ [this.interaction.corner]: val });
+  }
+
+  // ---- Pointer down ----
+
+  private handlePointerDown(e: PointerEvent): void {
+    if (this.isSplashActive()) {
+      return;
+    }
+    e.preventDefault();
+
+    const { nx, ny } = svgCoordsFromEvent(this.canvas, e);
+    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Two touch pointers -> pinch-rotate
+    if (e.pointerType === 'touch' && this.activePointers.size === 2) {
+      // Cancel any single-touch interaction in progress
+      if (this.interaction.mode !== 'idle') {
+        this.interaction = IDLE;
+      }
+
+      const [idA, posA] = [...this.activePointers.entries()][0]!;
+      const [idB, posB] = [...this.activePointers.entries()][1]!;
+
+      // For pinch, use the currently selected voice as target
+      const shapeId = this.selection.voiceId;
+      if (!shapeId) {
+        return;
+      }
+
+      const voice = this.store.getVoice(shapeId);
+      if (!voice) {
+        return;
+      }
+
+      this.selection.select(shapeId);
+      this.undo.snapshot();
+
+      const initRotation = voiceRotation(voice);
+      this.interaction = {
+        initAngle: pointerAngle(posA, posB),
+        initDist: pointerDist(posA, posB),
+        initRotation,
+        initSize: voice.size,
+        mode: 'pinch-rotate',
+        pointerA: idA,
+        pointerB: idB,
+        positions: new Map(this.activePointers),
+        shapeId,
+      };
+      this.canvasWrap.setPointerCapture(idA);
+      this.canvasWrap.setPointerCapture(idB);
+      this.requestRender();
+      return;
+    }
+
+    const tool = this.toolbar.currentTool;
+
+    // Shape (voice) placement tools
+    const waveform = toolToWaveform[tool];
+    if (waveform) {
+      this.addVoiceFromTool(tool, normalizedCoord(nx), snapYToNote(normalizedCoord(ny)));
+      return;
+    }
+
+    // Select mode -- skip shape hit testing in clipped corner regions
+    const inClippedCorner = isInClippedCorner(this.store.data.envelope, nx, ny, 1);
+
+    if (!inClippedCorner) {
+      // 1. Check handles on selected voice (SVG native hit testing)
+      const handleEl = (e.target as Element).closest?.('[data-handle]');
+      const handle = handleEl
+        ? (((handleEl as HTMLElement).dataset.handle as HandleType) ?? undefined)
+        : undefined;
+
+      if (handle) {
+        const selVoice = this.selection.getSelectedVoice();
+        if (selVoice) {
+          if (handle === 'rotate') {
+            this.undo.snapshot();
+            this.interaction = { mode: 'rotating', pointerId: e.pointerId };
+            this.canvasWrap.setPointerCapture(e.pointerId);
+            return;
+          }
+          this.undo.snapshot();
+          this.interaction = {
+            handle,
+            mode: 'resizing',
+            origin: { size: selVoice.size },
+            pointerId: e.pointerId,
+            startPx: nx,
+            startPy: ny,
+          };
+          this.canvasWrap.setPointerCapture(e.pointerId);
+          return;
+        }
+      }
+
+      // 2. Hit test voices (SVG native)
+      const voiceEl = (e.target as Element).closest?.('[data-voice-id]');
+      const hitId = voiceEl ? ((voiceEl as HTMLElement).dataset.voiceId ?? undefined) : undefined;
+      if (hitId) {
+        this.selection.select(hitId);
+
+        this.undo.snapshot();
+        const voice = this.store.getVoice(hitId)!;
+        this.interaction = {
+          mode: 'dragging',
+          origin: { x: voice.x, y: voice.y },
+          pointerId: e.pointerId,
+          startNx: nx,
+          startNy: ny,
+        };
+        this.canvasWrap.setPointerCapture(e.pointerId);
+        this.requestRender();
+        return;
+      }
+    }
+
+    // 3. Check ADSR corners
+    const adsrCorner = hitTestADSRCorner(this.store.data.envelope, nx, ny, 1);
+    if (adsrCorner) {
+      this.undo.snapshot();
+      this.interaction = {
+        corner: adsrCorner,
+        mode: 'adsr',
+        origin: { ...this.store.data.envelope },
+        pointerId: e.pointerId,
+        startPx: nx,
+        startPy: ny,
+      };
+      this.canvasWrap.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // 4. Deselect
+    if (!inClippedCorner) {
+      this.selection.clear();
+      this.requestRender();
+    }
+  }
+
+  // ---- Pointer move ----
+
+  private handlePointerMove(e: PointerEvent): void {
+    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Pinch-rotate: compute from two stored positions
+    if (this.interaction.mode === 'pinch-rotate') {
+      this.interaction.positions.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const posA = this.interaction.positions.get(this.interaction.pointerA);
+      const posB = this.interaction.positions.get(this.interaction.pointerB);
+      if (!posA || !posB) {
+        return;
+      }
+
+      const dist = pointerDist(posA, posB);
+      const angle = pointerAngle(posA, posB);
+      const scale = dist / this.interaction.initDist;
+      const newSize = clampSize(this.interaction.initSize * scale);
+
+      const voice = this.store.getVoice(this.interaction.shapeId);
+      if (!voice) {
+        return;
+      }
+
+      if (voice.waveform === 'sine') {
+        this.store.updateVoice(this.interaction.shapeId, { size: newSize });
+      } else {
+        const angleDelta = angle - this.interaction.initAngle;
+        const newRotation = (((this.interaction.initRotation + angleDelta) % 360) + 360) % 360;
+        const timbre = rotationToTimbre(newRotation, voice.waveform);
+        this.store.updateVoice(this.interaction.shapeId, {
+          size: newSize,
+          timbre: normalizedCoord(timbre),
+        });
+      }
+      return;
+    }
+
+    // Filter by pointerId for single-pointer interactions
+    if (
+      this.interaction.mode !== 'idle' &&
+      'pointerId' in this.interaction &&
+      this.interaction.pointerId !== e.pointerId
+    ) {
+      return;
+    }
+
+    const { nx, ny } = svgCoordsFromEvent(this.canvas, e);
+
+    if (this.interaction.mode === 'dragging') {
+      const voice = this.selection.getSelectedVoice();
+      if (!voice) {
+        return;
+      }
+      const dx = nx - this.interaction.startNx;
+      const dy = ny - this.interaction.startNy;
+      this.store.updateVoice(voice.id, {
+        x: normalizedCoord(this.interaction.origin.x + dx),
+        y: snapYToNote(normalizedCoord(this.interaction.origin.y + dy)),
+      });
+      return;
+    }
+
+    if (this.interaction.mode === 'resizing') {
+      const voice = this.selection.getSelectedVoice();
+      if (!voice) {
+        return;
+      }
+      const rotDeg = voiceRotation(voice);
+      const rotRad = (rotDeg * Math.PI) / 180;
+      const dnx = nx - this.interaction.startPx;
+      const dny = ny - this.interaction.startPy;
+      const cos = Math.cos(-rotRad);
+      const sin = Math.sin(-rotRad);
+      const localDx = dnx * cos - dny * sin;
+      const localDy = dnx * sin + dny * cos;
+      const newSize = calcResize(
+        { ...voice, size: normalizedCoord(this.interaction.origin.size) },
+        this.interaction.handle,
+        localDx,
+        localDy,
+        1,
+      );
+      this.store.updateVoice(voice.id, { size: newSize });
+      return;
+    }
+
+    if (this.interaction.mode === 'rotating') {
+      const voice = this.selection.getSelectedVoice();
+      if (!voice) {
+        return;
+      }
+      if (voice.waveform === 'sine') {
+        return;
+      }
+      const rotation = calcRotation(voice, nx, ny, 1);
+      const timbre = rotationToTimbre(rotation, voice.waveform);
+      this.store.updateVoice(voice.id, { timbre: normalizedCoord(timbre) });
+      return;
+    }
+
+    if (this.interaction.mode === 'adsr') {
+      this.handleADSRDrag(nx, ny);
+      return;
+    }
+  }
+
+  // ---- Pointer end ----
+
+  private handlePointerEnd(e: PointerEvent): void {
+    this.activePointers.delete(e.pointerId);
+
+    if (this.interaction.mode === 'pinch-rotate') {
+      if (e.pointerId === this.interaction.pointerA || e.pointerId === this.interaction.pointerB) {
+        this.interaction = IDLE;
+
+        this.requestRender();
+      }
+      return;
+    }
+
+    // Filter by pointerId
+    if (
+      this.interaction.mode !== 'idle' &&
+      'pointerId' in this.interaction &&
+      this.interaction.pointerId !== e.pointerId
+    ) {
+      return;
+    }
+
+    this.interaction = IDLE;
+  }
+}

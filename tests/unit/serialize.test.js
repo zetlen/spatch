@@ -5,7 +5,6 @@ function makeState(overrides = {}) {
   return {
     envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
     reverb: undefined,
-    texts: [],
     voices: [],
     ...overrides,
   };
@@ -38,7 +37,6 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decoded.envelope.sustain).toBeCloseTo(state.envelope.sustain);
     expect(decoded.envelope.release).toBeCloseTo(state.envelope.release);
     expect(decoded.voices).toHaveLength(0);
-    expect(decoded.texts).toHaveLength(0);
   });
 
   test('state with voices round-trips (values preserved, IDs regenerated)', () => {
@@ -160,17 +158,6 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(decodedEffects).toEqual(effects);
   });
 
-  test('text decorations round-trip', () => {
-    const state = makeState({
-      texts: [{ id: 't1', size: 0.06, text: 'Hello World', x: 0.5, y: 0.5 }],
-    });
-
-    const decoded = deserializeState(serializeState(state));
-    expect(decoded.texts).toHaveLength(1);
-    expect(decoded.texts[0].text).toBe('Hello World');
-    expect(decoded.texts[0].size).toBeCloseTo(0.06);
-  });
-
   test('max envelope values round-trip', () => {
     const state = makeState({
       envelope: { attack: 2, decay: 2, release: 3, sustain: 1 },
@@ -236,7 +223,6 @@ describe('serializeState output', () => {
   test('output is URL-safe (no special chars needing encoding)', () => {
     const encoded = serializeState(
       makeState({
-        texts: [{ id: 't1', size: 0.06, text: 'Test!@#', x: 0, y: 0 }],
         voices: [makeVoice()],
       }),
     );
@@ -247,9 +233,9 @@ describe('serializeState output', () => {
   test('wire format is positional arrays with no keys or IDs', () => {
     const json = _serializeToJSON(makeState({ voices: [makeVoice()] }));
     const packed = JSON.parse(json);
-    // Top level is [envelope, voices, texts]
+    // Top level is [envelope, voices]
     expect(Array.isArray(packed)).toBe(true);
-    expect(packed).toHaveLength(3);
+    expect(packed).toHaveLength(2);
     // Envelope is [a, d, s, r]
     expect(packed[0]).toEqual([0.1, 0.2, 0.7, 0.4]);
     // Voice is [waveform, x, y, size, fill, effect, blend, border]

@@ -2,6 +2,8 @@
 
 import type { AudioEffect, BlendMode, PatternType } from './types.ts';
 
+export const DEFAULT_BLEND: BlendMode = 'soft-light';
+
 export function createEffect(
   audioCtx: AudioContext,
   pattern: PatternType,
@@ -25,34 +27,55 @@ export function createEffect(
   }
 }
 
-// Raster stripes → Chorus
-function createChorus(ctx: AudioContext): AudioEffect {
+// ---- Shared helpers ----
+
+/** Create a dry/wet parallel chain with input and output gain nodes. */
+function dryWet(
+  ctx: AudioContext,
+  dryLevel: number,
+  wetLevel: number,
+): { input: GainNode; output: GainNode; dry: GainNode; wet: GainNode } {
   const input = ctx.createGain();
   const output = ctx.createGain();
   const dry = ctx.createGain();
-  dry.gain.value = 0.7;
+  dry.gain.value = dryLevel;
   const wet = ctx.createGain();
-  wet.gain.value = 0.5;
-
-  const delay = ctx.createDelay(0.1);
-  delay.delayTime.value = 0.025;
-
-  const lfo = ctx.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = 1.5;
-
-  const lfoGain = ctx.createGain();
-  lfoGain.gain.value = 0.002;
-
-  lfo.connect(lfoGain);
-  lfoGain.connect(delay.delayTime);
-  lfo.start();
-
+  wet.gain.value = wetLevel;
   input.connect(dry);
-  input.connect(delay);
-  delay.connect(wet);
   dry.connect(output);
   wet.connect(output);
+  return { input, output, dry, wet };
+}
+
+/** Create an LFO oscillator routed through a gain node. Returns the LFO for disposal. */
+function createLFO(
+  ctx: AudioContext,
+  freq: number,
+  depth: number,
+  target: AudioParam,
+): OscillatorNode {
+  const lfo = ctx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = freq;
+  const gain = ctx.createGain();
+  gain.gain.value = depth;
+  lfo.connect(gain);
+  gain.connect(target);
+  lfo.start();
+  return lfo;
+}
+
+// ---- Pattern effects ----
+
+// Raster stripes → Chorus
+function createChorus(ctx: AudioContext): AudioEffect {
+  const { input, output, wet } = dryWet(ctx, 0.7, 0.5);
+  const delay = ctx.createDelay(0.1);
+  delay.delayTime.value = 0.025;
+  const lfo = createLFO(ctx, 1.5, 0.002, delay.delayTime);
+
+  input.connect(delay);
+  delay.connect(wet);
 
   return { dispose: () => lfo.stop(), input, output };
 }
@@ -63,17 +86,7 @@ function createTremolo(ctx: AudioContext): AudioEffect {
   const output = ctx.createGain();
   const tremoloGain = ctx.createGain();
   tremoloGain.gain.value = 0.7;
-
-  const lfo = ctx.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = 6;
-
-  const lfoDepth = ctx.createGain();
-  lfoDepth.gain.value = 0.3;
-
-  lfo.connect(lfoDepth);
-  lfoDepth.connect(tremoloGain.gain);
-  lfo.start();
+  const lfo = createLFO(ctx, 6, 0.3, tremoloGain.gain);
 
   input.connect(tremoloGain);
   tremoloGain.connect(output);
@@ -83,49 +96,24 @@ function createTremolo(ctx: AudioContext): AudioEffect {
 
 // Noise texture → Flanger
 function createFlanger(ctx: AudioContext): AudioEffect {
-  const input = ctx.createGain();
-  const output = ctx.createGain();
-  const dry = ctx.createGain();
-  dry.gain.value = 0.7;
-  const wet = ctx.createGain();
-  wet.gain.value = 0.7;
-
+  const { input, output, wet } = dryWet(ctx, 0.7, 0.7);
   const delay = ctx.createDelay(0.02);
   delay.delayTime.value = 0.005;
-
   const feedback = ctx.createGain();
   feedback.gain.value = 0.6;
+  const lfo = createLFO(ctx, 0.25, 0.004, delay.delayTime);
 
-  const lfo = ctx.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = 0.25;
-
-  const lfoGain = ctx.createGain();
-  lfoGain.gain.value = 0.004;
-
-  lfo.connect(lfoGain);
-  lfoGain.connect(delay.delayTime);
-  lfo.start();
-
-  input.connect(dry);
   input.connect(delay);
   delay.connect(feedback);
   feedback.connect(delay);
   delay.connect(wet);
-  dry.connect(output);
-  wet.connect(output);
 
   return { dispose: () => lfo.stop(), input, output };
 }
 
 // Gradient overlay → Phaser
 function createPhaser(ctx: AudioContext): AudioEffect {
-  const input = ctx.createGain();
-  const output = ctx.createGain();
-  const dry = ctx.createGain();
-  dry.gain.value = 0.8;
-  const wet = ctx.createGain();
-  wet.gain.value = 0.6;
+  const { input, output, wet } = dryWet(ctx, 0.8, 0.6);
 
   const allpassFreqs = [350, 1100, 2700, 5500];
   const filters = allpassFreqs.map((freq) => {
@@ -139,7 +127,6 @@ function createPhaser(ctx: AudioContext): AudioEffect {
   const lfo = ctx.createOscillator();
   lfo.type = 'sine';
   lfo.frequency.value = 0.5;
-
   for (const f of filters) {
     const lg = ctx.createGain();
     lg.gain.value = 500;
@@ -154,10 +141,6 @@ function createPhaser(ctx: AudioContext): AudioEffect {
     filters[i]!.connect(filters[i + 1]!);
   }
   filters.at(-1)!.connect(wet);
-
-  input.connect(dry);
-  dry.connect(output);
-  wet.connect(output);
 
   return { dispose: () => lfo.stop(), input, output };
 }
@@ -317,16 +300,7 @@ function wireFlanger(ctx: AudioContext, input: GainNode, wet: GainNode): () => v
   delay.delayTime.value = 0.003;
   const feedback = ctx.createGain();
   feedback.gain.value = 0.5;
-
-  const lfo = ctx.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = 0.3;
-  const lfoGain = ctx.createGain();
-  lfoGain.gain.value = 0.002;
-
-  lfo.connect(lfoGain);
-  lfoGain.connect(delay.delayTime);
-  lfo.start();
+  const lfo = createLFO(ctx, 0.3, 0.002, delay.delayTime);
 
   input.connect(delay);
   delay.connect(feedback);

@@ -3,7 +3,7 @@ import path from 'path';
 
 async function getDecayRadius(page) {
   return page.evaluate(() => {
-    const frame = document.querySelector('#canvas-frame');
+    const frame = document.querySelector('#tile');
     return parseFloat(getComputedStyle(frame).borderTopLeftRadius);
   });
 }
