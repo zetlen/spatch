@@ -289,7 +289,8 @@ body {
   color: #fff;
   cursor: pointer;
   filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
-  opacity: 0.8;
+  opacity: 0;
+  pointer-events: none;
   transition: opacity 0.2s;
   touch-action: none;
   /* Portrait default: centered below tile, vertically centered in gap */
@@ -636,5 +637,10 @@ body {
 body.is-editing #toolbar-top,
 body.is-editing #toolbar-bottom {
   opacity: 1;
+  pointer-events: auto;
+}
+
+body.is-editing .stage-play-btn {
+  opacity: 0.8;
   pointer-events: auto;
 }
