@@ -94,10 +94,16 @@ export function safeDisconnect(node: AudioNode): void {
   } catch {}
 }
 
+/** IR duration in seconds for each reverb style. */
+const REVERB_IR_DURATION: Record<ReverbStyle, number> = {
+  glow: 0.3,
+  dim: 2,
+};
+
 /** Generate an algorithmic reverb impulse response buffer. */
 export function generateImpulseResponse(ctx: AudioContext, style: ReverbStyle): AudioBuffer {
   const { sampleRate } = ctx;
-  const duration = style === 'glow' ? 0.3 : 2;
+  const duration = REVERB_IR_DURATION[style];
   const length = Math.floor(sampleRate * duration);
   const buffer = ctx.createBuffer(2, length, sampleRate);
   const cutoff = style === 'glow' ? 1 : 0.3;

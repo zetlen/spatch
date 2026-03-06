@@ -35,6 +35,7 @@ export class AudioEngine {
   _reverbStyle: ReverbStyle | undefined;
   _streamDest: MediaStreamAudioDestinationNode | undefined;
   _audioEl: HTMLAudioElement | undefined;
+  _irCache: Map<ReverbStyle, AudioBuffer>;
 
   constructor() {
     this.activeVoices = [];
@@ -50,6 +51,7 @@ export class AudioEngine {
     this._reverbStyle = undefined;
     this._streamDest = undefined;
     this._audioEl = undefined;
+    this._irCache = new Map();
   }
 
   /** Synchronously create and unlock the AudioContext.
@@ -156,7 +158,7 @@ export class AudioEngine {
     // Master reverb (if active)
     if (sigilState.reverb) {
       this._reverbConvolver = ctx.createConvolver();
-      this._reverbConvolver.buffer = generateImpulseResponse(ctx, sigilState.reverb.style);
+      this._reverbConvolver.buffer = this._getImpulseResponse(ctx, sigilState.reverb.style);
       this._reverbWet = ctx.createGain();
       this._reverbWet.gain.value = sigilState.reverb.depth;
       this.envelopeGain.connect(this._reverbConvolver);
@@ -200,7 +202,11 @@ export class AudioEngine {
     this.envelopeGain.gain.setValueAtTime(this.envelopeGain.gain.value, now);
     this.envelopeGain.gain.linearRampToValueAtTime(0, now + releaseTime);
 
-    // Schedule cleanup, but only if the session hasn't changed
+    // Schedule cleanup after release + reverb tail have fully decayed.
+    // Without this, the convolver tail gets cut short by early cleanup.
+    const reverbTail = this._reverbStyle
+      ? (this._irCache.get(this._reverbStyle)?.duration ?? 0)
+      : 0;
     const sid = this._sessionId;
     setTimeout(
       () => {
@@ -208,7 +214,7 @@ export class AudioEngine {
           this._cleanup();
         }
       },
-      releaseTime * 1000 + 100,
+      (releaseTime + reverbTail) * 1000 + 100,
     );
   }
 
@@ -382,7 +388,7 @@ export class AudioEngine {
       }
 
       this._reverbConvolver = ctx.createConvolver();
-      this._reverbConvolver.buffer = generateImpulseResponse(ctx, reverb.style);
+      this._reverbConvolver.buffer = this._getImpulseResponse(ctx, reverb.style);
 
       this._reverbWet = ctx.createGain();
 
@@ -503,6 +509,17 @@ export class AudioEngine {
     safeDisconnect(audioVoice.outputNode);
     audioVoice.effectDispose?.();
     audioVoice.blendEffect?.dispose();
+  }
+
+  /** Return a cached impulse response buffer for the given reverb style.
+   *  Caching ensures reverb sounds identical across repeated plays. */
+  _getImpulseResponse(ctx: AudioContext, style: ReverbStyle): AudioBuffer {
+    let ir = this._irCache.get(style);
+    if (!ir) {
+      ir = generateImpulseResponse(ctx, style);
+      this._irCache.set(style, ir);
+    }
+    return ir;
   }
 
   _buildVoice(ctx: AudioContext, voice: Voice): AudioVoice {

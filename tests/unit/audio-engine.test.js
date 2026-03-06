@@ -58,6 +58,7 @@ function createStubAudioContext() {
         channelData.push(new Float32Array(length));
       }
       return {
+        duration: length / sampleRate,
         getChannelData(ch) {
           return channelData[ch];
         },
@@ -520,6 +521,100 @@ describe('AudioEngine — master reverb', () => {
     expect(engine._reverbConvolver).not.toBe(originalConvolver);
     expect(engine._reverbStyle).toBe('dim');
     expect(engine._reverbWet.gain.value).toBe(0.6);
+  });
+});
+
+describe('AudioEngine — reverb tail cleanup delay', () => {
+  let engine;
+
+  beforeEach(async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+  });
+
+  test('release with dim reverb delays cleanup for IR duration', async () => {
+    const state = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'dim' });
+    await engine.play(state, state.envelope);
+
+    engine.release(state.envelope);
+
+    // After releaseTime + 100ms, reverb should STILL be connected (tail still ringing)
+    const releaseMs = state.envelope.release * 1000 + 100;
+    await new Promise((r) => setTimeout(r, releaseMs + 50));
+    expect(engine.isPlaying).toBe(true); // Not cleaned up yet
+
+    // After releaseTime + IR duration + 100ms, cleanup should have fired
+    const irDurationMs = 2000; // 'dim' IR is 2s
+    await new Promise((r) => setTimeout(r, irDurationMs));
+    expect(engine.isPlaying).toBe(false);
+  });
+
+  test('release without reverb uses normal cleanup delay', async () => {
+    const state = makeSigilState([makeVoice('a')]);
+    await engine.play(state, state.envelope);
+
+    engine.release(state.envelope);
+
+    // After releaseTime + 100ms, cleanup should have fired
+    const releaseMs = state.envelope.release * 1000 + 150;
+    await new Promise((r) => setTimeout(r, releaseMs));
+    expect(engine.isPlaying).toBe(false);
+  });
+});
+
+describe('AudioEngine — reverb IR caching (#165)', () => {
+  let engine;
+
+  beforeEach(async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+  });
+
+  test('same reverb style reuses cached IR buffer across plays', async () => {
+    const reverb = { depth: 0.5, style: 'dim' };
+    const state = makeSigilState([makeVoice('a')], reverb);
+
+    await engine.play(state, state.envelope);
+    const firstBuffer = engine._reverbConvolver.buffer;
+
+    engine.stop();
+
+    await engine.play(state, state.envelope);
+    const secondBuffer = engine._reverbConvolver.buffer;
+
+    expect(secondBuffer).toBe(firstBuffer);
+  });
+
+  test('different reverb styles get different cached buffers', async () => {
+    const stateGlow = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'glow' });
+    await engine.play(stateGlow, stateGlow.envelope);
+    const glowBuffer = engine._reverbConvolver.buffer;
+    engine.stop();
+
+    const stateDim = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'dim' });
+    await engine.play(stateDim, stateDim.envelope);
+    const dimBuffer = engine._reverbConvolver.buffer;
+
+    expect(dimBuffer).not.toBe(glowBuffer);
+  });
+
+  test('updateReverb with style change reuses cache', async () => {
+    // Play with glow first to populate cache
+    const stateGlow = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'glow' });
+    await engine.play(stateGlow, stateGlow.envelope);
+    const glowBuffer = engine._reverbConvolver.buffer;
+    engine.stop();
+
+    // Play with dim to populate that cache entry
+    const stateDim = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'dim' });
+    await engine.play(stateDim, stateDim.envelope);
+    engine.stop();
+
+    // Play with glow again — should reuse the original buffer
+    await engine.play(stateGlow, stateGlow.envelope);
+    expect(engine._reverbConvolver.buffer).toBe(glowBuffer);
   });
 });
 

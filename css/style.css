@@ -240,6 +240,11 @@ body {
   z-index: 1;
   width: min(100cqh - 24px, 100cqw - 24px, 800px);
   aspect-ratio: 1;
+  visibility: hidden;
+}
+
+#canvas-wrap.ready {
+  visibility: visible;
 }
 
 #tile {

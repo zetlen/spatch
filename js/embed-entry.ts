@@ -47,6 +47,9 @@ if (!hash) {
     }
     renderLoop();
 
+    // Reveal after first render + ADSR corners applied (no FOUC)
+    qel('#wrap').classList.add('ready');
+
     // Play button: click-to-toggle works on both mouse and touch
     const btn = qel('#play-btn');
 

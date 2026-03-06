@@ -120,6 +120,9 @@ function renderLoop(): void {
 }
 renderLoop();
 
+// Reveal canvas after first render + ADSR corners are applied (no FOUC)
+canvasWrap.classList.add('ready');
+
 // ---- Canvas interaction controller ----
 
 const canvasInteraction = new CanvasInteractionController({

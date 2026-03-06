@@ -109,6 +109,7 @@ export default defineConfig({
 
   server: {
     allowedHosts: true,
+    host: true,
   },
 
   plugins: [

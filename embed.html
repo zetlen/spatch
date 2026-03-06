@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>spatch</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <style>
       * {
         margin: 0;
@@ -23,6 +25,10 @@
         width: min(90vw, 90vh, 600px);
         height: min(90vw, 90vh, 600px);
         overflow: hidden;
+        visibility: hidden;
+      }
+      #wrap.ready {
+        visibility: visible;
       }
       #tile {
         position: absolute;
