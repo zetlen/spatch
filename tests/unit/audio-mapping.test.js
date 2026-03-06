@@ -1,14 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  areaToGain,
-  rotationToTimbre,
-  shapeAreaFraction,
-  snapYToNote,
-  waveformGain,
-  xToPan,
-  yToFrequency,
-} from '../../js/audio/mapping.ts';
-import { borderOctaveGain, hueToFormants, lightnessToCutoff } from '../../js/audio/formants.ts';
+import { rotationToTimbre, snapYToNote, xToPan, yToFrequency } from '../../js/audio/mapping.ts';
+import { hueToFormants, lightnessToCutoff } from '../../js/audio/formants.ts';
 
 describe('yToFrequency', () => {
   test('y=0 (top) returns highest chromatic note (G5)', () => {
@@ -134,80 +126,6 @@ describe('rotationToTimbre', () => {
         expect(t).toBeLessThanOrEqual(1);
       }
     }
-  });
-});
-
-describe('waveformGain', () => {
-  test('sine is boosted for perceived loudness matching', () => {
-    expect(waveformGain('sine')).toBe(1.6);
-  });
-
-  test('pulse is attenuated below 1.0', () => {
-    expect(waveformGain('pulse')).toBeLessThan(1);
-    expect(waveformGain('pulse')).toBeGreaterThan(0);
-  });
-
-  test('blend (sawtooth) is attenuated below sine', () => {
-    expect(waveformGain('blend')).toBeLessThan(waveformGain('sine'));
-    expect(waveformGain('blend')).toBeGreaterThan(0);
-  });
-
-  test('pulse is attenuated more than blend', () => {
-    expect(waveformGain('pulse')).toBeLessThan(waveformGain('blend'));
-  });
-});
-
-describe('shapeAreaFraction', () => {
-  test('sine (circle) area = π × (size/2)²', () => {
-    expect(shapeAreaFraction('sine', 0.5)).toBeCloseTo(Math.PI * 0.25 * 0.25);
-  });
-
-  test('pulse (square) area = size²', () => {
-    expect(shapeAreaFraction('pulse', 0.5)).toBeCloseTo(0.25);
-  });
-
-  test('blend (triangle) area < sine (circle) area < pulse (square) area at same size', () => {
-    const size = 0.4;
-    const tri = shapeAreaFraction('blend', size);
-    const circ = shapeAreaFraction('sine', size);
-    const sq = shapeAreaFraction('pulse', size);
-    expect(tri).toBeLessThan(circ);
-    expect(circ).toBeLessThan(sq);
-  });
-
-  test('area scales with size squared', () => {
-    for (const type of ['sine', 'pulse', 'blend']) {
-      const small = shapeAreaFraction(type, 0.2);
-      const big = shapeAreaFraction(type, 0.4);
-      // Doubling size should quadruple area
-      expect(big / small).toBeCloseTo(4);
-    }
-  });
-});
-
-describe('areaToGain', () => {
-  test('tiny shape returns near-minimum gain', () => {
-    expect(areaToGain('sine', 0.025)).toBeCloseTo(0.05, 1);
-  });
-
-  test('large shape caps at 0.8', () => {
-    expect(areaToGain('pulse', 0.95)).toBe(0.8);
-  });
-
-  test('gain increases with size for all waveform types', () => {
-    for (const type of ['sine', 'pulse', 'blend']) {
-      const small = areaToGain(type, 0.2);
-      const big = areaToGain(type, 0.5);
-      expect(big).toBeGreaterThan(small);
-    }
-  });
-
-  test('same-size shapes produce gain proportional to visual area', () => {
-    const size = 0.4;
-    const sineGain = areaToGain('sine', size);
-    const pulseGain = areaToGain('pulse', size);
-    // Pulse (square) has more area, so more gain
-    expect(pulseGain).toBeGreaterThan(sineGain);
   });
 });
 
@@ -349,59 +267,6 @@ describe('hueToFormants', () => {
       expect(Math.abs(f.f2 - prevF2)).toBeLessThan(30);
       prevF1 = f.f1;
       prevF2 = f.f2;
-    }
-  });
-});
-
-describe('borderOctaveGain', () => {
-  test('returns 0 for zero thickness', () => {
-    expect(borderOctaveGain('sine', 0.5, 0, 'white', false)).toBe(0);
-  });
-
-  test('scales with shape size (larger shape = louder)', () => {
-    const small = borderOctaveGain('sine', 0.2, 0.5, 'white', false);
-    const large = borderOctaveGain('sine', 0.6, 0.5, 'white', false);
-    expect(large).toBeGreaterThan(small);
-  });
-
-  test('scales with thickness', () => {
-    const thin = borderOctaveGain('sine', 0.5, 0.2, 'white', false);
-    const thick = borderOctaveGain('sine', 0.5, 0.8, 'white', false);
-    expect(thick).toBeGreaterThan(thin);
-  });
-
-  test('octave up (white) is quieter than octave down (black)', () => {
-    const up = borderOctaveGain('sine', 0.5, 0.5, 'white', false);
-    const down = borderOctaveGain('sine', 0.5, 0.5, 'black', false);
-    expect(down).toBeGreaterThan(up);
-  });
-
-  test('double octave up is quieter than single octave up', () => {
-    const single = borderOctaveGain('sine', 0.5, 0.5, 'white', false);
-    const double = borderOctaveGain('sine', 0.5, 0.5, 'white', true);
-    expect(double).toBeLessThan(single);
-  });
-
-  test('double octave down is louder than single octave down', () => {
-    const single = borderOctaveGain('sine', 0.5, 0.5, 'black', false);
-    const double = borderOctaveGain('sine', 0.5, 0.5, 'black', true);
-    expect(double).toBeGreaterThan(single);
-  });
-
-  test('different waveforms at same size produce different gains', () => {
-    const sine = borderOctaveGain('sine', 0.5, 0.5, 'white', false);
-    const pulse = borderOctaveGain('pulse', 0.5, 0.5, 'white', false);
-    expect(sine).not.toBeCloseTo(pulse, 2);
-  });
-
-  test('always returns non-negative', () => {
-    for (const wf of ['sine', 'pulse', 'blend']) {
-      for (const color of ['white', 'black']) {
-        for (const dbl of [false, true]) {
-          const g = borderOctaveGain(wf, 0.5, 0.5, color, dbl);
-          expect(g).toBeGreaterThanOrEqual(0);
-        }
-      }
     }
   });
 });

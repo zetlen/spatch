@@ -65,3 +65,58 @@ test.describe('Playback', () => {
     await expect(page.locator('#btn-play')).not.toHaveClass(/playing/);
   });
 });
+
+test.describe('Volume curves — relative loudness', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
+    await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/audio-tap.js') });
+    await page.goto('/');
+    await page.waitForSelector('#sigil-canvas');
+  });
+
+  // Helper: place a shape, play, measure amplitude, stop, clean up
+  async function measureAmplitude(page, tool) {
+    const canvas = page.locator('#sigil-canvas');
+    const box = await canvas.boundingBox();
+
+    await page.click(`[data-tool="${tool}"]`);
+    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+
+    await page.keyboard.press('Space');
+    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
+    await page.waitForTimeout(500);
+
+    const amplitude = await page.evaluate(async () => {
+      const samples = [];
+      for (let i = 0; i < 8; i++) {
+        samples.push(globalThis.__audioTap.getAmplitude());
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return samples.reduce((a, b) => a + b, 0) / samples.length;
+    });
+
+    await page.keyboard.press('Space');
+    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Escape');
+
+    return amplitude;
+  }
+
+  test('circle and triangle produce similar amplitude at medium size', async ({ page }) => {
+    // Pulse/square (PWM waveshaper synthesis) produces near-silent output in
+    // headless Chromium, so we compare circle (sine) and triangle (blend) only.
+    // The unit tests cover all three waveforms' convergence at size=0.5.
+    const sineAmp = await measureAmplitude(page, 'circle');
+    const blendAmp = await measureAmplitude(page, 'triangle');
+
+    expect(sineAmp).toBeGreaterThan(0.001);
+    expect(blendAmp).toBeGreaterThan(0.001);
+
+    // At medium size, amplitudes should be in the same ballpark.
+    // Allow 5x tolerance since real audio RMS depends on more than just gain
+    // (waveform harmonics, formant filtering, compressor, analyser timing).
+    const ratio = Math.max(sineAmp, blendAmp) / Math.min(sineAmp, blendAmp);
+    expect(ratio).toBeLessThan(5);
+  });
+});

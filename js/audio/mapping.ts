@@ -1,7 +1,7 @@
 // mapping.ts — Pure pitch/spatial mapping functions for audio synthesis.
 // No Web Audio API dependencies — just math.
 
-import { type NormalizedCoord, type WaveformType, normalizedCoord } from '../types.ts';
+import { type NormalizedCoord, normalizedCoord } from '../types.ts';
 
 // ---- Chromatic scale ----
 // 3 octaves from G2 (MIDI 43) to G5 (MIDI 79): 37 semitones
@@ -94,49 +94,6 @@ export function xToPan(x: NormalizedCoord): number {
   return x * 2 - 1; // 0->-1 (left), 1->+1 (right)
 }
 
-/**
- * Compute the area of a shape as a fraction of the 1x1 normalized canvas.
- *
- * All shapes use r = size/2 as bounding radius:
- * - sine (circle): pi * r^2
- * - pulse (square): (2r)^2 = size^2
- * - blend (equilateral triangle inscribed in circle): (3*sqrt(3)/4) * r^2
- *
- * @param waveform - Shape type determining the area formula
- * @param size - Normalized shape size (0-1)
- * @returns Area as a fraction of the unit canvas
- */
-export function shapeAreaFraction(waveform: WaveformType, size: NormalizedCoord): number {
-  const halfSize = size / 2;
-  switch (waveform) {
-    case 'sine': {
-      return Math.PI * halfSize * halfSize;
-    }
-    case 'pulse': {
-      return size * size;
-    } // Side = 2r = size
-    case 'blend': {
-      // Equilateral inscribed in circle of radius size/2
-      return ((3 * Math.sqrt(3)) / 4) * halfSize * halfSize;
-    }
-  }
-}
-
-/**
- * Map a shape's canvas area fraction to audio gain.
- *
- * Larger shapes are louder. Gain starts at 0.05 for tiny shapes and caps at 0.8
- * for the largest shapes. The relationship is linear in area (quadratic in size).
- *
- * @param waveform - Shape type (determines area formula)
- * @param size - Normalized shape size (0-1)
- * @returns Gain value in [0.05, 0.8]
- */
-export function areaToGain(waveform: WaveformType, size: NormalizedCoord): number {
-  const fraction = shapeAreaFraction(waveform, size);
-  return Math.min(0.8, 0.05 + fraction);
-}
-
 // Map rotation to a periodic timbre parameter.
 // Each waveform's visual symmetry period determines the audio cycle:
 // a square repeats every 90 deg, a triangle every 120 deg.
@@ -168,30 +125,4 @@ export function rotationToTimbre(rotation: number, waveform: string): number {
   } // Sine has no timbre
   const phase = ((rotation % period) + period) % period;
   return phase / period;
-}
-
-/**
- * Per-waveform perceived-loudness normalization gain.
- *
- * Square and sawtooth waves have higher RMS and excite more auditory critical
- * bands than a pure sine, making them sound louder at the same amplitude.
- * Sine needs a boost (~3 dB) to match perceived loudness; square and sawtooth
- * are attenuated.
- *
- * - pulse (square): 0.7 (RMS ~1.41x sine, rich harmonics)
- * - blend (sawtooth): 0.85 (RMS ~1.15x sine)
- * - sine: 1.6 (single partial; boosted to match perceived loudness)
- */
-export function waveformGain(waveform: WaveformType): number {
-  switch (waveform) {
-    case 'pulse': {
-      return 0.7;
-    } // Square RMS ~= 1.41x sine, rich harmonics
-    case 'blend': {
-      return 0.85;
-    } // Sawtooth RMS ~= 1.15x sine
-    case 'sine': {
-      return 1.6;
-    } // Sine is single-partial; boost to match perceived loudness
-  }
 }

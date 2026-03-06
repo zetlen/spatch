@@ -8,8 +8,9 @@ import {
   type SigilData,
   type Voice,
 } from '../types.ts';
-import { areaToGain, waveformGain, xToPan, yToFrequency } from './mapping.ts';
-import { applyFormantFilter, borderOctaveGain } from './formants.ts';
+import { xToPan, yToFrequency } from './mapping.ts';
+import { applyFormantFilter } from './formants.ts';
+import { vibe } from './vibe.ts';
 import {
   type AudioVoice,
   buildVoice,
@@ -320,10 +321,7 @@ export class AudioEngine {
         }
       }
 
-      audioVoice.gain.gain.setValueAtTime(
-        areaToGain(voice.waveform, voice.size) * waveformGain(voice.waveform),
-        now,
-      );
+      audioVoice.gain.gain.setValueAtTime(vibe.voiceGain(voice.waveform, voice.size), now);
       audioVoice.panner.pan.setValueAtTime(xToPan(voice.x), now);
       applyFormantFilter(
         audioVoice.formantF1,
@@ -344,7 +342,7 @@ export class AudioEngine {
       // Update octave oscillator gain if border is present
       if (audioVoice.octaveGainNode && voice.border) {
         audioVoice.octaveGainNode.gain.setValueAtTime(
-          borderOctaveGain(
+          vibe.borderOctaveGain(
             voice.waveform,
             voice.size,
             voice.border.thickness,

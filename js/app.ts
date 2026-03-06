@@ -239,3 +239,16 @@ qel('#btn-splash').addEventListener('click', () => {
   splash.resetSeen();
   location.reload();
 });
+
+// ---- Debug: Vibe tuner (dev only, elided in production) ----
+
+if (__VIBE_DEBUG__) {
+  if (new URLSearchParams(location.search).get('debug') === 'vibe') {
+    import('./debug/vibe-tuner.ts').then((m) =>
+      m.init({
+        audio,
+        store,
+      }),
+    );
+  }
+}

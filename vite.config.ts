@@ -97,7 +97,11 @@ function spatchPlugin(): Plugin {
 // Vite config
 // ---------------------------------------------------------------------------
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  define: {
+    __VIBE_DEBUG__: String(mode !== 'production'),
+  },
+
   build: {
     rollupOptions: {
       input: {
@@ -139,4 +143,4 @@ export default defineConfig({
 
     spatchPlugin(),
   ],
-});
+}));

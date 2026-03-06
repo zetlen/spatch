@@ -1,52 +1,9 @@
-// formants.ts — Formant filter mapping and border octave gain.
+// formants.ts — Formant filter mapping.
 // Pure functions mapping visual fill properties to audio filter parameters.
 // No Web Audio API node creation — just parameter computation (except applyFormantFilter
 // which sets values on pre-existing BiquadFilterNodes).
 
-import type { BorderColor, Fill, NormalizedCoord, WaveformType } from '../types.ts';
-import { areaToGain, waveformGain } from './mapping.ts';
-
-// ---- Border octave gain ----
-
-// Direction-dependent loudness coefficients for octave-doubled border oscillator.
-// Higher octaves sound louder perceptually (equal-loudness contours), so we
-// attenuate up-shifts and boost down-shifts.
-const OCTAVE_GAIN_COEFF: Record<string, number> = {
-  'down-1': 1.5,
-  'down-2': 2,
-  'up-1': 0.5,
-  'up-2': 0.35,
-};
-
-/**
- * Compute the gain for a border's octave-doubled oscillator.
- *
- * Border color determines octave direction (white = up, black = down).
- * The `double` flag doubles the octave shift (1 or 2 octaves). Gain scales
- * with the base voice gain (from shape area), square root of border thickness,
- * and a perceptual loudness coefficient that attenuates higher octaves and
- * boosts lower ones.
- *
- * @param waveform - Voice waveform type (determines base area gain formula)
- * @param size - Normalized shape size (0-1)
- * @param thickness - Normalized border thickness (0-1)
- * @param color - Border color: 'white' (octave up) or 'black' (octave down)
- * @param double - Whether to shift by 2 octaves instead of 1
- * @returns Gain value for the octave oscillator (non-negative)
- */
-export function borderOctaveGain(
-  waveform: WaveformType,
-  size: NormalizedCoord,
-  thickness: NormalizedCoord,
-  color: BorderColor,
-  double: boolean,
-): number {
-  const baseGain = areaToGain(waveform, size) * waveformGain(waveform);
-  const direction = color === 'white' ? 'up' : 'down';
-  const shift = double ? 2 : 1;
-  const coeff = OCTAVE_GAIN_COEFF[`${direction}-${shift}`]!;
-  return baseGain * Math.sqrt(thickness) * coeff;
-}
+import type { Fill, WaveformType } from '../types.ts';
 
 // ---- Formant filter mapping ----
 //

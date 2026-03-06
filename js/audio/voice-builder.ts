@@ -13,8 +13,9 @@ import type {
   Voice,
   WaveformType,
 } from '../types.ts';
-import { areaToGain, waveformGain, xToPan, yToFrequency } from './mapping.ts';
-import { applyFormantFilter, borderOctaveGain } from './formants.ts';
+import { xToPan, yToFrequency } from './mapping.ts';
+import { applyFormantFilter } from './formants.ts';
+import { vibe } from './vibe.ts';
 
 // ---- Audio voice types ----
 
@@ -150,7 +151,7 @@ export function buildVoice(
 ): AudioVoice {
   const timbre = 'timbre' in voice ? voice.timbre : 0;
   const gain = ctx.createGain();
-  gain.gain.value = areaToGain(voice.waveform, voice.size) * waveformGain(voice.waveform);
+  gain.gain.value = vibe.voiceGain(voice.waveform, voice.size);
 
   const freq = yToFrequency(voice.y);
 
@@ -218,7 +219,7 @@ export function buildVoice(
     octaveOsc.frequency.value = octaveFreq;
 
     octaveGainNode = ctx.createGain();
-    octaveGainNode.gain.value = borderOctaveGain(
+    octaveGainNode.gain.value = vibe.borderOctaveGain(
       voice.waveform,
       voice.size,
       voice.border.thickness,
