@@ -212,12 +212,6 @@ body {
   }
 }
 
-@media (orientation: landscape) {
-  #stage {
-    padding-left: calc(var(--play-btn-size) + 24px);
-  }
-}
-
 #canvas-wrap {
   position: relative;
   overflow: hidden;
@@ -588,13 +582,7 @@ body {
   background: var(--active-bg);
 }
 
-/* ---- Scene-active toolbar transparency ---- */
-
-#app.stage-florid #toolbar-top,
-#app.stage-florid #toolbar-bottom {
-  background: transparent;
-  border-color: transparent;
-}
+/* ---- Scene-active toolbar expansion backdrop ---- */
 
 #app.stage-florid .toolbar-expansion {
   background: color-mix(in srgb, var(--bg-toolbar) 80%, transparent);
