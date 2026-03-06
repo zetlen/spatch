@@ -45,15 +45,15 @@ test.describe('Playback', () => {
     const useEl = playBtn.locator('.play-icon use');
 
     // Before playing — play icon
-    await expect(useEl).toHaveAttribute('href', /player-play-filled/);
+    await expect(useEl).toHaveAttribute('href', /player-play/);
 
     // Start playing via Space (latched)
     await page.keyboard.press('Space');
-    await expect(useEl).toHaveAttribute('href', /player-stop-filled/);
+    await expect(useEl).toHaveAttribute('href', /player-stop/);
 
     // Press Space again to stop
     await page.keyboard.press('Space');
-    await expect(useEl).toHaveAttribute('href', /player-play-filled/, { timeout: 5000 });
+    await expect(useEl).toHaveAttribute('href', /player-play/, { timeout: 5000 });
   });
 
   test('play does nothing with no shapes', async ({ page }) => {

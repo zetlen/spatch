@@ -128,8 +128,7 @@ body {
 /* ---- Buttons ---- */
 
 .tool-btn,
-.action-btn,
-.play-btn {
+.action-btn {
   position: relative;
   background: var(--bg-toolbar);
   border-width: 1px;
@@ -161,8 +160,7 @@ body {
 }
 
 .tool-btn:hover,
-.action-btn:hover,
-.play-btn:hover {
+.action-btn:hover {
   background: var(--hover-bg);
 }
 
@@ -178,32 +176,6 @@ body {
 
 .action-btn.danger:hover {
   background: rgba(204, 51, 68, 0.12);
-}
-
-.play-btn {
-  width: 64px;
-  gap: 4px;
-}
-
-.play-btn.playing {
-  background: var(--active-bg);
-  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
-}
-
-.play-btn.looping {
-  --loop-progress: 0%;
-  background: linear-gradient(
-    to right,
-    var(--active-bg) var(--loop-progress),
-    var(--bg-toolbar) var(--loop-progress)
-  );
-}
-
-.play-mode-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
 }
 
 /* ---- Swatch ---- */
@@ -231,6 +203,19 @@ body {
   container-type: size;
   --audio-level: 0;
   --stage-bg: none;
+  --play-btn-size: clamp(62px, 13vmin, 84px);
+}
+
+@media (orientation: portrait) {
+  #stage {
+    padding-bottom: calc(var(--play-btn-size) + 24px);
+  }
+}
+
+@media (orientation: landscape) {
+  #stage {
+    padding-left: calc(var(--play-btn-size) + 24px);
+  }
 }
 
 #canvas-wrap {
@@ -294,6 +279,140 @@ body {
   opacity: 1;
 }
 
+/* ---- Stage play button ---- */
+
+.stage-play-btn {
+  position: absolute;
+  z-index: 2;
+  width: var(--play-btn-size);
+  height: var(--play-btn-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  touch-action: none;
+  /* Portrait default: centered below tile, vertically centered in gap */
+  left: 50%;
+  bottom: max(4px, calc((100cqh - min(100cqh - 24px, 100cqw - 24px, 800px)) / 4 + 12px));
+  transform: translateX(-50%);
+}
+
+@media (orientation: landscape) {
+  .stage-play-btn {
+    /* Landscape: bottom-left corner */
+    left: 12px;
+    bottom: 12px;
+    transform: none;
+  }
+}
+
+.stage-play-btn:hover {
+  opacity: 1;
+}
+
+.stage-play-btn .play-icon {
+  position: relative;
+  z-index: 1;
+  width: 70%;
+  height: 70%;
+}
+
+/* Mode badge (lock/repeat icon shown overlapping stop icon, bottom-right) */
+.play-mode-badge {
+  position: absolute;
+  bottom: 2%;
+  right: 2%;
+  z-index: 2;
+  width: 28%;
+  height: 28%;
+  color: #fff;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+  pointer-events: none;
+}
+
+.play-mode-badge svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Loop progress ring — viewBox 68x68, r=31, circumference = 194.78 */
+.play-ring {
+  position: absolute;
+  inset: -2px;
+  width: calc(100% + 4px);
+  height: calc(100% + 4px);
+  pointer-events: none;
+  transform: rotate(-90deg);
+}
+
+.play-ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 2;
+}
+
+.play-ring-fill {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 194.78;
+  stroke-dashoffset: 194.78;
+  transition: none;
+  opacity: 0;
+}
+
+.stage-play-btn.looping .play-ring-fill {
+  opacity: 1;
+}
+
+/* Latch glow */
+.stage-play-btn.latched {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
+}
+
+/* ---- Radial overlay ---- */
+
+.radial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+.radial-overlay.active {
+  opacity: 1;
+}
+
+/* Zone icons — positioned by JS, sized to match play button */
+.radial-zone-icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.4));
+  transition: color 0.15s;
+}
+
+.radial-zone-icon svg {
+  width: 60%;
+  height: 60%;
+}
+
+.radial-zone-icon.active {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 #stage::before,
 #stage::after {
   content: '';
@@ -355,67 +474,6 @@ body {
       rgba(200, 232, 212, 0.3) 100%
     );
   filter: hue-rotate(calc(var(--audio-level) * 30deg));
-}
-
-/* ---- Play fan menu ---- */
-
-.play-fan-wrap {
-  position: relative;
-  touch-action: none;
-}
-
-.play-fan {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s ease-out;
-}
-
-.play-fan.open {
-  opacity: 1;
-}
-
-.fan-option {
-  width: 120px;
-  height: 36px;
-  border-radius: 18px;
-  background: var(--bg-toolbar);
-  border-width: 1px;
-  border-style: solid;
-  border-color: var(--bevel-hi) var(--bevel-lo) var(--bevel-lo) var(--bevel-hi);
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease-out;
-}
-
-.fan-option.hot {
-  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
-  color: var(--text-primary);
-  background: var(--active-bg);
-}
-
-.fan-loop {
-  transition:
-    transform 0.1s ease-out,
-    border-color 0.15s,
-    color 0.15s,
-    background 0.15s;
-}
-
-.fan-loop.dragging {
-  transition:
-    border-color 0.15s,
-    color 0.15s,
-    background 0.15s;
 }
 
 /* ---- Dropdown items (inside toolbar-expansion rows) ---- */
@@ -564,13 +622,9 @@ body {
     width: 34px;
   }
   .tool-btn,
-  .action-btn,
-  .play-btn {
+  .action-btn {
     width: 40px;
     height: 40px;
-  }
-  .play-btn {
-    width: 56px;
   }
 }
 

@@ -19,27 +19,6 @@
           </div>
 
           <div class="toolbar-group play-group">
-            <div class="play-fan-wrap">
-              <button id="btn-play" class="play-btn" title="Play">
-                <svg class="play-icon" width="20" height="20">
-                  <use href="tabler-sprite.svg#tabler-player-play-filled" />
-                </svg>
-                <span id="play-mode-lock" class="play-mode-indicator hidden" title="Latched">
-                  <svg width="14" height="14"><use href="tabler-sprite.svg#tabler-lock" /></svg>
-                </span>
-                <span id="play-mode-loop" class="play-mode-indicator hidden" title="Looping">
-                  <svg width="14" height="14"><use href="tabler-sprite.svg#tabler-repeat" /></svg>
-                </span>
-              </button>
-              <div id="play-fan" class="play-fan" aria-hidden="true">
-                <div class="fan-option fan-lock" title="Latch">
-                  <svg width="18" height="18"><use href="tabler-sprite.svg#tabler-lock" /></svg>
-                </div>
-                <div class="fan-option fan-loop" title="Loop">
-                  <svg width="18" height="18"><use href="tabler-sprite.svg#tabler-repeat" /></svg>
-                </div>
-              </div>
-            </div>
             <button id="btn-share" class="action-btn" title="Share">
               <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-share" /></svg>
             </button>
@@ -93,6 +72,17 @@
           <div id="tile"></div>
           <svg id="sigil-canvas" viewBox="0 0 1 1" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
+        <button id="btn-play" class="stage-play-btn" title="Play">
+          <svg class="play-icon" viewBox="0 0 24 24">
+            <use href="tabler-sprite.svg#tabler-player-play" />
+          </svg>
+          <span class="play-mode-badge hidden"></span>
+          <svg class="play-ring" viewBox="0 0 68 68">
+            <circle class="play-ring-track" cx="34" cy="34" r="31" />
+            <circle class="play-ring-fill" cx="34" cy="34" r="31" />
+          </svg>
+        </button>
+        <div id="radial-overlay" class="radial-overlay hidden" aria-hidden="true"></div>
       </main>
 
       <footer id="toolbar-bottom">

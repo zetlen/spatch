@@ -1,18 +1,14 @@
-// playback.ts — Play state machine, fan gesture, loop scheduling
+// playback.ts — Play state machine, radial gesture, loop scheduling
 
 import type { AudioEngine } from './audio/engine.ts';
 import type { SigilData } from './types.ts';
 import { qel, svgEl } from './dom.ts';
 
-// ---- Play fan gesture constants ----
+// ---- Radial gesture constants ----
 
-const LOCK_MIN = 35;
-const LOCK_MAX = 70;
-const LOOP_MIN = 70;
-const LOOP_RANGE = 130;
 const LOOP_MS_MIN = 100;
 const LOOP_MS_MAX = 2000;
-const FAN_DELAY_MS = 250;
+const OVERLAY_DELAY_MS = 1000;
 
 // ---- Types ----
 
@@ -22,29 +18,37 @@ export type PlayMode = 'idle' | 'latched' | 'looping';
 // ---- PlaybackController ----
 
 /**
- * Play state machine and fan gesture handler. Manages play/stop/latch/loop
- * modes, the play button fan menu (drag down for latch or loop), and loop
- * scheduling with envelope-aware restart timing.
+ * Play state machine and radial gesture handler. Manages play/stop/latch/loop
+ * modes via a radial overlay (drag distance from button center selects mode),
+ * and loop scheduling with envelope-aware restart timing.
  */
 export class PlaybackController {
   private audio: AudioEngine;
   private getState: () => SigilData;
   private requestRender: () => void;
+  private isSplashActive: () => boolean;
 
-  // DOM elements (queried once in constructor)
+  // DOM elements
   private playBtn: HTMLElement;
-  private playFan: HTMLElement;
-  private fanLock: HTMLElement;
-  private fanLoop: HTMLElement;
-  private playModeLock: HTMLElement;
-  private playModeLoop: HTMLElement;
+  private radialOverlay: HTMLElement;
+  private ringFill: SVGCircleElement;
+  private modeBadge: HTMLElement;
+
+  // Zone elements (created once in constructor)
+  private pointerZoneIcon: HTMLElement | undefined;
+  private zoneBorderCircle: SVGCircleElement | undefined;
+  private pointerRadiusCircle: SVGCircleElement | undefined;
+
+  // ring r=31 in SVG viewBox units, circumference = 2*PI*31
+  private static readonly RING_CIRCUMFERENCE = 2 * Math.PI * 31;
+  private static readonly LATCH_MARGIN = 0.3;
 
   // Play state
   private playState: PlayMode = 'idle';
-  private gestureActive = false;
-  private gestureTimerId: ReturnType<typeof setTimeout> | undefined;
   private gesturePointerId: number | undefined;
-  private lastFanInfo: { zone: string; ms?: number; pull?: number } | undefined;
+  private gestureActive = false;
+  private overlayTimerId: ReturnType<typeof setTimeout> | undefined;
+  private lastZoneInfo: { zone: string; ms?: number } | undefined;
   private loopHoldMs = 500;
   private loopTimeoutId: ReturnType<typeof setTimeout> | undefined;
   private loopCycleStart = 0;
@@ -52,18 +56,30 @@ export class PlaybackController {
   private releaseGlowTimeoutId: ReturnType<typeof setTimeout> | undefined;
   private playGeneration = 0;
 
-  constructor(deps: { audio: AudioEngine; getState: () => SigilData; requestRender: () => void }) {
+  // Overlay geometry (computed on pointerdown)
+  private overlayCenterX = 0;
+  private overlayCenterY = 0;
+  private overlayInnerRadius = 0;
+  private overlayLatchStart = 0;
+  private overlayMaxDist = 0;
+
+  constructor(deps: {
+    audio: AudioEngine;
+    getState: () => SigilData;
+    requestRender: () => void;
+    isSplashActive: () => boolean;
+  }) {
     this.audio = deps.audio;
     this.getState = deps.getState;
     this.requestRender = deps.requestRender;
+    this.isSplashActive = deps.isSplashActive;
 
-    // DOM queries — these elements have known IDs in index.html
     this.playBtn = qel('#btn-play');
-    this.playFan = qel('#play-fan');
-    this.fanLock = qel('.fan-lock', this.playFan);
-    this.fanLoop = qel('.fan-loop', this.playFan);
-    this.playModeLock = qel('#play-mode-lock');
-    this.playModeLoop = qel('#play-mode-loop');
+    this.radialOverlay = qel('#radial-overlay');
+    this.ringFill = qel<SVGCircleElement>('.play-ring-fill', this.playBtn);
+    this.modeBadge = qel('.play-mode-badge', this.playBtn);
+
+    this.createZoneElements();
   }
 
   /** Current play mode (idle, latched, or looping). */
@@ -76,12 +92,13 @@ export class PlaybackController {
     return this.playState !== 'idle';
   }
 
-  /** Called from render loop to update loop progress indicator. */
+  /** Called from render loop to update loop progress ring. */
   renderTick(): void {
     if (this.playState === 'looping' && this.loopCycleDuration > 0) {
       const elapsed = performance.now() - this.loopCycleStart;
       const progress = Math.min(1, elapsed / this.loopCycleDuration);
-      this.playBtn.style.setProperty('--loop-progress', `${(progress * 100).toFixed(1)}%`);
+      const offset = PlaybackController.RING_CIRCUMFERENCE * (1 - progress);
+      this.ringFill.style.strokeDashoffset = `${offset}`;
     }
   }
 
@@ -103,7 +120,6 @@ export class PlaybackController {
     const state = this.getState();
     await this.audio.play(state, state.envelope);
     if (gen !== this.playGeneration) {
-      // Cancelled during async init — stop audio that just started
       this.audio.stop();
       return;
     }
@@ -121,8 +137,8 @@ export class PlaybackController {
     }
     const state = this.getState();
     this.audio.release(state.envelope);
-    this.playBtn.classList.remove('playing', 'looping');
-    this.playBtn.style.setProperty('--loop-progress', '0%');
+    this.ringFill.style.strokeDashoffset = `${PlaybackController.RING_CIRCUMFERENCE}`;
+    this.playBtn.classList.remove('playing', 'latched', 'looping');
     this.setPlayIcon(false);
     this.playState = 'idle';
     this.updatePlayIndicators();
@@ -142,6 +158,7 @@ export class PlaybackController {
     this.playBtn.classList.remove('playing');
     this.setPlayIcon(false);
     this.playState = 'idle';
+    this.updatePlayIndicators();
   }
 
   /**
@@ -154,6 +171,7 @@ export class PlaybackController {
     this.playBtn.classList.remove('playing');
     this.setPlayIcon(false);
     this.playState = 'idle';
+    this.updatePlayIndicators();
     const releaseMs = state.envelope.release * 1000 + 100;
     this.releaseGlowTimeoutId = setTimeout(() => {
       this.releaseGlowTimeoutId = undefined;
@@ -163,13 +181,13 @@ export class PlaybackController {
 
   // ---- Bind play button events ----
 
-  /** Wire up play button pointer events for tap-to-play and drag-to-latch/loop gestures. */
+  /** Wire up play button pointer events for radial gesture. */
   bindEvents(): void {
     this.playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
+      // Don't interfere with splash — let event bubble to splash handler
+      if (this.isSplashActive()) return;
       e.preventDefault();
-      // Eagerly warm up AudioContext — even though pointerdown isn't a qualifying
-      // gesture on iOS Safari, creating the context now means it's ready when
-      // touchend/click fires and actually unlocks it.
+
       this.audio.warmUp();
 
       // If already playing (latched or looping), stop
@@ -178,155 +196,161 @@ export class PlaybackController {
         return;
       }
 
-      if (this.getState().voices.length === 0) {
-        return;
-      }
+      if (this.getState().voices.length === 0) return;
 
       this.gesturePointerId = e.pointerId;
-      this.lastFanInfo = undefined;
+      this.lastZoneInfo = undefined;
+      this.gestureActive = false;
       this.playBtn.setPointerCapture(e.pointerId);
 
-      // Set up gesture tracking synchronously -- before audio init
-      this.gestureTimerId = setTimeout(() => {
-        this.gestureTimerId = undefined;
-        if (this.gesturePointerId != undefined) {
-          this.openFan();
-        }
-      }, FAN_DELAY_MS);
-
-      // Track early drag to open fan immediately
-      const earlyMove = (me: PointerEvent) => {
-        if (me.pointerId !== this.gesturePointerId) {
-          return;
-        }
-        const r = this.playBtn.getBoundingClientRect();
-        const dy = me.clientY - (r.top + r.height / 2); // Positive = below button
-        if (dy > 10 && this.gestureTimerId != undefined) {
-          clearTimeout(this.gestureTimerId);
-          this.gestureTimerId = undefined;
-          this.openFan();
-          this.playBtn.removeEventListener('pointermove', earlyMove);
-        }
-      };
-      this.playBtn.addEventListener('pointermove', earlyMove);
-
-      // Clean up early-move listener once gesture ends
-      const cleanup = () => {
-        this.playBtn.removeEventListener('pointermove', earlyMove);
-        this.playBtn.removeEventListener('pointerup', cleanup);
-        this.playBtn.removeEventListener('lostpointercapture', cleanup);
-      };
-      this.playBtn.addEventListener('pointerup', cleanup, { once: true });
-      this.playBtn.addEventListener('lostpointercapture', cleanup, { once: true });
-
-      // Start audio (non-blocking -- gesture is already wired)
+      // Start audio immediately (momentary)
       this.start();
+
+      // Delay before showing radial overlay — taps don't show it
+      this.overlayTimerId = setTimeout(() => {
+        this.overlayTimerId = undefined;
+        if (this.gesturePointerId != undefined) {
+          this.gestureActive = true;
+          this.showRadialOverlay();
+        }
+      }, OVERLAY_DELAY_MS);
     });
 
     this.playBtn.addEventListener('pointermove', (e: PointerEvent) => {
-      if (!this.gestureActive || e.pointerId !== this.gesturePointerId) {
-        return;
-      }
+      if (e.pointerId !== this.gesturePointerId || !this.gestureActive) return;
 
-      const info = this.fanZone(e.clientY);
-      this.lastFanInfo = info;
-
-      this.fanLock.classList.toggle('hot', info.zone === 'lock');
-
-      if (info.zone === 'loop') {
-        this.fanLoop.classList.add('hot', 'dragging');
-        this.fanLoop.style.transform = `translateY(${info.pull}px)`;
-      } else {
-        this.fanLoop.classList.remove('hot', 'dragging');
-        this.fanLoop.style.transform = '';
-      }
+      const info = this.radialZone(e.clientX, e.clientY);
+      this.lastZoneInfo = info;
+      this.updateOverlayHighlight(info.zone, e.clientX, e.clientY);
     });
 
     this.playBtn.addEventListener('pointerup', (e: PointerEvent) => {
-      if (e.pointerId !== this.gesturePointerId) {
-        return;
-      }
+      if (e.pointerId !== this.gesturePointerId) return;
 
-      if (this.gestureTimerId != undefined) {
-        clearTimeout(this.gestureTimerId);
-        this.gestureTimerId = undefined;
+      if (this.overlayTimerId != undefined) {
+        clearTimeout(this.overlayTimerId);
+        this.overlayTimerId = undefined;
       }
 
       if (!this.gestureActive) {
-        // Quick click -- normal release
+        // Quick tap — momentary stop
         this.stop();
-        this.closeFan();
         this.gesturePointerId = undefined;
         return;
       }
 
-      // Use the last tracked zone from pointermove -- avoids drift during finger lift.
-      // Fall back to computing from the pointerup position if no move was recorded.
-      const info = this.lastFanInfo || this.fanZone(e.clientY);
+      const info = this.lastZoneInfo || this.radialZone(e.clientX, e.clientY);
 
-      if (info.zone === 'lock') {
+      if (info.zone === 'latch') {
         this.playState = 'latched';
         this.updatePlayIndicators();
+        // Defensive: restart audio if it stopped during the gesture
+        if (!this.audio.isPlaying) {
+          this.start();
+        }
       } else if (info.zone === 'loop') {
         this.loopHoldMs = info.ms!;
         this.playState = 'looping';
         this.updatePlayIndicators();
         this.scheduleLoopRestart();
       } else {
-        // Released back on button
+        // Momentary — stop
         this.stop();
       }
 
-      this.closeFan();
+      this.hideRadialOverlay();
+      this.gestureActive = false;
       this.gesturePointerId = undefined;
     });
 
     this.playBtn.addEventListener('lostpointercapture', (e: PointerEvent) => {
-      // Pointerup already handled this gesture
-      if (this.gesturePointerId == undefined) {
-        return;
-      }
-      if (e.pointerId !== this.gesturePointerId) {
-        return;
-      }
+      if (this.gesturePointerId == undefined) return;
+      if (e.pointerId !== this.gesturePointerId) return;
 
-      if (this.gestureTimerId != undefined) {
-        clearTimeout(this.gestureTimerId);
-        this.gestureTimerId = undefined;
+      if (this.overlayTimerId != undefined) {
+        clearTimeout(this.overlayTimerId);
+        this.overlayTimerId = undefined;
       }
 
       if (this.audio.isPlaying && this.playState === 'idle') {
         this.stop();
       }
-      this.closeFan();
+      this.hideRadialOverlay();
+      this.gestureActive = false;
       this.gesturePointerId = undefined;
     });
   }
 
-  /** Clear all pending timers (loop, glow, gesture). */
+  /** Clear all pending timers. */
   dispose(): void {
-    if (this.loopTimeoutId != undefined) {
-      clearTimeout(this.loopTimeoutId);
-    }
-    if (this.releaseGlowTimeoutId != undefined) {
-      clearTimeout(this.releaseGlowTimeoutId);
-    }
-    if (this.gestureTimerId != undefined) {
-      clearTimeout(this.gestureTimerId);
-    }
+    if (this.loopTimeoutId != undefined) clearTimeout(this.loopTimeoutId);
+    if (this.releaseGlowTimeoutId != undefined) clearTimeout(this.releaseGlowTimeoutId);
+    if (this.overlayTimerId != undefined) clearTimeout(this.overlayTimerId);
   }
 
   // ---- Private helpers ----
 
-  private updatePlayIndicators(): void {
-    this.playModeLock.classList.toggle('hidden', this.playState !== 'latched');
-    this.playModeLoop.classList.toggle('hidden', this.playState !== 'looping');
+  // Icon refs for sprite scanner: #tabler-repeat #tabler-lock
+  private createZoneElements(): void {
+    // Floating zone icon — follows pointer, switches between loop/latch icons
+    const zoneIcon = document.createElement('div');
+    zoneIcon.className = 'radial-zone-icon';
+    zoneIcon.style.opacity = '0';
+    const zoneSvg = svgEl(
+      'svg',
+      { viewBox: '0 0 24 24' },
+      svgEl('use', { href: '#tabler-repeat' }),
+    );
+    zoneIcon.appendChild(zoneSvg);
+    this.radialOverlay.appendChild(zoneIcon);
+    this.pointerZoneIcon = zoneIcon;
+
+    // Dashed border circle between loop and latch zones
+    const borderSvg = svgEl('svg', {});
+    borderSvg.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none';
+    const circle = svgEl('circle', {});
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', 'rgba(255, 255, 255, 0.3)');
+    circle.setAttribute('stroke-width', '1.5');
+    circle.setAttribute('stroke-dasharray', '8 6');
+    borderSvg.appendChild(circle);
+    this.zoneBorderCircle = circle;
+
+    // Pointer radius indicator (tracks distance during loop zone drag)
+    const radiusCircle = svgEl('circle', {});
+    radiusCircle.setAttribute('fill', 'none');
+    radiusCircle.setAttribute('stroke', 'rgba(180, 220, 255, 0.7)');
+    radiusCircle.setAttribute('stroke-width', '2.5');
+    radiusCircle.setAttribute('stroke-dasharray', '6 4');
+    radiusCircle.style.opacity = '0';
+    borderSvg.appendChild(radiusCircle);
+    this.pointerRadiusCircle = radiusCircle;
+
+    this.radialOverlay.appendChild(borderSvg);
   }
 
-  // Icon reference for sprite scanner: #tabler-player-stop-filled
+  private updatePlayIndicators(): void {
+    this.playBtn.classList.toggle('latched', this.playState === 'latched');
+    this.playBtn.classList.toggle('looping', this.playState === 'looping');
+
+    // Mode badge: show lock/repeat icon inside the stop button
+    if (this.playState === 'latched') {
+      const svg = svgEl('svg', { viewBox: '0 0 24 24' }, svgEl('use', { href: '#tabler-lock' }));
+      this.modeBadge.replaceChildren(svg);
+      this.modeBadge.classList.remove('hidden');
+    } else if (this.playState === 'looping') {
+      const svg = svgEl('svg', { viewBox: '0 0 24 24' }, svgEl('use', { href: '#tabler-repeat' }));
+      this.modeBadge.replaceChildren(svg);
+      this.modeBadge.classList.remove('hidden');
+    } else {
+      this.modeBadge.classList.add('hidden');
+    }
+  }
+
+  // Icon references for sprite scanner: #tabler-player-stop #tabler-player-play
   private setPlayIcon(playing: boolean): void {
-    const symbol = playing ? 'tabler-player-stop-filled' : 'tabler-player-play-filled';
-    const svg = svgEl('svg', { width: 20, height: 20 }, svgEl('use', { href: `#${symbol}` }));
+    const symbol = playing ? 'tabler-player-stop' : 'tabler-player-play';
+    const svg = svgEl('svg', { viewBox: '0 0 24 24' }, svgEl('use', { href: `#${symbol}` }));
     svg.classList.add('play-icon');
     this.playBtn.querySelector('.play-icon')!.replaceWith(svg);
   }
@@ -337,13 +361,13 @@ export class PlaybackController {
 
     this.loopCycleDuration = this.loopHoldMs + releaseMs + 50;
     this.loopCycleStart = performance.now();
-    this.playBtn.classList.add('looping');
 
     this.loopTimeoutId = setTimeout(() => {
       this.audio.release(this.getState().envelope);
       this.loopTimeoutId = setTimeout(() => {
         if (this.playState === 'looping') {
           this.loopCycleStart = performance.now();
+          this.ringFill.style.strokeDashoffset = `${PlaybackController.RING_CIRCUMFERENCE}`;
           this.start();
           this.scheduleLoopRestart();
         }
@@ -351,31 +375,139 @@ export class PlaybackController {
     }, this.loopHoldMs);
   }
 
-  private fanZone(clientY: number): { zone: string; ms?: number; pull?: number } {
-    const r = this.playBtn.getBoundingClientRect();
-    const dy = clientY - (r.top + r.height / 2); // Positive = below button
-    if (dy < LOCK_MIN) {
-      return { zone: 'button' };
+  private radialZone(clientX: number, clientY: number): { zone: string; ms?: number } {
+    const dx = clientX - this.overlayCenterX;
+    const dy = clientY - this.overlayCenterY;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < this.overlayInnerRadius) {
+      return { zone: 'momentary' };
     }
-    if (dy < LOCK_MAX) {
-      return { zone: 'lock' };
+    if (dist >= this.overlayLatchStart) {
+      return { zone: 'latch' };
     }
-    const t = Math.min(1, Math.max(0, (dy - LOOP_MIN) / LOOP_RANGE));
+    const loopRange = this.overlayLatchStart - this.overlayInnerRadius;
+    const t = Math.min(1, Math.max(0, (dist - this.overlayInnerRadius) / loopRange));
     const ms = Math.round((LOOP_MS_MIN + t * (LOOP_MS_MAX - LOOP_MS_MIN)) / 50) * 50;
-    return { ms, pull: Math.max(0, dy - LOOP_MIN), zone: 'loop' };
+    return { zone: 'loop', ms };
   }
 
-  private openFan(): void {
-    this.gestureActive = true;
-    this.playFan.classList.add('open');
+  private showRadialOverlay(): void {
+    const r = this.playBtn.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    this.overlayCenterX = cx;
+    this.overlayCenterY = cy;
+
+    // Cap at vmin/2 so the overlay circle fits within the viewport
+    const vmin = Math.min(window.innerWidth, window.innerHeight);
+    const maxDist = vmin / 2;
+    this.overlayMaxDist = maxDist;
+
+    const innerR = r.width / 2;
+    const latchStart = maxDist * (1 - PlaybackController.LATCH_MARGIN);
+    this.overlayInnerRadius = innerR;
+    this.overlayLatchStart = latchStart;
+
+    // Initialize floating zone icon (hidden until loop/latch zone entered)
+    const iconSize = r.width;
+    if (this.pointerZoneIcon) {
+      this.pointerZoneIcon.style.width = `${iconSize}px`;
+      this.pointerZoneIcon.style.height = `${iconSize}px`;
+      this.pointerZoneIcon.style.opacity = '0';
+    }
+
+    // Dashed border circle at zone boundary
+    if (this.zoneBorderCircle) {
+      this.zoneBorderCircle.setAttribute('cx', `${cx}`);
+      this.zoneBorderCircle.setAttribute('cy', `${cy}`);
+      this.zoneBorderCircle.setAttribute('r', `${latchStart}`);
+    }
+
+    // Reset pointer radius indicator
+    if (this.pointerRadiusCircle) {
+      this.pointerRadiusCircle.setAttribute('cx', `${cx}`);
+      this.pointerRadiusCircle.setAttribute('cy', `${cy}`);
+      this.pointerRadiusCircle.style.opacity = '0';
+    }
+
+    this.setOverlayGradient('momentary');
+    this.radialOverlay.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      this.radialOverlay.classList.add('active');
+    });
   }
 
-  private closeFan(): void {
-    this.gestureActive = false;
-    this.lastFanInfo = undefined;
-    this.playFan.classList.remove('open');
-    this.fanLock.classList.remove('hot');
-    this.fanLoop.classList.remove('hot', 'dragging');
-    this.fanLoop.style.transform = '';
+  private hideRadialOverlay(): void {
+    this.radialOverlay.classList.remove('active');
+    if (this.pointerZoneIcon) this.pointerZoneIcon.style.opacity = '0';
+    this.radialOverlay.addEventListener(
+      'transitionend',
+      () => {
+        if (!this.radialOverlay.classList.contains('active')) {
+          this.radialOverlay.classList.add('hidden');
+        }
+      },
+      { once: true },
+    );
+  }
+
+  private setOverlayGradient(activeZone: string): void {
+    const cx = this.overlayCenterX;
+    const cy = this.overlayCenterY;
+    const innerR = this.overlayInnerRadius;
+    const latchStart = this.overlayLatchStart;
+
+    const momentaryAlpha = activeZone === 'momentary' ? 0.14 : 0.06;
+    const loopAlpha = activeZone === 'loop' ? 0.18 : 0.1;
+
+    this.radialOverlay.style.background = `radial-gradient(
+      circle at ${cx}px ${cy}px,
+      rgba(255, 255, 255, ${momentaryAlpha}) 0px,
+      rgba(255, 255, 255, ${momentaryAlpha}) ${innerR}px,
+      rgba(180, 220, 255, ${loopAlpha}) ${innerR}px,
+      rgba(180, 220, 255, ${loopAlpha}) ${latchStart}px,
+      transparent ${latchStart}px
+    )`;
+  }
+
+  private updateOverlayHighlight(zone: string, clientX: number, clientY: number): void {
+    this.setOverlayGradient(zone);
+
+    const dist = Math.hypot(clientX - this.overlayCenterX, clientY - this.overlayCenterY);
+
+    // Floating zone icon follows pointer — shows loop icon in loop zone, latch icon past boundary
+    if (this.pointerZoneIcon) {
+      if (zone === 'loop' || zone === 'latch') {
+        // Swap icon based on zone
+        const href = zone === 'latch' ? '#tabler-lock' : '#tabler-repeat';
+        const use = this.pointerZoneIcon.querySelector('use');
+        if (use && use.getAttribute('href') !== href) {
+          use.setAttribute('href', href);
+        }
+
+        const half = this.pointerZoneIcon.offsetWidth / 2;
+        const angle = Math.atan2(clientY - this.overlayCenterY, clientX - this.overlayCenterX);
+        const ix = this.overlayCenterX + Math.cos(angle) * dist - half;
+        const iy = this.overlayCenterY + Math.sin(angle) * dist - half;
+        this.pointerZoneIcon.style.left = `${ix}px`;
+        this.pointerZoneIcon.style.top = `${iy}px`;
+        this.pointerZoneIcon.style.opacity = '1';
+        this.pointerZoneIcon.classList.toggle('active', true);
+      } else {
+        this.pointerZoneIcon.style.opacity = '0';
+        this.pointerZoneIcon.classList.toggle('active', false);
+      }
+    }
+
+    // Show pointer radius indicator in loop zone
+    if (this.pointerRadiusCircle) {
+      if (zone === 'loop') {
+        this.pointerRadiusCircle.setAttribute('r', `${dist}`);
+        this.pointerRadiusCircle.style.opacity = '1';
+      } else {
+        this.pointerRadiusCircle.style.opacity = '0';
+      }
+    }
   }
 }

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import path from 'path';
 
-test.describe('Play fan gesture', () => {
+test.describe('Play radial gesture', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
     await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/audio-tap.js') });
@@ -31,36 +31,45 @@ test.describe('Play fan gesture', () => {
     await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
-  test('hold opens fan', async ({ page }) => {
+  test('hold for 1s shows radial overlay', async ({ page }) => {
     const playBtn = page.locator('#btn-play');
+    const box = await playBtn.boundingBox();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
 
-    await playBtn.dispatchEvent('pointerdown', { pointerId: 1 });
-    await page.waitForTimeout(400);
+    // Pointer down starts audio but overlay has 1s delay
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
 
-    // Fan should be open
-    await expect(page.locator('.play-fan')).toHaveClass(/open/);
+    // Overlay not shown yet (quick tap)
+    await page.waitForTimeout(200);
+    await expect(page.locator('#radial-overlay')).not.toHaveClass(/active/);
+
+    // After 1s delay, overlay appears
+    await page.waitForTimeout(1000);
+    await expect(page.locator('#radial-overlay')).toHaveClass(/active/);
 
     // Release on button to stop
-    await playBtn.dispatchEvent('pointerup', { pointerId: 1 });
-    await expect(page.locator('.play-fan')).not.toHaveClass(/open/);
+    await page.mouse.up();
+    await expect(page.locator('#radial-overlay')).not.toHaveClass(/active/);
   });
 
-  test('drag to lock latches playback', async ({ page }) => {
+  test('drag to outer edge latches playback', async ({ page }) => {
     const playBtn = page.locator('#btn-play');
     const box = await playBtn.boundingBox();
     const centerX = box.x + box.width / 2;
     const centerY = box.y + box.height / 2;
 
-    // Real pointer down + hold to open fan
+    // Hold to open radial overlay (1s delay)
     await page.mouse.move(centerX, centerY);
     await page.mouse.down();
-    await page.waitForTimeout(400);
-    await expect(page.locator('.play-fan')).toHaveClass(/open/);
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#radial-overlay')).toHaveClass(/active/);
 
-    // Move into lock zone (50px below center — fan extends downward)
-    await page.mouse.move(centerX, centerY + 50);
+    // Move far from button center into latch zone (outer 30% of max distance)
+    await page.mouse.move(10, 10);
 
-    // Release in lock zone
+    // Release in latch zone
     await page.mouse.up();
 
     // Should still be playing (latched)
@@ -74,19 +83,20 @@ test.describe('Play fan gesture', () => {
     await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
-  test('drag to loop starts loop', async ({ page }) => {
+  test('drag to middle zone starts loop', async ({ page }) => {
     const playBtn = page.locator('#btn-play');
     const box = await playBtn.boundingBox();
     const centerX = box.x + box.width / 2;
     const centerY = box.y + box.height / 2;
 
-    // Real pointer down + hold to open fan
+    // Hold to open radial overlay (1s delay)
     await page.mouse.move(centerX, centerY);
     await page.mouse.down();
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#radial-overlay')).toHaveClass(/active/);
 
-    // Move into loop zone (100px below center — past the lock zone)
-    await page.mouse.move(centerX, centerY + 100);
+    // Move moderate distance from button center into loop zone (middle ring)
+    await page.mouse.move(centerX, centerY - 150);
 
     // Release in loop zone
     await page.mouse.up();

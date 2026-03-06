@@ -72,12 +72,13 @@ const canvasWrap = qel('#canvas-wrap');
 
 // ---- Playback controller ----
 
-const playback = new PlaybackController({
+const playback: PlaybackController = new PlaybackController({
   audio,
   getState: () => store.data,
   requestRender: () => {
     needsRender = true;
   },
+  isSplashActive: (): boolean => splash.isActive,
 });
 
 // ---- Splash screen ----
