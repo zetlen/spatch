@@ -95,7 +95,9 @@ const splash = new SplashController({ stage, audio, playback });
   let first = true;
   effect(() => {
     const data = store.data; // subscribe to the signal
+    updateCanvasBorderRadius(canvasWrap, data.envelope);
     updateCanvasBorderRadius(tile, data.envelope);
+    updateCanvasBorderRadius(svgCanvas, data.envelope, 10);
     if (first) {
       first = false;
       return; // skip the initial run (matches old onChange behavior)

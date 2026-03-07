@@ -19,17 +19,24 @@ const MAX_RADIUS_PCT = 15; // Max corner radius as percentage of canvas size
  * Apply ADSR-derived corner radii (as %) to the canvas frame element and its parent wrapper.
  * @param frameEl - The canvas frame HTML element
  * @param envelope - The ADSR envelope
+ * @param inset - Optional pixel inset to subtract from the radius for concentric inner borders
  */
-export function updateCanvasBorderRadius(frameEl: HTMLElement, envelope: Envelope): void {
+export function updateCanvasBorderRadius(
+  frameEl: HTMLElement | SVGElement,
+  envelope: Envelope,
+  inset: number = 0,
+): void {
   const tl = ((envelope.decay / 2) * MAX_RADIUS_PCT).toFixed(2);
   const tr = (envelope.sustain * MAX_RADIUS_PCT).toFixed(2);
   const br = ((envelope.release / 3) * MAX_RADIUS_PCT).toFixed(2);
   const bl = ((envelope.attack / 2) * MAX_RADIUS_PCT).toFixed(2);
-  const borderRadius = `${tl}% ${tr}% ${br}% ${bl}%`;
+
+  const borderRadius =
+    inset > 0
+      ? `calc(${tl}% - ${inset}px) calc(${tr}% - ${inset}px) calc(${br}% - ${inset}px) calc(${bl}% - ${inset}px)`
+      : `${tl}% ${tr}% ${br}% ${bl}%`;
+
   frameEl.style.borderRadius = borderRadius;
-  if (frameEl.parentElement) {
-    frameEl.parentElement.style.borderRadius = borderRadius;
-  }
 }
 
 /**

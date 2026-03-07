@@ -38,7 +38,9 @@ if (!hash) {
     }
 
     // Apply ADSR border radius to frame (static in embed — only needs to run once)
+    updateCanvasBorderRadius(qel('#wrap'), sigil.envelope);
     updateCanvasBorderRadius(frame, sigil.envelope);
+    updateCanvasBorderRadius(svgRoot, sigil.envelope, 10);
 
     // Render loop: continuously re-render so playback glow effects animate
     function renderLoop(): void {
