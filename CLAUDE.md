@@ -56,13 +56,13 @@ js/
   canvas/
     render.ts        SVG DOM reconciler (voices, selection UI)
     interaction.ts   CanvasInteractionController: pointer/touch input on canvas
-    frame-shadow.ts  Frame shadow computation (reverb + audio-reactive)
   audio/
     engine.ts        AudioEngine class: Web Audio lifecycle, voice management,
-                     reverb, analyser
+                     vibe-driven reverb/EQ/compression, analyser
     mapping.ts       Audio mapping functions (pitch, pan, gain, timbre, formants)
     voice-builder.ts Voice audio graph construction (oscillators, effects, borders)
-    voice-types.ts   AudioVoice interface (runtime audio graph state)
+    vibe.ts          Vibe class: perceptual gain tuning, reverb, mastering, synthesis params
+    vibe-presets.ts  Scene registry: SceneDefinition[] mapping index → image + vibe overrides
     formants.ts      Formant filter bank for fill-driven vowel synthesis
   toolbar/
     toolbar.ts       Toolbar class: tool/pattern/color picker UI binding
@@ -70,8 +70,9 @@ js/
     border-panel.ts  Border settings expansion panel
     fill-panel.ts    Fill color/gradient expansion panel
     pattern-panel.ts Pattern effect dropdown panel
-    reverb-panel.ts  Reverb controls panel
     dom-helpers.ts   Shared DOM construction helpers for toolbar panels
+  debug/
+    vibe-tuner.ts    Debug-only vibe tuner side drawer (?debug=vibe, elided in production)
   shapes.ts          Resize/rotate math, ADSR corner testing
   colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
   patterns.ts        SVG pattern definitions (stripes, checker, noise, gradient)
@@ -82,7 +83,7 @@ js/
   envelope.ts        ADSR ↔ canvas corner radius conversion
   share.ts           Share menu binding + embed snippet generator
   serialize.ts       Bespoke Base64 URL serialization (bitfield-packed, no keys)
-  stage.ts           Stage theme cycling (white / florid background images)
+  stage.ts           Stage scene cycling (background images tied to SigilData.scene)
 dist/                Build output (gitignored)
 docs/plans/              Design docs and implementation plans
                          Convention: YYYY-MM-DD-{topic}-{design|plan}.md
@@ -220,21 +221,26 @@ design rationale and enumeration of past violations.
     double = 2 octaves. `thickness` scales both the visual stroke width and
     the doubled oscillator's gain. Undefined = no border, no doubling.
 
-- **Reverb** is a global effect on `SigilData` (not per-voice). The canvas
-  frame gains an inset shadow (CSS `box-shadow: inset`) that maps to master
-  reverb via a ConvolverNode with algorithmic impulse response. `depth`
-  controls wet/dry mix and shadow intensity. `style` is either `glow` (short
-  bright IR, white shadow) or `dim` (long dark IR, black shadow).
+- **Scene** is a global index on `SigilData` (not per-voice). Each scene maps
+  to a background image (visual) and a `Vibe` preset (audio). The scene index
+  is serialized as 1 B64 char (0–63) in the URL. Clicking the stage button
+  advances to the next scene. The `SCENES` registry in `audio/vibe-presets.ts`
+  defines `SceneDefinition[]` — each entry has `image`, `name`, and
+  `vibe: Partial<VibeOptions>` overrides. Scene satisfies the bijection
+  principle: scene index → background image (visual) + vibe preset (audio).
 
-- **Canvas frame**: The canvas is split into `#canvas-frame` (div) and
+- **Vibe** (`audio/vibe.ts`) encapsulates all audio tuning: gain curves,
+  reverb (ConvolverNode with algorithmic IR), compressor, 3-band EQ, formant
+  scaling, warmth, stereo width, and octave gain coefficients. A `vibe`
+  singleton is set via `setVibe()` when the scene changes. The `Vibe` class
+  takes `VibeOptions` with ~25 optional params; `VIBE_DEFAULTS` provides
+  defaults. The debug tuner (`?debug=vibe`) exposes all params in a side drawer.
+
+- **Canvas frame**: The canvas is split into `#canvas-wrap` (div) and
   `#sigil-canvas` (SVG, `viewBox="0 0 1 1"`). The frame div owns the dark
-  background, border-radius (ADSR corners), bevel border, inset shadow
-  (reverb), and audio-reactive elevation shadow (play indicator). The SVG is
-  transparent and renders shapes and touch selection indicators only, ensuring
-  they appear above the shadow. During playback, `updateFrameShadow` in app.ts
-  composes both the reverb inset shadow and a cool dark outer shadow whose
-  intensity tracks real-time RMS audio level via an AnalyserNode in the audio
-  engine.
+  background, border-radius (ADSR corners), bevel border, and audio-reactive
+  elevation shadow (play indicator). The SVG is transparent and renders shapes
+  and touch selection indicators only, ensuring they appear above the shadow.
 
 - **ADSR envelope** is encoded as the canvas frame corner radii. Drag
   corners to adjust. Bottom-left = attack, top-left = decay, top-right =
@@ -244,7 +250,7 @@ design rationale and enumeration of past violations.
   (auto-repeating).
 
 - **State** lives in `SigilStore` (js/state.ts). It holds voices,
-  envelope, and reverb. All mutations go through this class. `UndoManager`
+  envelope, and scene index. All mutations go through this class. `UndoManager`
   wraps the store and provides undo/redo via JSON snapshots. Selection state is
   app-level in `SelectionManager` (js/state/selection.ts), backed by
   @preact/signals-core signals.
@@ -364,10 +370,18 @@ The current unlock strategy (in `audio.ts:_init()`) uses three layers:
 - To add a new field to any type: you MUST provide both a visual rendering path
   and an audio mapping. If either is missing, the field violates the bijection
   principle and must not be added.
-- To modify reverb behavior: update `Reverb` type in `types.ts`, update
-  `canvas/frame-shadow.ts` (visual rendering), `audio/engine.ts:updateReverb`
-  (ConvolverNode + IR generation), `serialize.ts` (pack/unpack), and
-  `toolbar/reverb-panel.ts` (reverb panel UI). Reverb is global — not per-voice.
+- To modify scene/vibe behavior: update `SceneDefinition` in
+  `audio/vibe-presets.ts` (scene registry), `VibeOptions` and `Vibe` class in
+  `audio/vibe.ts` (audio params), `audio/engine.ts` (master chain wiring),
+  `audio/voice-builder.ts` (per-voice params read from vibe), and
+  `debug/vibe-tuner.ts` (debug UI). Scene index is serialized in
+  `serialize.ts` as 1 B64 char. Stage button cycles scenes via
+  `store.updateScene()` in `stage.ts`. App.ts reactively calls `setVibe()`
+  and `applyScene()` when scene changes.
+- To add a new scene: add a `SceneDefinition` entry to `SCENES` in
+  `audio/vibe-presets.ts`, add the corresponding JPG to `img/scene/`, and
+  tune vibe params using `?debug=vibe`. No other code changes needed.
 - The `embed.html` page imports the same modules as the main app but only uses
-  `canvas/render.ts`, `audio/engine.ts`, `serialize.ts`, and `envelope.ts`.
-  Both pages use the same frame div + transparent SVG architecture.
+  `canvas/render.ts`, `audio/engine.ts`, `serialize.ts`, `stage.ts`, and
+  `envelope.ts`. It also applies the scene background image and vibe from the
+  deserialized URL state.

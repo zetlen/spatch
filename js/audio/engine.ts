@@ -1,13 +1,7 @@
 // engine.ts — Web Audio engine: AudioEngine class
 
 import { computeTotalOverlap, createEffect } from '../effects.ts';
-import {
-  type Envelope,
-  type Reverb,
-  type ReverbStyle,
-  type SigilData,
-  type Voice,
-} from '../types.ts';
+import { type Envelope, type SigilData, type Voice } from '../types.ts';
 import { xToPan, yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
 import { vibe } from './vibe.ts';
@@ -33,10 +27,12 @@ export class AudioEngine {
   _analyserBuf: Float32Array<ArrayBuffer> | undefined;
   _reverbConvolver: ConvolverNode | undefined;
   _reverbWet: GainNode | undefined;
-  _reverbStyle: ReverbStyle | undefined;
   _streamDest: MediaStreamAudioDestinationNode | undefined;
   _audioEl: HTMLAudioElement | undefined;
-  _irCache: Map<ReverbStyle, AudioBuffer>;
+  _irCache: AudioBuffer | undefined;
+  _eqLow: BiquadFilterNode | undefined;
+  _eqMid: BiquadFilterNode | undefined;
+  _eqHigh: BiquadFilterNode | undefined;
   _muffleFilter: BiquadFilterNode | undefined;
   _muffled: boolean;
 
@@ -51,10 +47,12 @@ export class AudioEngine {
     this._analyserBuf = undefined;
     this._reverbConvolver = undefined;
     this._reverbWet = undefined;
-    this._reverbStyle = undefined;
     this._streamDest = undefined;
     this._audioEl = undefined;
-    this._irCache = new Map();
+    this._irCache = undefined;
+    this._eqLow = undefined;
+    this._eqMid = undefined;
+    this._eqHigh = undefined;
     this._muffleFilter = undefined;
     this._muffled = false;
   }
@@ -124,27 +122,47 @@ export class AudioEngine {
 
     // Master chain
     this.compressor = ctx.createDynamicsCompressor();
-    this.compressor.threshold.value = -10;
-    this.compressor.knee.value = 18;
-    this.compressor.ratio.value = 3;
-    this.compressor.attack.value = 0.005;
-    this.compressor.release.value = 0.25;
+    this.compressor.threshold.value = vibe.compThreshold;
+    this.compressor.knee.value = vibe.compKnee;
+    this.compressor.ratio.value = vibe.compRatio;
+    this.compressor.attack.value = vibe.compAttack;
+    this.compressor.release.value = vibe.compRelease;
 
     this.envelopeGain = ctx.createGain();
     this.envelopeGain.gain.value = 0;
 
     this.masterGain = ctx.createGain();
-    this.masterGain.gain.value = 0.5;
+    this.masterGain.gain.value = vibe.masterGain;
 
     // Analyser for level metering (drives play glow)
     this._analyser = ctx.createAnalyser();
     this._analyser.fftSize = 256;
     this._analyserBuf = new Float32Array(this._analyser.fftSize);
 
-    // Wire: masterGain -> envelopeGain -> compressor -> analyser -> dest
+    // 3-band EQ from vibe
+    this._eqLow = ctx.createBiquadFilter();
+    this._eqLow.type = 'lowshelf';
+    this._eqLow.frequency.value = vibe.eqLowFreq;
+    this._eqLow.gain.value = vibe.eqLowGain;
+
+    this._eqMid = ctx.createBiquadFilter();
+    this._eqMid.type = 'peaking';
+    this._eqMid.frequency.value = vibe.eqMidFreq;
+    this._eqMid.gain.value = vibe.eqMidGain;
+    this._eqMid.Q.value = vibe.eqMidQ;
+
+    this._eqHigh = ctx.createBiquadFilter();
+    this._eqHigh.type = 'highshelf';
+    this._eqHigh.frequency.value = vibe.eqHighFreq;
+    this._eqHigh.gain.value = vibe.eqHighGain;
+
+    // Wire: masterGain -> envelopeGain -> compressor -> eqLow -> eqMid -> eqHigh -> analyser -> dest
     this.masterGain.connect(this.envelopeGain);
     this.envelopeGain.connect(this.compressor);
-    this.compressor.connect(this._analyser);
+    this.compressor.connect(this._eqLow);
+    this._eqLow.connect(this._eqMid);
+    this._eqMid.connect(this._eqHigh);
+    this._eqHigh.connect(this._analyser);
     // Muffle filter: low-pass that's normally transparent (20 kHz cutoff)
     // but drops to ~600 Hz when muffled (e.g. credits overlay).
     this._muffleFilter = ctx.createBiquadFilter();
@@ -167,16 +185,24 @@ export class AudioEngine {
       }
     }
 
-    // Master reverb (if active)
-    if (sigilState.reverb) {
+    // Master reverb from vibe
+    if (vibe.reverbMix > 0) {
       this._reverbConvolver = ctx.createConvolver();
-      this._reverbConvolver.buffer = this._getImpulseResponse(ctx, sigilState.reverb.style);
+      this._reverbConvolver.buffer = this._getImpulseResponse(ctx);
       this._reverbWet = ctx.createGain();
-      this._reverbWet.gain.value = sigilState.reverb.depth;
-      this.envelopeGain.connect(this._reverbConvolver);
+      this._reverbWet.gain.value = vibe.reverbMix;
+
+      // Pre-delay
+      if (vibe.reverbPreDelay > 0) {
+        const preDelay = ctx.createDelay(1);
+        preDelay.delayTime.value = vibe.reverbPreDelay;
+        this.envelopeGain.connect(preDelay);
+        preDelay.connect(this._reverbConvolver);
+      } else {
+        this.envelopeGain.connect(this._reverbConvolver);
+      }
       this._reverbConvolver.connect(this._reverbWet);
       this._reverbWet.connect(this.compressor);
-      this._reverbStyle = sigilState.reverb.style;
     }
 
     // Apply ADSR envelope
@@ -216,9 +242,8 @@ export class AudioEngine {
 
     // Schedule cleanup after release + reverb tail have fully decayed.
     // Without this, the convolver tail gets cut short by early cleanup.
-    const reverbTail = this._reverbStyle
-      ? (this._irCache.get(this._reverbStyle)?.duration ?? 0)
-      : 0;
+    const reverbTail =
+      this._reverbConvolver && this._irCache ? this._irCache.duration + vibe.reverbPreDelay : 0;
     const sid = this._sessionId;
     setTimeout(
       () => {
@@ -254,7 +279,41 @@ export class AudioEngine {
 
   update(sigilState: SigilData): void {
     this._updateVoices(sigilState);
-    this._updateReverb(sigilState.reverb);
+    this._updateMasterChain();
+  }
+
+  private _updateMasterChain(): void {
+    if (!this.isPlaying || !this.audioCtx) {
+      return;
+    }
+    const now = this.audioCtx.currentTime;
+
+    if (this.compressor) {
+      this.compressor.threshold.setValueAtTime(vibe.compThreshold, now);
+      this.compressor.knee.setValueAtTime(vibe.compKnee, now);
+      this.compressor.ratio.setValueAtTime(vibe.compRatio, now);
+      this.compressor.attack.setValueAtTime(vibe.compAttack, now);
+      this.compressor.release.setValueAtTime(vibe.compRelease, now);
+    }
+    if (this.masterGain) {
+      this.masterGain.gain.setValueAtTime(vibe.masterGain, now);
+    }
+    if (this._eqLow) {
+      this._eqLow.frequency.setValueAtTime(vibe.eqLowFreq, now);
+      this._eqLow.gain.setValueAtTime(vibe.eqLowGain, now);
+    }
+    if (this._eqMid) {
+      this._eqMid.frequency.setValueAtTime(vibe.eqMidFreq, now);
+      this._eqMid.gain.setValueAtTime(vibe.eqMidGain, now);
+      this._eqMid.Q.setValueAtTime(vibe.eqMidQ, now);
+    }
+    if (this._eqHigh) {
+      this._eqHigh.frequency.setValueAtTime(vibe.eqHighFreq, now);
+      this._eqHigh.gain.setValueAtTime(vibe.eqHighGain, now);
+    }
+    if (this._reverbWet) {
+      this._reverbWet.gain.setValueAtTime(vibe.reverbMix, now);
+    }
   }
 
   private _updateVoices(sigilState: SigilData): void {
@@ -369,49 +428,6 @@ export class AudioEngine {
     this._updateBlendOverlaps(sigilState.voices);
   }
 
-  private _updateReverb(reverb: Reverb | undefined): void {
-    if (!this.audioCtx || !this.isPlaying) {
-      return;
-    }
-    const ctx = this.audioCtx;
-
-    if (!reverb) {
-      if (this._reverbConvolver) {
-        safeDisconnect(this._reverbConvolver);
-        this._reverbConvolver = undefined;
-      }
-      if (this._reverbWet) {
-        safeDisconnect(this._reverbWet);
-        this._reverbWet = undefined;
-      }
-      this._reverbStyle = undefined;
-      return;
-    }
-
-    if (!this._reverbConvolver || this._reverbStyle !== reverb.style) {
-      if (this._reverbConvolver) {
-        safeDisconnect(this._reverbConvolver);
-      }
-      if (this._reverbWet) {
-        safeDisconnect(this._reverbWet);
-      }
-
-      this._reverbConvolver = ctx.createConvolver();
-      this._reverbConvolver.buffer = this._getImpulseResponse(ctx, reverb.style);
-
-      this._reverbWet = ctx.createGain();
-
-      // Wire: envelopeGain → convolver → wetGain → compressor
-      this.envelopeGain!.connect(this._reverbConvolver);
-      this._reverbConvolver.connect(this._reverbWet);
-      this._reverbWet.connect(this.compressor!);
-
-      this._reverbStyle = reverb.style;
-    }
-
-    this._reverbWet!.gain.value = reverb.depth;
-  }
-
   stop(): void {
     if (!this.isPlaying) {
       return;
@@ -517,7 +533,18 @@ export class AudioEngine {
       safeDisconnect(this._reverbWet);
       this._reverbWet = undefined;
     }
-    this._reverbStyle = undefined;
+    if (this._eqLow) {
+      safeDisconnect(this._eqLow);
+      this._eqLow = undefined;
+    }
+    if (this._eqMid) {
+      safeDisconnect(this._eqMid);
+      this._eqMid = undefined;
+    }
+    if (this._eqHigh) {
+      safeDisconnect(this._eqHigh);
+      this._eqHigh = undefined;
+    }
     if (this._muffleFilter) {
       safeDisconnect(this._muffleFilter);
       this._muffleFilter = undefined;
@@ -544,15 +571,13 @@ export class AudioEngine {
     audioVoice.blendEffect?.dispose();
   }
 
-  /** Return a cached impulse response buffer for the given reverb style.
+  /** Return a cached impulse response buffer.
    *  Caching ensures reverb sounds identical across repeated plays. */
-  _getImpulseResponse(ctx: AudioContext, style: ReverbStyle): AudioBuffer {
-    let ir = this._irCache.get(style);
-    if (!ir) {
-      ir = generateImpulseResponse(ctx, style);
-      this._irCache.set(style, ir);
+  _getImpulseResponse(ctx: AudioContext): AudioBuffer {
+    if (!this._irCache) {
+      this._irCache = generateImpulseResponse(ctx);
     }
-    return ir;
+    return this._irCache;
   }
 
   _buildVoice(ctx: AudioContext, voice: Voice): AudioVoice {

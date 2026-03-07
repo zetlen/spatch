@@ -7,15 +7,76 @@
 import type { BorderColor, WaveformType } from '../types.ts';
 
 export interface VibeOptions {
+  // Existing
   norm?: number;
   refMult?: number;
   exponents?: Partial<Record<WaveformType, number>>;
+
+  // Reverb / Ambience
+  reverbDuration?: number;
+  reverbDecay?: number;
+  reverbTone?: number;
+  reverbMix?: number;
+  reverbPreDelay?: number;
+
+  // Mastering
+  compThreshold?: number;
+  compKnee?: number;
+  compRatio?: number;
+  compAttack?: number;
+  compRelease?: number;
+  masterGain?: number;
+  eqLowFreq?: number;
+  eqLowGain?: number;
+  eqMidFreq?: number;
+  eqMidGain?: number;
+  eqMidQ?: number;
+  eqHighFreq?: number;
+  eqHighGain?: number;
+
+  // Synthesis / Sound Font
+  warmth?: number;
+  formantMix?: number;
+  formantQ?: number;
+  brightnessQ?: number;
+  octaveGainCoeffs?: Partial<Record<string, number>>;
+  stereoWidth?: number;
 }
 
 export const VIBE_DEFAULTS = {
   norm: 0.5,
   refMult: 1.1,
   exponents: { sine: 1.0, pulse: 1.6, blend: 1.3 } as Record<WaveformType, number>,
+
+  reverbDuration: 0.3,
+  reverbDecay: 3.0,
+  reverbTone: 1.0,
+  reverbMix: 0.0,
+  reverbPreDelay: 0.0,
+
+  compThreshold: -10,
+  compKnee: 18,
+  compRatio: 3,
+  compAttack: 0.005,
+  compRelease: 0.25,
+  masterGain: 0.5,
+  eqLowFreq: 200,
+  eqLowGain: 0,
+  eqMidFreq: 1000,
+  eqMidGain: 0,
+  eqMidQ: 1.0,
+  eqHighFreq: 4000,
+  eqHighGain: 0,
+
+  warmth: 1.5,
+  formantMix: 0.7,
+  formantQ: 1.0,
+  brightnessQ: Math.SQRT1_2,
+  octaveGainCoeffs: { 'up-1': 0.5, 'up-2': 0.35, 'down-1': 1.5, 'down-2': 2 } as Record<
+    string,
+    number
+  >,
+  stereoWidth: 1.0,
 };
 
 export class Vibe {
@@ -27,14 +88,38 @@ export class Vibe {
 
   readonly GAIN_EXPONENT: Record<WaveformType, number>;
 
-  readonly OCTAVE_GAIN_COEFF: Record<string, number> = {
-    'up-1': 0.5,
-    'up-2': 0.35,
-    'down-1': 1.5,
-    'down-2': 2,
-  };
+  readonly OCTAVE_GAIN_COEFF: Record<string, number>;
 
   readonly WAVEFORM_GAIN: Record<WaveformType, number>;
+
+  // Reverb / Ambience
+  readonly reverbDuration: number;
+  readonly reverbDecay: number;
+  readonly reverbTone: number;
+  readonly reverbMix: number;
+  readonly reverbPreDelay: number;
+
+  // Mastering
+  readonly compThreshold: number;
+  readonly compKnee: number;
+  readonly compRatio: number;
+  readonly compAttack: number;
+  readonly compRelease: number;
+  readonly masterGain: number;
+  readonly eqLowFreq: number;
+  readonly eqLowGain: number;
+  readonly eqMidFreq: number;
+  readonly eqMidGain: number;
+  readonly eqMidQ: number;
+  readonly eqHighFreq: number;
+  readonly eqHighGain: number;
+
+  // Synthesis / Sound Font
+  readonly warmth: number;
+  readonly formantMix: number;
+  readonly formantQ: number;
+  readonly brightnessQ: number;
+  readonly stereoWidth: number;
 
   constructor(opts?: VibeOptions) {
     this.norm = opts?.norm ?? VIBE_DEFAULTS.norm;
@@ -44,6 +129,42 @@ export class Vibe {
       pulse: opts?.exponents?.pulse ?? VIBE_DEFAULTS.exponents.pulse,
       blend: opts?.exponents?.blend ?? VIBE_DEFAULTS.exponents.blend,
     };
+    const mergedCoeffs: Record<string, number> = { ...VIBE_DEFAULTS.octaveGainCoeffs };
+    if (opts?.octaveGainCoeffs) {
+      for (const [k, v] of Object.entries(opts.octaveGainCoeffs)) {
+        if (v !== undefined) mergedCoeffs[k] = v;
+      }
+    }
+    this.OCTAVE_GAIN_COEFF = mergedCoeffs;
+
+    // Reverb / Ambience
+    this.reverbDuration = opts?.reverbDuration ?? VIBE_DEFAULTS.reverbDuration;
+    this.reverbDecay = opts?.reverbDecay ?? VIBE_DEFAULTS.reverbDecay;
+    this.reverbTone = opts?.reverbTone ?? VIBE_DEFAULTS.reverbTone;
+    this.reverbMix = opts?.reverbMix ?? VIBE_DEFAULTS.reverbMix;
+    this.reverbPreDelay = opts?.reverbPreDelay ?? VIBE_DEFAULTS.reverbPreDelay;
+
+    // Mastering
+    this.compThreshold = opts?.compThreshold ?? VIBE_DEFAULTS.compThreshold;
+    this.compKnee = opts?.compKnee ?? VIBE_DEFAULTS.compKnee;
+    this.compRatio = opts?.compRatio ?? VIBE_DEFAULTS.compRatio;
+    this.compAttack = opts?.compAttack ?? VIBE_DEFAULTS.compAttack;
+    this.compRelease = opts?.compRelease ?? VIBE_DEFAULTS.compRelease;
+    this.masterGain = opts?.masterGain ?? VIBE_DEFAULTS.masterGain;
+    this.eqLowFreq = opts?.eqLowFreq ?? VIBE_DEFAULTS.eqLowFreq;
+    this.eqLowGain = opts?.eqLowGain ?? VIBE_DEFAULTS.eqLowGain;
+    this.eqMidFreq = opts?.eqMidFreq ?? VIBE_DEFAULTS.eqMidFreq;
+    this.eqMidGain = opts?.eqMidGain ?? VIBE_DEFAULTS.eqMidGain;
+    this.eqMidQ = opts?.eqMidQ ?? VIBE_DEFAULTS.eqMidQ;
+    this.eqHighFreq = opts?.eqHighFreq ?? VIBE_DEFAULTS.eqHighFreq;
+    this.eqHighGain = opts?.eqHighGain ?? VIBE_DEFAULTS.eqHighGain;
+
+    // Synthesis / Sound Font
+    this.warmth = opts?.warmth ?? VIBE_DEFAULTS.warmth;
+    this.formantMix = opts?.formantMix ?? VIBE_DEFAULTS.formantMix;
+    this.formantQ = opts?.formantQ ?? VIBE_DEFAULTS.formantQ;
+    this.brightnessQ = opts?.brightnessQ ?? VIBE_DEFAULTS.brightnessQ;
+    this.stereoWidth = opts?.stereoWidth ?? VIBE_DEFAULTS.stereoWidth;
 
     const refVoiceGain = this.refMult * this.areaToGain('sine', 0.5);
     this.WAVEFORM_GAIN = {

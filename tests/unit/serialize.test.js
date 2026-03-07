@@ -4,7 +4,7 @@ import { deserializeState, serializeState } from '../../js/serialize.ts';
 function makeState(overrides = {}) {
   return {
     envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
-    reverb: undefined,
+    scene: 0,
     voices: [],
     ...overrides,
   };
@@ -246,28 +246,22 @@ describe('deserializeState edge cases', () => {
   });
 });
 
-describe('reverb serialization', () => {
-  test('null reverb round-trips', () => {
-    const state = makeState({ reverb: undefined });
-    const encoded = serializeState(state);
-    const decoded = deserializeState(encoded);
-    expect(decoded.reverb).toBeUndefined();
+describe('scene serialization', () => {
+  test('scene 0 round-trips', () => {
+    const state = makeState({ scene: 0 });
+    const decoded = deserializeState(serializeState(state));
+    expect(decoded.scene).toBe(0);
   });
 
-  test('glow reverb round-trips', () => {
-    const state = makeState({ reverb: { depth: 0.6, style: 'glow' } });
-    const encoded = serializeState(state);
-    const decoded = deserializeState(encoded);
-    expect(decoded.reverb).not.toBeUndefined();
-    expect(decoded.reverb.style).toBe('glow');
-    expect(decoded.reverb.depth).toBeCloseTo(0.6);
+  test('scene index round-trips', () => {
+    const state = makeState({ scene: 5 });
+    const decoded = deserializeState(serializeState(state));
+    expect(decoded.scene).toBe(5);
   });
 
-  test('dim reverb round-trips', () => {
-    const state = makeState({ reverb: { depth: 0.3, style: 'dim' } });
-    const encoded = serializeState(state);
-    const decoded = deserializeState(encoded);
-    expect(decoded.reverb.style).toBe('dim');
-    expect(decoded.reverb.depth).toBeCloseTo(0.3);
+  test('max scene index (63) round-trips', () => {
+    const state = makeState({ scene: 63 });
+    const decoded = deserializeState(serializeState(state));
+    expect(decoded.scene).toBe(63);
   });
 });

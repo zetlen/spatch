@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { AudioEngine } from '../../js/audio/engine.ts';
+import { Vibe, setVibe } from '../../js/audio/vibe.ts';
+
+// Reset vibe to defaults after every test so state doesn't leak
+afterEach(() => setVibe(new Vibe()));
 
 // Minimal Web Audio API stubs for testing voice reconciliation logic.
 // We only need enough to let _buildVoice wire up nodes and updateVoices
@@ -132,10 +136,10 @@ function makeVoice(id, waveform = 'sine', overrides = {}) {
   return base;
 }
 
-function makeSigilState(voices, reverb = undefined) {
+function makeSigilState(voices) {
   return {
     envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
-    reverb,
+    scene: 0,
     voices,
   };
 }
@@ -440,7 +444,7 @@ describe('AudioEngine — border / octave doubling', () => {
   });
 });
 
-describe('AudioEngine — master reverb', () => {
+describe('AudioEngine — vibe-based master reverb', () => {
   let engine;
 
   beforeEach(async () => {
@@ -449,36 +453,38 @@ describe('AudioEngine — master reverb', () => {
     engine.masterGain = engine.audioCtx.createGain();
   });
 
-  async function startWith(voices, reverb = undefined) {
-    const state = makeSigilState(voices, reverb);
+  async function startWith(voices) {
+    const state = makeSigilState(voices);
     await engine.play(state, state.envelope);
     return state;
   }
 
-  test('play with null reverb creates no convolver', async () => {
-    await startWith([makeVoice('a')], undefined);
+  test('play with zero reverbMix creates no convolver', async () => {
+    setVibe(new Vibe({ reverbMix: 0 }));
+    await startWith([makeVoice('a')]);
 
     expect(engine._reverbConvolver).toBeUndefined();
     expect(engine._reverbWet).toBeUndefined();
-    expect(engine._reverbStyle).toBeUndefined();
   });
 
-  test('play with reverb creates convolver and wet gain', async () => {
-    await startWith([makeVoice('a')], { depth: 0.5, style: 'dim' });
+  test('play with positive reverbMix creates convolver and wet gain', async () => {
+    setVibe(new Vibe({ reverbMix: 0.5 }));
+    await startWith([makeVoice('a')]);
 
     expect(engine._reverbConvolver).not.toBeUndefined();
     expect(engine._reverbWet).not.toBeUndefined();
-    expect(engine._reverbStyle).toBe('dim');
   });
 
-  test('reverb wet gain matches depth', async () => {
-    await startWith([makeVoice('a')], { depth: 0.75, style: 'glow' });
+  test('reverb wet gain matches vibe.reverbMix', async () => {
+    setVibe(new Vibe({ reverbMix: 0.75 }));
+    await startWith([makeVoice('a')]);
 
     expect(engine._reverbWet.gain.value).toBe(0.75);
   });
 
   test('cleanup nulls reverb nodes', async () => {
-    await startWith([makeVoice('a')], { depth: 0.5, style: 'dim' });
+    setVibe(new Vibe({ reverbMix: 0.5 }));
+    await startWith([makeVoice('a')]);
 
     expect(engine._reverbConvolver).not.toBeUndefined();
 
@@ -486,45 +492,49 @@ describe('AudioEngine — master reverb', () => {
 
     expect(engine._reverbConvolver).toBeUndefined();
     expect(engine._reverbWet).toBeUndefined();
-    expect(engine._reverbStyle).toBeUndefined();
   });
 
-  test('updateReverb changes wet gain during playback', async () => {
-    await startWith([makeVoice('a')], { depth: 0.3, style: 'dim' });
+  test('compressor uses vibe params', async () => {
+    setVibe(new Vibe({ compThreshold: -20, compKnee: 10, compRatio: 5 }));
+    await startWith([makeVoice('a')]);
 
-    expect(engine._reverbWet.gain.value).toBe(0.3);
-
-    engine.update(makeSigilState([makeVoice('a')], { depth: 0.8, style: 'dim' }));
-
-    expect(engine._reverbWet.gain.value).toBe(0.8);
+    expect(engine.compressor.threshold.value).toBe(-20);
+    expect(engine.compressor.knee.value).toBe(10);
+    expect(engine.compressor.ratio.value).toBe(5);
   });
 
-  test('updateReverb with null removes reverb nodes', async () => {
-    await startWith([makeVoice('a')], { depth: 0.5, style: 'glow' });
+  test('masterGain uses vibe.masterGain', async () => {
+    setVibe(new Vibe({ masterGain: 0.8 }));
+    await startWith([makeVoice('a')]);
 
-    expect(engine._reverbConvolver).not.toBeUndefined();
-
-    engine.update(makeSigilState([makeVoice('a')]));
-
-    expect(engine._reverbConvolver).toBeUndefined();
-    expect(engine._reverbWet).toBeUndefined();
-    expect(engine._reverbStyle).toBeUndefined();
+    expect(engine.masterGain.gain.value).toBe(0.8);
   });
 
-  test('updateReverb with different style rebuilds convolver', async () => {
-    await startWith([makeVoice('a')], { depth: 0.5, style: 'glow' });
+  test('3-band EQ nodes are created', async () => {
+    setVibe(new Vibe({ eqLowGain: 3, eqMidGain: -2, eqHighGain: 1 }));
+    await startWith([makeVoice('a')]);
 
-    const originalConvolver = engine._reverbConvolver;
+    expect(engine._eqLow).not.toBeUndefined();
+    expect(engine._eqMid).not.toBeUndefined();
+    expect(engine._eqHigh).not.toBeUndefined();
+    expect(engine._eqLow.gain.value).toBe(3);
+    expect(engine._eqMid.gain.value).toBe(-2);
+    expect(engine._eqHigh.gain.value).toBe(1);
+  });
 
-    engine.update(makeSigilState([makeVoice('a')], { depth: 0.6, style: 'dim' }));
+  test('cleanup nulls EQ nodes', async () => {
+    setVibe(new Vibe());
+    await startWith([makeVoice('a')]);
 
-    expect(engine._reverbConvolver).not.toBe(originalConvolver);
-    expect(engine._reverbStyle).toBe('dim');
-    expect(engine._reverbWet.gain.value).toBe(0.6);
+    engine.stop();
+
+    expect(engine._eqLow).toBeUndefined();
+    expect(engine._eqMid).toBeUndefined();
+    expect(engine._eqHigh).toBeUndefined();
   });
 });
 
-describe('AudioEngine — reverb tail cleanup delay', () => {
+describe('AudioEngine — reverb tail cleanup delay (vibe-based)', () => {
   let engine;
 
   beforeEach(async () => {
@@ -533,24 +543,8 @@ describe('AudioEngine — reverb tail cleanup delay', () => {
     engine.masterGain = engine.audioCtx.createGain();
   });
 
-  test('release with dim reverb delays cleanup for IR duration', async () => {
-    const state = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'dim' });
-    await engine.play(state, state.envelope);
-
-    engine.release(state.envelope);
-
-    // After releaseTime + 100ms, reverb should STILL be connected (tail still ringing)
-    const releaseMs = state.envelope.release * 1000 + 100;
-    await new Promise((r) => setTimeout(r, releaseMs + 50));
-    expect(engine.isPlaying).toBe(true); // Not cleaned up yet
-
-    // After releaseTime + IR duration + 100ms, cleanup should have fired
-    const irDurationMs = 2000; // 'dim' IR is 2s
-    await new Promise((r) => setTimeout(r, irDurationMs));
-    expect(engine.isPlaying).toBe(false);
-  });
-
   test('release without reverb uses normal cleanup delay', async () => {
+    setVibe(new Vibe({ reverbMix: 0 }));
     const state = makeSigilState([makeVoice('a')]);
     await engine.play(state, state.envelope);
 
@@ -561,9 +555,27 @@ describe('AudioEngine — reverb tail cleanup delay', () => {
     await new Promise((r) => setTimeout(r, releaseMs));
     expect(engine.isPlaying).toBe(false);
   });
+
+  test('release with reverb delays cleanup for IR duration', async () => {
+    setVibe(new Vibe({ reverbMix: 0.5, reverbDuration: 0.5 }));
+    const state = makeSigilState([makeVoice('a')]);
+    await engine.play(state, state.envelope);
+
+    engine.release(state.envelope);
+
+    // After releaseTime + 100ms, reverb should STILL be connected (tail still ringing)
+    const releaseMs = state.envelope.release * 1000 + 100;
+    await new Promise((r) => setTimeout(r, releaseMs + 50));
+    expect(engine.isPlaying).toBe(true); // Not cleaned up yet
+
+    // After releaseTime + IR duration + 100ms, cleanup should have fired
+    const irDurationMs = 500; // vibe.reverbDuration = 0.5s
+    await new Promise((r) => setTimeout(r, irDurationMs));
+    expect(engine.isPlaying).toBe(false);
+  });
 });
 
-describe('AudioEngine — reverb IR caching (#165)', () => {
+describe('AudioEngine — reverb IR caching (vibe-based)', () => {
   let engine;
 
   beforeEach(async () => {
@@ -572,9 +584,9 @@ describe('AudioEngine — reverb IR caching (#165)', () => {
     engine.masterGain = engine.audioCtx.createGain();
   });
 
-  test('same reverb style reuses cached IR buffer across plays', async () => {
-    const reverb = { depth: 0.5, style: 'dim' };
-    const state = makeSigilState([makeVoice('a')], reverb);
+  test('same vibe reuses cached IR buffer across plays', async () => {
+    setVibe(new Vibe({ reverbMix: 0.5 }));
+    const state = makeSigilState([makeVoice('a')]);
 
     await engine.play(state, state.envelope);
     const firstBuffer = engine._reverbConvolver.buffer;
@@ -585,36 +597,6 @@ describe('AudioEngine — reverb IR caching (#165)', () => {
     const secondBuffer = engine._reverbConvolver.buffer;
 
     expect(secondBuffer).toBe(firstBuffer);
-  });
-
-  test('different reverb styles get different cached buffers', async () => {
-    const stateGlow = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'glow' });
-    await engine.play(stateGlow, stateGlow.envelope);
-    const glowBuffer = engine._reverbConvolver.buffer;
-    engine.stop();
-
-    const stateDim = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'dim' });
-    await engine.play(stateDim, stateDim.envelope);
-    const dimBuffer = engine._reverbConvolver.buffer;
-
-    expect(dimBuffer).not.toBe(glowBuffer);
-  });
-
-  test('updateReverb with style change reuses cache', async () => {
-    // Play with glow first to populate cache
-    const stateGlow = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'glow' });
-    await engine.play(stateGlow, stateGlow.envelope);
-    const glowBuffer = engine._reverbConvolver.buffer;
-    engine.stop();
-
-    // Play with dim to populate that cache entry
-    const stateDim = makeSigilState([makeVoice('a')], { depth: 0.5, style: 'dim' });
-    await engine.play(stateDim, stateDim.envelope);
-    engine.stop();
-
-    // Play with glow again — should reuse the original buffer
-    await engine.play(stateGlow, stateGlow.envelope);
-    expect(engine._reverbConvolver.buffer).toBe(glowBuffer);
   });
 });
 

@@ -4,7 +4,7 @@
 // The layout packs variables into 64-char dictionary indices (A-Z, a-z, 0-9, -, _)
 //
 //   [Envelope] (8 chars): attack, decay, sustain, release (2 chars each, 12-bit, x1000)
-//   [Reverb] (1-3 chars): 0 = none. 1 = glow, 2 = dim. If >0, followed by depth (2 chars).
+//   [Scene] (1 char): scene index (0-63)
 //   [Voices] (variable length):
 //      Flags (2 chars): 12-bit bitfield storing waveform, effect, blend, fillMode, borderMode
 //      x, y, size (2 chars each)
@@ -22,7 +22,6 @@ import {
   type PatternType,
   PATTERN_TYPES,
   BLEND_MODES,
-  type Reverb,
   type SigilData,
   type SolidFill,
   type Voice,
@@ -110,13 +109,8 @@ function packB64(state: SigilData): string {
   out += encodeInt(round3(state.envelope.sustain) * 1000, 2);
   out += encodeInt(round3(state.envelope.release) * 1000, 2);
 
-  // Reverb
-  if (!state.reverb) {
-    out += encodeInt(0, 1);
-  } else {
-    out += encodeInt(state.reverb.style === 'dim' ? 2 : 1, 1);
-    out += encodeInt(round3(state.reverb.depth) * 1000, 2);
-  }
+  // Scene (1 char)
+  out += encodeInt(state.scene, 1);
 
   // Voices
   for (const v of state.voices) {
@@ -185,15 +179,9 @@ function unpackB64(str: string): SigilData {
   const release = decodeInt(str, idx, 2) / 1000;
   idx += 2;
 
-  // Reverb
-  let reverb: Reverb | undefined = undefined;
-  const revFlag = decodeInt(str, idx, 1);
+  // Scene (1 char)
+  const scene = decodeInt(str, idx, 1);
   idx += 1;
-  if (revFlag > 0) {
-    const depth = decodeInt(str, idx, 2) / 1000;
-    idx += 2;
-    reverb = { style: revFlag === 2 ? 'dim' : 'glow', depth: normalizedCoord(depth) };
-  }
 
   // Voices
   const voices: Voice[] = [];
@@ -282,7 +270,7 @@ function unpackB64(str: string): SigilData {
 
   return {
     envelope: { attack, decay, sustain, release },
-    reverb,
+    scene,
     voices,
   };
 }

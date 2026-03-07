@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { vibe } from '../../js/audio/vibe.ts';
+import { vibe, Vibe, VIBE_DEFAULTS } from '../../js/audio/vibe.ts';
 
 describe('vibe.shapeAreaFraction', () => {
   test('sine (circle) area = pi * (size/2)^2', () => {
@@ -157,5 +157,33 @@ describe('vibe.borderOctaveGain', () => {
         }
       }
     }
+  });
+});
+
+describe('Vibe — new parameters', () => {
+  test('defaults are applied when no options given', () => {
+    const v = new Vibe();
+    expect(v.reverbDuration).toBe(VIBE_DEFAULTS.reverbDuration);
+    expect(v.reverbMix).toBe(VIBE_DEFAULTS.reverbMix);
+    expect(v.compThreshold).toBe(VIBE_DEFAULTS.compThreshold);
+    expect(v.masterGain).toBe(VIBE_DEFAULTS.masterGain);
+    expect(v.warmth).toBe(VIBE_DEFAULTS.warmth);
+    expect(v.stereoWidth).toBe(VIBE_DEFAULTS.stereoWidth);
+    expect(v.formantMix).toBe(VIBE_DEFAULTS.formantMix);
+  });
+
+  test('partial overrides merge with defaults', () => {
+    const v = new Vibe({ reverbMix: 0.6, warmth: 2.0 });
+    expect(v.reverbMix).toBe(0.6);
+    expect(v.warmth).toBe(2.0);
+    expect(v.reverbDuration).toBe(VIBE_DEFAULTS.reverbDuration);
+    expect(v.compThreshold).toBe(VIBE_DEFAULTS.compThreshold);
+  });
+
+  test('stereoWidth scales pan', () => {
+    const narrow = new Vibe({ stereoWidth: 0.5 });
+    expect(narrow.stereoWidth).toBe(0.5);
+    const full = new Vibe({ stereoWidth: 1.0 });
+    expect(full.stereoWidth).toBe(1.0);
   });
 });

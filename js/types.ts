@@ -151,15 +151,6 @@ export interface Border {
   thickness: NormalizedCoord;
 }
 
-/** Reverb impulse response style: glow (short bright) or dim (long dark). */
-export type ReverbStyle = 'glow' | 'dim';
-
-/** Global reverb effect: depth controls wet/dry mix, style selects the impulse response. */
-export interface Reverb {
-  depth: NormalizedCoord;
-  style: ReverbStyle;
-}
-
 interface VoiceBase {
   id: string;
   x: NormalizedCoord;
@@ -207,11 +198,11 @@ export interface Envelope {
 
 // ---- Top-level state ----
 
-/** Complete sigil state: voices, envelope, and optional reverb. */
+/** Complete sigil state: voices, envelope, and scene index. */
 export interface SigilData {
   envelope: Envelope;
   voices: Voice[];
-  reverb: Reverb | undefined;
+  scene: number;
 }
 
 /**

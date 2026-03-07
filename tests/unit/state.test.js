@@ -398,48 +398,38 @@ describe('SigilStore loadState', () => {
   });
 });
 
-describe('SigilStore reverb', () => {
-  test('default state has null reverb', () => {
+describe('SigilStore scene', () => {
+  test('default state has scene 0', () => {
     const store = new SigilStore();
-    expect(store.data.reverb).toBeUndefined();
+    expect(store.data.scene).toBe(0);
   });
 
-  test('updateReverb sets reverb', () => {
+  test('updateScene sets scene index', () => {
     const store = new SigilStore();
-    store.updateReverb({ depth: 0.5, style: 'glow' });
-    expect(store.data.reverb).not.toBeUndefined();
-    expect(store.data.reverb.depth).toBe(0.5);
-    expect(store.data.reverb.style).toBe('glow');
+    store.updateScene(3);
+    expect(store.data.scene).toBe(3);
   });
 
-  test('updateReverb to null removes reverb', () => {
-    const store = new SigilStore();
-    store.updateReverb({ depth: 0.5, style: 'dim' });
-    store.updateReverb(undefined);
-    expect(store.data.reverb).toBeUndefined();
-  });
-
-  test('updateReverb notifies listeners', () => {
+  test('updateScene notifies listeners', () => {
     const store = new SigilStore();
     let called = false;
     store.onChange(() => {
       called = true;
     });
-    store.updateReverb({ depth: 0.3, style: 'glow' });
+    store.updateScene(2);
     expect(called).toBe(true);
   });
 
-  test('reverb persists through undo/redo', () => {
+  test('scene persists through undo/redo', () => {
     const store = new SigilStore();
     const undo = new UndoManager(store);
     undo.snapshot();
-    store.updateReverb({ depth: 0.7, style: 'dim' });
+    store.updateScene(5);
 
-    expect(store.data.reverb).not.toBeUndefined();
+    expect(store.data.scene).toBe(5);
     undo.undo();
-    expect(store.data.reverb).toBeUndefined();
+    expect(store.data.scene).toBe(0);
     undo.redo();
-    expect(store.data.reverb.depth).toBe(0.7);
-    expect(store.data.reverb.style).toBe('dim');
+    expect(store.data.scene).toBe(5);
   });
 });

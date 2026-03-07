@@ -4,6 +4,7 @@
 // which sets values on pre-existing BiquadFilterNodes).
 
 import type { Fill, WaveformType } from '../types.ts';
+import { vibe } from './vibe.ts';
 
 // ---- Formant filter mapping ----
 //
@@ -120,7 +121,7 @@ export function applyFormantFilter(
   // Sine has no harmonics -- high Q kills the signal when the fundamental
   // is far from formant centers. Cap Q lower for sine (#82).
   const maxQ = waveform === 'sine' ? 4 : 8;
-  const q = 1 + (s / 100) * maxQ;
+  const q = (1 + (s / 100) * maxQ) * vibe.formantQ;
 
   f1Node.frequency.value = formants.f1;
   f1Node.Q.value = q;

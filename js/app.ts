@@ -8,7 +8,9 @@ import { AudioEngine } from './audio/engine.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, saveToURL } from './serialize.ts';
 import { bindShareMenu } from './share.ts';
-import { initStage } from './stage.ts';
+import { applyScene, initStage, loadFallbackScene } from './stage.ts';
+import { Vibe, setVibe } from './audio/vibe.ts';
+import { SCENES } from './audio/vibe-presets.ts';
 import { qel } from './dom.ts';
 import { SelectionManager } from './state.ts';
 import { PlaybackController } from './playback.ts';
@@ -60,11 +62,21 @@ effect(() => {
 const loaded = loadFromURL();
 if (loaded) {
   store.loadState(loaded);
+} else {
+  store.updateScene(loadFallbackScene());
 }
 
 let needsRender = true;
 
-initStage();
+initStage(store);
+
+// React to scene changes: update background + vibe
+effect(() => {
+  const scene = store.data.scene;
+  applyScene(scene);
+  const sceneDef = SCENES[scene % SCENES.length];
+  setVibe(new Vibe(sceneDef?.vibe));
+});
 
 // ---- DOM queries ----
 

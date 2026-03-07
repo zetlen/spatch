@@ -9,7 +9,6 @@ import {
   type Envelope,
   type Fill,
   type NormalizedCoord,
-  type Reverb,
   type SigilData,
   type Voice,
   type WaveformType,
@@ -28,11 +27,11 @@ export function genId(prefix = 's'): string {
   return prefix + (++_idCounter).toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-/** Create a fresh empty SigilData with default envelope and no voices/reverb. */
+/** Create a fresh empty SigilData with default envelope and no voices. */
 export function createDefaultState(): SigilData {
   return {
     envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
-    reverb: undefined,
+    scene: 0,
     voices: [],
   };
 }
@@ -194,11 +193,11 @@ export class SigilStore {
     };
   }
 
-  /** Set or clear the global reverb effect. Pass undefined to remove reverb. */
-  updateReverb(reverb: Reverb | undefined): void {
+  /** Set the scene index (0-based). */
+  updateScene(scene: number): void {
     this._data.value = {
       ...this._data.value,
-      reverb,
+      scene,
     };
   }
 

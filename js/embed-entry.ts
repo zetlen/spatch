@@ -4,6 +4,9 @@ import { AudioEngine } from './audio/engine.ts';
 import { deserializeState } from './serialize.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { qel, svgEl } from './dom.ts';
+import { getSceneImageUrl } from './stage.ts';
+import { Vibe, setVibe } from './audio/vibe.ts';
+import { SCENES } from './audio/vibe-presets.ts';
 
 const hash = globalThis.location.hash.slice(1);
 if (!hash) {
@@ -18,6 +21,15 @@ if (!hash) {
       '<p style="color:#2a2a2a;text-align:center;padding:2em;">Invalid sigil data.</p>';
   } else {
     const sigil = state; // Narrow for closures
+
+    // Apply scene background and vibe
+    const sceneIndex = sigil.scene;
+    const sceneDef = SCENES[sceneIndex % SCENES.length];
+    setVibe(new Vibe(sceneDef?.vibe));
+    document.body.style.backgroundImage = `url(${getSceneImageUrl(sceneIndex)})`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+
     const svgRoot = qel<SVGSVGElement>('#c');
     const frame = qel('#tile');
     const audio = new AudioEngine();

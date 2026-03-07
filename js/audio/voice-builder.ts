@@ -5,14 +5,7 @@
 
 import type { BlendEffect } from '../effects.ts';
 import { createBlendEffect } from '../effects.ts';
-import type {
-  AudioEffect,
-  BlendMode,
-  PatternType,
-  ReverbStyle,
-  Voice,
-  WaveformType,
-} from '../types.ts';
+import type { AudioEffect, BlendMode, PatternType, Voice, WaveformType } from '../types.ts';
 import { xToPan, yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
 import { vibe } from './vibe.ts';
@@ -95,28 +88,19 @@ export function safeDisconnect(node: AudioNode): void {
   } catch {}
 }
 
-/** IR duration in seconds for each reverb style. */
-const REVERB_IR_DURATION: Record<ReverbStyle, number> = {
-  glow: 0.3,
-  dim: 2,
-};
-
-/** Generate an algorithmic reverb impulse response buffer. */
-export function generateImpulseResponse(ctx: AudioContext, style: ReverbStyle): AudioBuffer {
+/** Generate an algorithmic reverb impulse response buffer from vibe params. */
+export function generateImpulseResponse(ctx: AudioContext): AudioBuffer {
   const { sampleRate } = ctx;
-  const duration = REVERB_IR_DURATION[style];
+  const duration = vibe.reverbDuration;
   const length = Math.floor(sampleRate * duration);
   const buffer = ctx.createBuffer(2, length, sampleRate);
-  const cutoff = style === 'glow' ? 1 : 0.3;
 
   for (let ch = 0; ch < 2; ch++) {
     const data = buffer.getChannelData(ch);
     for (let i = 0; i < length; i++) {
       const t = i / length;
-      let sample = (Math.random() * 2 - 1) * Math.exp((-3 * t) / duration);
-      if (cutoff < 1) {
-        sample *= Math.max(0, 1 - t * (1 - cutoff));
-      }
+      let sample = (Math.random() * 2 - 1) * Math.exp(-vibe.reverbDecay * t);
+      sample *= Math.max(0, 1 - t * (1 - vibe.reverbTone));
       data[i] = sample;
     }
   }
@@ -161,10 +145,10 @@ export function buildVoice(
   const formantF2 = ctx.createBiquadFilter();
   formantF2.type = 'bandpass';
   const formantMixer = ctx.createGain();
-  formantMixer.gain.value = 0.7; // Compensate for two-path sum
+  formantMixer.gain.value = vibe.formantMix;
   const brightness = ctx.createBiquadFilter();
   brightness.type = 'lowpass';
-  brightness.Q.value = Math.SQRT1_2; // Butterworth — no resonant peak
+  brightness.Q.value = vibe.brightnessQ;
 
   applyFormantFilter(formantF1, formantF2, brightness, voice.fill, voice.waveform);
 
@@ -350,7 +334,7 @@ export function buildVoice(
   const warmCurve = new Float32Array(warmSamples);
   for (let i = 0; i < warmSamples; i++) {
     const x = (i * 2) / warmSamples - 1;
-    warmCurve[i] = Math.tanh(x * 1.5);
+    warmCurve[i] = Math.tanh(x * vibe.warmth);
   }
   sineWarm.curve = warmCurve;
   sineWarm.oversample = '2x';
