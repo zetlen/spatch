@@ -588,12 +588,10 @@ function renderSelection(
     selectionLayer.removeChild(selectionLayer.firstChild);
   }
 
-  const isTouch = lastInputWasTouch;
-
   if (selectedId) {
     const voice = state.voices.find((v) => v.id === selectedId);
     if (voice) {
-      renderVoiceSelection(selectionLayer, voice, isTouch);
+      renderVoiceSelection(selectionLayer, voice, lastInputWasTouch);
     }
   }
 }

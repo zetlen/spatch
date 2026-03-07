@@ -17,45 +17,24 @@ import {
 
 export class AudioEngine {
   audioCtx: AudioContext | undefined = undefined;
-  activeVoices: AudioVoice[];
+  activeVoices: AudioVoice[] = [];
   masterGain: GainNode | undefined;
   envelopeGain: GainNode | undefined;
   compressor: DynamicsCompressorNode | undefined;
-  isPlaying: boolean;
-  _sessionId: number;
-  _analyser: AnalyserNode | undefined;
-  _analyserBuf: Float32Array<ArrayBuffer> | undefined;
-  _reverbConvolver: ConvolverNode | undefined;
-  _reverbWet: GainNode | undefined;
-  _streamDest: MediaStreamAudioDestinationNode | undefined;
-  _audioEl: HTMLAudioElement | undefined;
-  _irCache: AudioBuffer | undefined;
-  _eqLow: BiquadFilterNode | undefined;
-  _eqMid: BiquadFilterNode | undefined;
-  _eqHigh: BiquadFilterNode | undefined;
-  _muffleFilter: BiquadFilterNode | undefined;
-  _muffled: boolean;
-
-  constructor() {
-    this.activeVoices = [];
-    this.masterGain = undefined;
-    this.envelopeGain = undefined;
-    this.compressor = undefined;
-    this.isPlaying = false;
-    this._sessionId = 0;
-    this._analyser = undefined;
-    this._analyserBuf = undefined;
-    this._reverbConvolver = undefined;
-    this._reverbWet = undefined;
-    this._streamDest = undefined;
-    this._audioEl = undefined;
-    this._irCache = undefined;
-    this._eqLow = undefined;
-    this._eqMid = undefined;
-    this._eqHigh = undefined;
-    this._muffleFilter = undefined;
-    this._muffled = false;
-  }
+  isPlaying: boolean = false;
+  private _sessionId: number = 0;
+  private _analyser: AnalyserNode | undefined;
+  private _analyserBuf: Float32Array<ArrayBuffer> | undefined;
+  private _reverbConvolver: ConvolverNode | undefined;
+  private _reverbWet: GainNode | undefined;
+  private _streamDest: MediaStreamAudioDestinationNode | undefined;
+  private _audioEl: HTMLAudioElement | undefined;
+  private _irCache: AudioBuffer | undefined;
+  private _eqLow: BiquadFilterNode | undefined;
+  private _eqMid: BiquadFilterNode | undefined;
+  private _eqHigh: BiquadFilterNode | undefined;
+  private _muffleFilter: BiquadFilterNode | undefined;
+  private _muffled: boolean = false;
 
   /** Synchronously create and unlock the AudioContext.
    *  Everything here MUST be synchronous — iOS Safari revokes user-gesture

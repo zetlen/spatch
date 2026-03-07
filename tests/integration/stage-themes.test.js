@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { SCENES } from '../../js/audio/vibe-presets';
 import path from 'path';
 
 test.describe('Stage themes', () => {
@@ -32,8 +33,8 @@ test.describe('Stage themes', () => {
     const btn = page.locator('#btn-stage');
 
     const bg0 = await app.evaluate((el) => getComputedStyle(el).backgroundImage);
-    // Click through all images (8 total) to wrap back to index 0
-    for (let i = 0; i < 8; i++) await btn.click();
+    // Click through all images to wrap back to index 0
+    for (let i = 0; i < SCENES.length; i++) await btn.click();
     const bgWrapped = await app.evaluate((el) => getComputedStyle(el).backgroundImage);
 
     expect(bgWrapped).toEqual(bg0);

@@ -20,7 +20,7 @@
 
           <div class="toolbar-group play-group">
             <button id="btn-share" class="action-btn" title="Share">
-              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-share" /></svg>
+              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-user-share" /></svg>
             </button>
           </div>
 
@@ -42,14 +42,28 @@
           <div class="separator"></div>
 
           <div class="toolbar-group new-group">
-            <button id="btn-new" class="action-btn" title="New">
-              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-file-plus" /></svg>
+            <button id="btn-randomize" class="action-btn" title="Randomize">
+              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-bowling" /></svg>
+            </button>
+            <button id="btn-harmonize" class="action-btn" title="Harmonize">
+              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-music-heart" /></svg>
+            </button>
+            <button id="btn-new" class="action-btn" title="Blank">
+              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-bomb" /></svg>
+            </button>
+          </div>
+
+          <div class="separator"></div>
+
+          <div class="toolbar-group stage-group">
+            <button id="btn-stage" class="action-btn" title="Cycle stage background">
+              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-photo" /></svg>
             </button>
           </div>
 
           <div class="toolbar-group splash-group" style="margin-left: auto">
             <button id="btn-splash" class="action-btn" title="Splash preview">
-              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-sparkles" /></svg>
+              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-user-screen" /></svg>
             </button>
           </div>
         </div>
@@ -65,9 +79,6 @@
       </header>
 
       <main id="stage">
-        <button id="btn-stage" class="stage-btn" title="Cycle stage background">
-          <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-photo" /></svg>
-        </button>
         <div id="canvas-wrap">
           <div id="tile"></div>
           <svg id="sigil-canvas" viewBox="0 0 1 1" preserveAspectRatio="xMidYMid meet"></svg>
@@ -83,8 +94,8 @@
           </svg>
         </button>
         <div id="radial-overlay" class="radial-overlay hidden" aria-hidden="true"></div>
-        <button id="btn-credits" class="stage-btn credits-btn" title="Credits">
-          <svg width="16" height="16"><use href="tabler-sprite.svg#tabler-heart-search" /></svg>
+        <button id="btn-credits" class="credits-btn" title="Credits">
+          <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-heart-search" /></svg>
         </button>
         <div id="credits-overlay" class="credits-overlay hidden" aria-hidden="true">
           <div class="credits-content">
@@ -191,11 +202,11 @@
               <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-border-outer" /></svg>
             </button>
 
+            <div class="separator"></div>
+
             <button id="btn-duplicate" class="action-btn" title="Duplicate (Ctrl+D)">
               <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-copy" /></svg>
             </button>
-
-            <div class="separator"></div>
 
             <button id="btn-delete" class="action-btn danger" title="Delete">
               <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-trash" /></svg>

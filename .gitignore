@@ -5,3 +5,4 @@ test-results/
 .playwright-mcp/
 *.tar.gz
 .env*
+.DS_Store

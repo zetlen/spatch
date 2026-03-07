@@ -1,23 +1,75 @@
 import type { VibeOptions } from './vibe.ts';
 
 export interface SceneDefinition {
-  image: string;
   name: string;
+  credit: string;
   vibe: Partial<VibeOptions>;
 }
 
-export const SCENES: SceneDefinition[] = [
-  { image: 'blue-hall.jpg', name: 'Blue Hall', vibe: {} },
-  { image: 'cloud-carpet.jpg', name: 'Cloud Carpet', vibe: {} },
-  { image: 'excel-flyer.jpg', name: 'Excel Flyer', vibe: {} },
-  { image: 'g-block.jpg', name: 'G Block', vibe: {} },
-  { image: 'mclassic.jpg', name: 'Macintosh Classic', vibe: {} },
-  { image: 'parking-elevator.jpg', name: 'Parking Elevator', vibe: {} },
-  { image: 'shoe-dept.jpg', name: 'Shoe Dept', vibe: {} },
-  { image: 'tile-towers.jpg', name: 'Tile Towers', vibe: {} },
-];
+export const SCENES = [
+  {
+    name: 'chiclet',
+    credit: 'me',
+    vibe: {},
+  },
+  {
+    name: 'four-freedoms',
+    credit: 'Archetonic',
+    vibe: {},
+  },
+  {
+    name: 'gate-78',
+    credit: 'CarpetsInter',
+    vibe: {},
+  },
+  {
+    name: 'knockdown',
+    credit: 'me',
+    vibe: {},
+  },
+  {
+    name: 'finger-lakes',
+    credit: 'Ed the Punk Rock Guy',
+    vibe: {},
+  },
+  {
+    name: 'parking-elevator',
+    credit: 'liminalsorting.tumblr.com',
+    vibe: {},
+  },
+  {
+    name: 'putty-click',
+    credit: '/u/Born03',
+    vibe: {},
+  },
+  {
+    name: 's-c-b-d',
+    credit: 'Mohammed Alim',
+    vibe: {},
+  },
+  {
+    name: 'tartu',
+    credit: 'Indrek Mustimets',
+    vibe: {},
+  },
+  {
+    name: 'the-metro',
+    credit: '/u/ramenov3lord',
+    vibe: {},
+  },
+  {
+    name: 'to-let',
+    credit: 'Deven Smith',
+    vibe: {},
+  },
+  {
+    name: 'grout',
+    credit: 'Alf van Beem',
+    vibe: {},
+  },
+] as const;
 
 export function getSceneImage(index: number): string {
   const scene = SCENES[index % SCENES.length]!;
-  return `/img/scene/${scene.image}`;
+  return `/img/scene/${scene.name}.jpg`;
 }
