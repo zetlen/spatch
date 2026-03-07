@@ -97,8 +97,7 @@ export class SplashController {
     const elapsed = Date.now() - this.splashDownTime;
     const remaining = Math.max(0, MIN_SUSTAIN_MS - elapsed);
 
-    // Always reveal UI immediately; audio sustains for remainder if needed.
-    // Pass the playback promise so release waits for play() to finish.
+    // Audio sustains for remainder, then toolbars fade in after release.
     this.splashReveal(remaining, playReady);
   }
 
@@ -107,29 +106,26 @@ export class SplashController {
     const topBar = qel('#toolbar-top');
     const botBar = qel('#toolbar-bottom');
 
-    // Fast fixed fade — starts immediately, eases out
-    topBar.style.transitionDuration = `${FADE_DURATION}s`;
-    botBar.style.transitionDuration = `${FADE_DURATION}s`;
-
-    // Add editing class — triggers CSS opacity transition right away
-    document.body.classList.add('is-editing');
+    // Mark URL as seen immediately (even though UI isn't visible yet)
     this._isActive = false;
-
-    // Mark URL as seen
     localStorage.setItem(this.splashKey, '1');
 
-    // Release audio: wait for play() to finish first, otherwise release()
-    // fires while isPlaying is still false and becomes a no-op.
     const doRelease = async () => {
       try {
         await playReady;
       } catch {}
-      // If play() somehow didn't complete, force stop as fallback
       if (!this.audio.isPlaying) {
         this.playback.forceStop();
+        this.revealToolbars(topBar, botBar, FADE_DURATION);
         return;
       }
-      this.playback.releaseAndIdle();
+      const releaseMs = this.playback.releaseAndIdle();
+      // Start fade partway through the release so it overlaps with the audible tail
+      const fadeDelay = releaseMs * 0.3;
+      const fadeDuration = Math.max(FADE_DURATION, (releaseMs - fadeDelay) / 1000);
+      setTimeout(() => {
+        this.revealToolbars(topBar, botBar, fadeDuration);
+      }, fadeDelay);
     };
 
     if (delayAudioRelease > 0) {
@@ -138,7 +134,14 @@ export class SplashController {
       doRelease();
     }
 
-    // Clean up inline transition-duration after transition ends
+    this.removeSplashListeners();
+  }
+
+  private revealToolbars(topBar: HTMLElement, botBar: HTMLElement, duration: number): void {
+    topBar.style.transitionDuration = `${duration}s`;
+    botBar.style.transitionDuration = `${duration}s`;
+    document.body.classList.add('is-editing');
+
     topBar.addEventListener(
       'transitionend',
       () => {
@@ -147,8 +150,6 @@ export class SplashController {
       },
       { once: true },
     );
-
-    this.removeSplashListeners();
   }
 
   private removeSplashListeners(): void {

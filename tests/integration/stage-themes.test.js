@@ -10,59 +10,46 @@ test.describe('Stage themes', () => {
     await page.waitForSelector('#sigil-canvas');
   });
 
-  test('cycle button exists and starts on white', async ({ page }) => {
-    const btn = page.locator('#btn-stage');
-    await expect(btn).toBeVisible();
-    await expect(btn).toHaveAttribute('title', 'Stage: White');
-
-    const area = page.locator('#stage');
-    await expect(area).not.toHaveClass(/stage-florid/);
+  test('stage always has a background image', async ({ page }) => {
+    const app = page.locator('#app');
+    const bg = await app.evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(bg).toContain('url(');
   });
 
-  test('clicking cycles white → florid → white', async ({ page }) => {
+  test('clicking advances to next image', async ({ page }) => {
+    const app = page.locator('#app');
     const btn = page.locator('#btn-stage');
-    const area = page.locator('#stage');
 
-    // Click 1: white → florid
+    const bg1 = await app.evaluate((el) => getComputedStyle(el).backgroundImage);
     await btn.click();
-    await expect(area).toHaveClass(/stage-florid/);
-    await expect(btn).toHaveAttribute('title', /Stage: Image/);
+    const bg2 = await app.evaluate((el) => getComputedStyle(el).backgroundImage);
 
-    // Click 2: florid → white
-    await btn.click();
-    await expect(area).not.toHaveClass(/stage-florid/);
-    await expect(btn).toHaveAttribute('title', 'Stage: White');
+    expect(bg1).not.toEqual(bg2);
   });
 
-  test('theme persists across reload', async ({ page }) => {
+  test('cycle wraps around to first image', async ({ page }) => {
+    const app = page.locator('#app');
     const btn = page.locator('#btn-stage');
-    const area = page.locator('#stage');
 
-    // Set to florid
+    const bg0 = await app.evaluate((el) => getComputedStyle(el).backgroundImage);
+    // Click through all images (8 total) to wrap back to index 0
+    for (let i = 0; i < 8; i++) await btn.click();
+    const bgWrapped = await app.evaluate((el) => getComputedStyle(el).backgroundImage);
+
+    expect(bgWrapped).toEqual(bg0);
+  });
+
+  test('image persists across reload', async ({ page }) => {
+    const app = page.locator('#app');
+    const btn = page.locator('#btn-stage');
+
     await btn.click();
-    await expect(area).toHaveClass(/stage-florid/);
+    const bg1 = await app.evaluate((el) => getComputedStyle(el).backgroundImage);
 
-    // Reload
     await page.reload();
     await page.waitForSelector('#sigil-canvas');
 
-    await expect(area).toHaveClass(/stage-florid/);
-    await expect(btn).toHaveAttribute('title', /Stage: Image/);
-  });
-
-  test('florid mode advances image on each cycle', async ({ page }) => {
-    const area = page.locator('#stage');
-    const btn = page.locator('#btn-stage');
-
-    // Get to florid (image 1)
-    await btn.click(); // Florid
-    const bg1 = await area.evaluate((el) => getComputedStyle(el).getPropertyValue('--stage-bg'));
-
-    // Cycle: florid → white → florid (image 2)
-    await btn.click(); // White
-    await btn.click(); // Florid
-    const bg2 = await area.evaluate((el) => getComputedStyle(el).getPropertyValue('--stage-bg'));
-
-    expect(bg1).not.toEqual(bg2);
+    const bg2 = await app.evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(bg1).toEqual(bg2);
   });
 });

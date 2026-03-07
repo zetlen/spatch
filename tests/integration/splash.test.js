@@ -48,13 +48,13 @@ test.describe('First-load splash interaction', () => {
     await page.mouse.up();
 
     // After release, is-editing should be added
-    await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 5000 });
+    await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 8000 });
 
     // Toolbars should be visible
     await expect(page.locator('#toolbar-top')).toHaveCSS('opacity', '1');
   });
 
-  test('quick tap reveals UI immediately', async ({ page }) => {
+  test('tap reveals UI after audio finishes', async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');
@@ -64,11 +64,11 @@ test.describe('First-load splash interaction', () => {
     const canvas = page.locator('#sigil-canvas');
     const box = await canvas.boundingBox();
 
-    // Quick tap — UI should start revealing right away
+    // Quick tap — UI reveals after audio release finishes
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
-    // is-editing class added immediately (fade handled by CSS transition)
-    await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 2000 });
+    // is-editing class added after audio release (fade handled by CSS transition)
+    await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 8000 });
   });
 
   test('localStorage is set after splash completes', async ({ page }) => {
@@ -82,8 +82,8 @@ test.describe('First-load splash interaction', () => {
     // Quick tap to trigger splash
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
-    // Wait for splash to complete
-    await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 5000 });
+    // Wait for splash to complete (toolbars reveal after audio release finishes)
+    await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 8000 });
 
     // Check localStorage was set
     const key = await page.evaluate(() => localStorage.getItem('spatch-seen:/'));

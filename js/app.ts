@@ -8,7 +8,7 @@ import { AudioEngine } from './audio/engine.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, saveToURL } from './serialize.ts';
 import { bindShareMenu } from './share.ts';
-import { initStage, setAudioLevel } from './stage.ts';
+import { initStage } from './stage.ts';
 import { qel } from './dom.ts';
 import { SelectionManager } from './state.ts';
 import { PlaybackController } from './playback.ts';
@@ -113,7 +113,6 @@ const splash = new SplashController({ stage, audio, playback });
 function renderLoop(): void {
   if (needsRender || audio.isPlaying) {
     render(svgCanvas, store.data, selection.voiceId);
-    setAudioLevel(audio.getLevel());
 
     needsRender = false;
   }

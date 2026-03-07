@@ -165,7 +165,7 @@ export class PlaybackController {
    * Release with envelope (for splash reveal where we want the tail).
    * Schedules a glow timeout like stop() but doesn't cancel loops.
    */
-  releaseAndIdle(): void {
+  releaseAndIdle(): number {
     const state = this.getState();
     this.audio.release(state.envelope);
     this.playBtn.classList.remove('playing');
@@ -177,6 +177,7 @@ export class PlaybackController {
       this.releaseGlowTimeoutId = undefined;
       this.requestRender();
     }, releaseMs);
+    return releaseMs;
   }
 
   // ---- Bind play button events ----
