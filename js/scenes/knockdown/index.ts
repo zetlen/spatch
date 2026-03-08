@@ -10,6 +10,15 @@ const scene: Scene = {
   vibe: {
     ir,
     reverbMix: 0.6,
+    // Punchy, dry, close — basement plaster texture
+    eqLowGain: 4,
+    eqMidFreq: 2000,
+    eqMidGain: 1,
+    compThreshold: -8,
+    compRatio: 4,
+    compAttack: 0.002,
+    warmth: 2.0,
+    stereoWidth: 0.8,
   },
 };
 

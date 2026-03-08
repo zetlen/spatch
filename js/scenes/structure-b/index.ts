@@ -10,6 +10,15 @@ const scene: Scene = {
   vibe: {
     ir,
     reverbMix: 0.8,
+    // Dark, cavernous — underground car park (already bass-heavy IR)
+    eqLowGain: 2,
+    eqMidGain: -4,
+    eqHighGain: -3,
+    compThreshold: -12,
+    compRatio: 6,
+    warmth: 2.5,
+    formantMix: 0.5,
+    stereoWidth: 1.6,
   },
 };
 

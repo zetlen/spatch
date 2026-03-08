@@ -10,6 +10,10 @@ const scene: Scene = {
   vibe: {
     ir,
     reverbMix: 0.7,
+    // Bright, present, playful — colorful pillows in a living room
+    eqHighGain: 3,
+    warmth: 1.8,
+    stereoWidth: 1.2,
   },
 };
 

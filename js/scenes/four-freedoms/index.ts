@@ -10,6 +10,13 @@ const scene: Scene = {
   vibe: {
     ir,
     reverbMix: 0.8,
+    // Majestic, clean — abbey ruins, stone and water
+    eqMidFreq: 800,
+    eqMidGain: 2,
+    eqHighGain: 1,
+    compThreshold: -14,
+    warmth: 1.3,
+    formantMix: 0.8,
   },
 };
 

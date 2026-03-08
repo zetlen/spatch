@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { vibe, Vibe, VIBE_DEFAULTS } from '../../js/audio/vibe.ts';
+import { effect } from '@preact/signals-core';
+import { vibe, Vibe, VIBE_DEFAULTS, vibeSignal, setVibe } from '../../js/audio/vibe.ts';
 
 describe('vibe.shapeAreaFraction', () => {
   test('sine (circle) area = pi * (size/2)^2', () => {
@@ -185,5 +186,76 @@ describe('Vibe — new parameters', () => {
     expect(narrow.stereoWidth).toBe(0.5);
     const full = new Vibe({ stereoWidth: 1.0 });
     expect(full.stereoWidth).toBe(1.0);
+  });
+});
+
+describe('vibeSignal reactivity', () => {
+  test('setVibe updates vibeSignal.value', () => {
+    const before = vibeSignal.value;
+    const custom = new Vibe({ warmth: 3.0 });
+    setVibe(custom);
+    expect(vibeSignal.value).toBe(custom);
+    expect(vibeSignal.value).not.toBe(before);
+    // Restore default
+    setVibe(new Vibe());
+  });
+
+  test('setVibe updates module-level vibe binding', () => {
+    const custom = new Vibe({ stereoWidth: 0.3 });
+    setVibe(custom);
+    expect(vibe).toBe(custom);
+    expect(vibe.stereoWidth).toBe(0.3);
+    setVibe(new Vibe());
+  });
+
+  test('effect() fires when setVibe is called', () => {
+    const seen = [];
+    const dispose = effect(() => {
+      seen.push(vibeSignal.value.warmth);
+    });
+    // Effect runs once on creation with current value
+    expect(seen.length).toBe(1);
+    setVibe(new Vibe({ warmth: 4.0 }));
+    expect(seen.length).toBe(2);
+    expect(seen[1]).toBe(4.0);
+    setVibe(new Vibe({ warmth: 1.0 }));
+    expect(seen.length).toBe(3);
+    expect(seen[2]).toBe(1.0);
+    dispose();
+    // After dispose, no more notifications
+    setVibe(new Vibe({ warmth: 2.0 }));
+    expect(seen.length).toBe(3);
+    // Restore default
+    setVibe(new Vibe());
+  });
+});
+
+describe('scene vibe presets produce distinct Vibe instances', () => {
+  // Importing SCENES would pull in image assets, so test via Vibe construction
+  const sceneVibes = [
+    { name: 'chiclet', opts: { reverbMix: 0.7, eqHighGain: 3, warmth: 1.8, stereoWidth: 1.2 } },
+    { name: 'structure-b', opts: { reverbMix: 0.8, eqLowGain: 2, warmth: 2.5, stereoWidth: 1.6 } },
+    { name: 'tartu', opts: { reverbMix: 0.75, eqHighGain: 3, warmth: 1.1, formantQ: 1.4 } },
+    { name: 'knockdown', opts: { reverbMix: 0.6, compRatio: 4, warmth: 2.0, stereoWidth: 0.8 } },
+  ];
+
+  test('each scene vibe differs from defaults', () => {
+    const def = new Vibe();
+    for (const { opts } of sceneVibes) {
+      const v = new Vibe(opts);
+      const differs =
+        v.warmth !== def.warmth ||
+        v.stereoWidth !== def.stereoWidth ||
+        v.eqHighGain !== def.eqHighGain ||
+        v.compRatio !== def.compRatio;
+      expect(differs).toBe(true);
+    }
+  });
+
+  test('scene vibes differ from each other in voiceGain', () => {
+    // At minimum, stereoWidth and warmth produce distinct Vibe instances
+    const vibes = sceneVibes.map(({ opts }) => new Vibe(opts));
+    const warmths = new Set(vibes.map((v) => v.warmth));
+    expect(warmths.size).toBeGreaterThan(1);
   });
 });

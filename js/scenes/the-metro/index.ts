@@ -10,6 +10,17 @@ const scene: Scene = {
   vibe: {
     ir,
     reverbMix: 0.8,
+    // Rumbling, diffuse — long railroad tunnel (already resonant low-end IR)
+    eqLowFreq: 150,
+    eqLowGain: 2,
+    eqMidFreq: 600,
+    eqMidGain: -3,
+    eqHighGain: -2,
+    compThreshold: -14,
+    compRatio: 4,
+    warmth: 2.0,
+    stereoWidth: 1.8,
+    reverbPreDelay: 0.06,
   },
 };
 

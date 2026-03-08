@@ -249,14 +249,22 @@ design rationale and enumeration of past violations.
 - **Vibe** (`audio/vibe.ts`) encapsulates all audio tuning: gain curves,
   reverb (ConvolverNode with IR file), compressor, 3-band EQ, formant
   scaling, warmth, stereo width, and octave gain coefficients. A `vibe`
-  singleton is set via `setVibe()` when the scene changes. The `Vibe` class
-  takes `VibeOptions` with ~25 optional params; `VIBE_DEFAULTS` provides
-  defaults. Each scene provides `vibe: Partial<VibeOptions>` overrides
-  including an `ir` field pointing to the scene's `.m4a` impulse response.
-  IR loading uses a two-phase cache (`audio/ir-loader.ts`): `fetchIR()`
-  fetches raw bytes (no AudioContext needed, enabling prefetch before user
-  gesture), and `decodeIR()` decodes to an `AudioBuffer` on demand.
-  The debug tuner (`?debug=vibe`) exposes all params in a side drawer.
+  module binding is set via `setVibe()` when the scene changes or the debug
+  tuner adjusts a slider. The `Vibe` class takes `VibeOptions` with ~25
+  optional params; `VIBE_DEFAULTS` provides defaults. Each scene provides
+  `vibe: Partial<VibeOptions>` overrides including an `ir` field pointing
+  to the scene's `.m4a` impulse response, plus EQ, compression, warmth,
+  and synthesis params that give each scene a distinct sonic character.
+  **Reactivity**: `vibeSignal` is a `@preact/signals-core` signal that
+  `setVibe()` updates alongside the module binding. `app.ts` subscribes
+  via `effect()` to push vibe changes to the audio engine in real time.
+  Imperative audio code (`engine.ts`, `voice-builder.ts`, `formants.ts`)
+  reads the non-reactive `vibe` export directly. IR loading uses a
+  two-phase cache (`audio/ir-loader.ts`): `fetchIR()` fetches raw bytes
+  (no AudioContext needed, enabling prefetch before user gesture), and
+  `decodeIR()` decodes to an `AudioBuffer` on demand. The debug tuner
+  (`?debug=vibe`) exposes all params in a side drawer and auto-syncs
+  sliders when the scene changes externally.
 
 - **Canvas frame**: The canvas is split into `#canvas-wrap` (div) and
   `#sigil-canvas` (SVG, `viewBox="0 0 1 1"`). The frame div owns the dark

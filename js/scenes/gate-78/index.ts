@@ -10,6 +10,14 @@ const scene: Scene = {
   vibe: {
     ir,
     reverbMix: 0.75,
+    // Gritty, industrial — factory warehouse
+    eqLowGain: 3,
+    eqMidFreq: 1500,
+    eqMidGain: -3,
+    eqHighGain: -1,
+    compThreshold: -6,
+    compRatio: 5,
+    warmth: 2.2,
   },
 };
 

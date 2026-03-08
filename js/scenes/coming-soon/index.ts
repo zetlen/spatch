@@ -10,6 +10,16 @@ const scene: Scene = {
   vibe: {
     ir,
     reverbMix: 0.7,
+    // Eerie, vast — nuclear reactor hall
+    eqLowGain: 2,
+    eqMidFreq: 900,
+    eqMidGain: -4,
+    eqMidQ: 2.0,
+    eqHighGain: 2,
+    warmth: 1.6,
+    formantMix: 0.4,
+    stereoWidth: 1.7,
+    reverbPreDelay: 0.08,
   },
 };
 

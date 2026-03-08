@@ -4,6 +4,7 @@
 // ensuring all waveform types converge to similar perceived loudness at
 // medium sizes while preserving distinct character at small/large sizes.
 
+import { signal } from '@preact/signals-core';
 import type { BorderColor, WaveformType } from '../types.ts';
 
 export interface VibeOptions {
@@ -217,9 +218,18 @@ export class Vibe {
   }
 }
 
-export let vibe = new Vibe();
+/** Reactive signal holding the current Vibe. Subscribe via `effect()`. */
+const _vibeSignal = signal<Vibe>(new Vibe());
+export const vibeSignal: { readonly value: Vibe } = _vibeSignal;
 
-/** Replace the active vibe instance (debug tuner only). */
+/**
+ * Current vibe instance (non-reactive).
+ * Use for imperative reads in audio code; use `vibeSignal` in effects.
+ */
+export let vibe: Vibe = _vibeSignal.peek();
+
+/** Replace the active vibe instance. Updates both the signal and module binding. */
 export function setVibe(v: Vibe): void {
   vibe = v;
+  _vibeSignal.value = v;
 }

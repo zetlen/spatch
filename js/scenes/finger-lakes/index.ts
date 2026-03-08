@@ -10,6 +10,12 @@ const scene: Scene = {
   vibe: {
     ir,
     reverbMix: 0.75,
+    // Spacious, airy — cavernous palace court
+    eqLowGain: 2,
+    eqMidGain: -2,
+    warmth: 1.2,
+    stereoWidth: 1.5,
+    compRatio: 2,
   },
 };
 

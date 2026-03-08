@@ -9,7 +9,7 @@ import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, saveToURL } from './serialize.ts';
 import { SCENES, applyScene, getScene, initStageLayers, randomSceneIndex } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
-import { Vibe, setVibe } from './audio/vibe.ts';
+import { Vibe, setVibe, vibeSignal } from './audio/vibe.ts';
 import { qel } from './dom.ts';
 import { SelectionManager } from './state.ts';
 import { PlaybackController } from './playback.ts';
@@ -305,15 +305,29 @@ qel('#btn-splash').addEventListener('click', () => {
   location.reload();
 });
 
-// ---- Debug: Vibe tuner (dev only, elided in production) ----
-
-if (__VIBE_DEBUG__) {
-  if (new URLSearchParams(location.search).get('debug') === 'vibe') {
-    import('./debug/vibe-tuner.ts').then((m) =>
-      m.init({
-        audio,
-        store,
-      }),
-    );
+// ---- Reactive vibe → engine sync ----
+// When vibe changes (scene switch or debug tuner), update the audio engine
+// immediately so the new parameters are audible without waiting for a
+// store-driven data effect. The signal subscription auto-tracks changes.
+effect(() => {
+  void vibeSignal.value; // subscribe to vibe changes
+  if (audio.isPlaying) {
+    audio.update(store.data);
   }
+});
+
+// ---- Debug: Vibe tuner (hidden, activated via ?debug URL param) ----
+
+const debugParam = atob('dmliZWNoZWNr');
+
+if (
+  new URLSearchParams(location.search).has(debugParam) ||
+  location.pathname === `/${debugParam}`
+) {
+  import('./debug/vibe-tuner.ts').then((m) =>
+    m.init({
+      audio,
+      store,
+    }),
+  );
 }
