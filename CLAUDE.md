@@ -26,7 +26,7 @@ and hear them as synthesized chords. Every visual property maps to an audio para
 ```
 package.json         Package manifest (Bun)
 bun.lock             Lockfile
-vite.config.ts       Vite build/dev config (plugins, MPA input, virtual modules)
+vite.config.ts       Vite build/dev config (plugins, MPA input)
 tsconfig.json        TypeScript configuration
 index.html           Main app (source HTML entry point)
 embed.html           Standalone embed viewer (reads state from URL hash)
@@ -35,7 +35,7 @@ scripts/
   vite-plugin-svg-sprite.ts  Reusable Vite plugin: scans sources for icon refs,
                              builds SVG sprite, inlines into HTML
 js/
-  virtual.d.ts       Type declarations for virtual modules (scene-images)
+  virtual.d.ts       Type declaration for __VIBE_DEBUG__ compile-time flag
   dom.ts             Typed DOM helper: qel() wraps querySelector with type
                      parameter and runtime null check
   types.ts           Shared type definitions: branded primitives, Voice
@@ -59,11 +59,20 @@ js/
   audio/
     engine.ts        AudioEngine class: Web Audio lifecycle, voice management,
                      vibe-driven reverb/EQ/compression, analyser
+    ir-loader.ts     Two-layer IR cache: fetchIR (bytes) + decodeIR (AudioBuffer)
     mapping.ts       Audio mapping functions (pitch, pan, gain, timbre, formants)
     voice-builder.ts Voice audio graph construction (oscillators, effects, borders)
     vibe.ts          Vibe class: perceptual gain tuning, reverb, mastering, synthesis params
-    vibe-presets.ts  Scene registry: SceneDefinition[] mapping index → image + vibe overrides
     formants.ts      Formant filter bank for fill-driven vowel synthesis
+  scenes/
+    scene-types.ts   Scene interface (name, stageBackground, imageCredit, vibe)
+    index.ts         SCENES registry, getScene(), applyScene() crossfade,
+                     initStageLayers() for two-layer background transition
+    loader.ts        prefetchScene(), loadSceneIR(), preloadNextScene()
+    <name>/          One directory per scene (see "Scene convention" below)
+      index.ts       Default export of Scene object
+      *.jpg          Stage background image
+      *.m4a          Impulse response audio (optional)
   toolbar/
     toolbar.ts       Toolbar class: tool/pattern/color picker UI binding
     blend-panel.ts   Blend mode expansion panel
@@ -83,7 +92,6 @@ js/
   envelope.ts        ADSR ↔ canvas corner radius conversion
   share.ts           Share menu binding + embed snippet generator
   serialize.ts       Bespoke Base64 URL serialization (bitfield-packed, no keys)
-  stage.ts           Stage scene cycling (background images tied to SigilData.scene)
 dist/                Build output (gitignored)
 docs/plans/              Design docs and implementation plans
                          Convention: YYYY-MM-DD-{topic}-{design|plan}.md
@@ -221,20 +229,29 @@ design rationale and enumeration of past violations.
     double = 2 octaves. `thickness` scales both the visual stroke width and
     the doubled oscillator's gain. Undefined = no border, no doubling.
 
-- **Scene** is a global index on `SigilData` (not per-voice). Each scene maps
-  to a background image (visual) and a `Vibe` preset (audio). The scene index
-  is serialized as 1 B64 char (0–63) in the URL. Clicking the stage button
-  advances to the next scene. The `SCENES` registry in `audio/vibe-presets.ts`
-  defines `SceneDefinition[]` — each entry has `image`, `name`, and
-  `vibe: Partial<VibeOptions>` overrides. Scene satisfies the bijection
+- **Scene** is a global index on `SigilData` (not per-voice). Each scene is
+  a self-contained module in `js/scenes/<name>/` containing a background image
+  (`.jpg`), an optional impulse response (`.m4a`), and an `index.ts` that
+  exports a `Scene` object (`{ name, stageBackground, imageCredit, vibe }`).
+  The scene index is serialized as 1 B64 char (0–63) in the URL. Clicking the
+  stage button advances to the next scene. The `SCENES` array in
+  `js/scenes/index.ts` is the registry. Scene satisfies the bijection
   principle: scene index → background image (visual) + vibe preset (audio).
+  Scene transitions use a two-layer CSS crossfade (two `.stage-bg` divs swap
+  opacity). Assets (image + IR bytes) are prefetched before the crossfade
+  begins, and the next scene is preloaded in the background.
 
 - **Vibe** (`audio/vibe.ts`) encapsulates all audio tuning: gain curves,
-  reverb (ConvolverNode with algorithmic IR), compressor, 3-band EQ, formant
+  reverb (ConvolverNode with IR file), compressor, 3-band EQ, formant
   scaling, warmth, stereo width, and octave gain coefficients. A `vibe`
   singleton is set via `setVibe()` when the scene changes. The `Vibe` class
   takes `VibeOptions` with ~25 optional params; `VIBE_DEFAULTS` provides
-  defaults. The debug tuner (`?debug=vibe`) exposes all params in a side drawer.
+  defaults. Each scene provides `vibe: Partial<VibeOptions>` overrides
+  including an `ir` field pointing to the scene's `.m4a` impulse response.
+  IR loading uses a two-phase cache (`audio/ir-loader.ts`): `fetchIR()`
+  fetches raw bytes (no AudioContext needed, enabling prefetch before user
+  gesture), and `decodeIR()` decodes to an `AudioBuffer` on demand.
+  The debug tuner (`?debug=vibe`) exposes all params in a side drawer.
 
 - **Canvas frame**: The canvas is split into `#canvas-wrap` (div) and
   `#sigil-canvas` (SVG, `viewBox="0 0 1 1"`). The frame div owns the dark
@@ -370,18 +387,67 @@ The current unlock strategy (in `audio.ts:_init()`) uses three layers:
 - To add a new field to any type: you MUST provide both a visual rendering path
   and an audio mapping. If either is missing, the field violates the bijection
   principle and must not be added.
-- To modify scene/vibe behavior: update `SceneDefinition` in
-  `audio/vibe-presets.ts` (scene registry), `VibeOptions` and `Vibe` class in
+- To modify scene/vibe behavior: update the `Scene` interface in
+  `scenes/scene-types.ts`, `VibeOptions` and `Vibe` class in
   `audio/vibe.ts` (audio params), `audio/engine.ts` (master chain wiring),
   `audio/voice-builder.ts` (per-voice params read from vibe), and
   `debug/vibe-tuner.ts` (debug UI). Scene index is serialized in
   `serialize.ts` as 1 B64 char. Stage button cycles scenes via
-  `store.updateScene()` in `stage.ts`. App.ts reactively calls `setVibe()`
+  `store.updateScene()` in `app.ts`. App.ts reactively calls `setVibe()`
   and `applyScene()` when scene changes.
-- To add a new scene: add a `SceneDefinition` entry to `SCENES` in
-  `audio/vibe-presets.ts`, add the corresponding JPG to `img/scene/`, and
-  tune vibe params using `?debug=vibe`. No other code changes needed.
+- To add a new scene: create a directory under `js/scenes/<name>/` with a
+  background `.jpg`, an optional IR `.m4a`, and an `index.ts` that default-
+  exports a `Scene` object. Import and add it to `SCENES` in
+  `js/scenes/index.ts`. Tune vibe params using `?debug=vibe`. See "Scene
+  convention" below for the full format.
 - The `embed.html` page imports the same modules as the main app but only uses
-  `canvas/render.ts`, `audio/engine.ts`, `serialize.ts`, `stage.ts`, and
-  `envelope.ts`. It also applies the scene background image and vibe from the
-  deserialized URL state.
+  `canvas/render.ts`, `audio/engine.ts`, `serialize.ts`, `scenes/`,
+  `audio/ir-loader.ts`, and `envelope.ts`. It blocks reveal and playback
+  until scene assets are loaded.
+
+## Scene Convention
+
+Each scene is a self-contained directory under `js/scenes/<name>/`:
+
+```
+js/scenes/chiclet/
+  index.ts                   Scene definition (default export)
+  chairpillows.jpg           Stage background image
+  DomesticLivingRoom.m4a     Impulse response for convolution reverb
+```
+
+The `index.ts` follows a fixed pattern:
+
+```ts
+import type { Scene } from '../scene-types';
+import stageBackground from './image.jpg';
+import ir from './SomeImpulseResponse.m4a';
+
+const scene: Scene = {
+  name: 'scene-name',
+  stageBackground,
+  imageCredit: 'photographer or source',
+  vibe: {
+    ir,                       // IR file URL (resolved by Vite)
+    reverbMix: 0.7,           // + any other Partial<VibeOptions> overrides
+  },
+};
+
+export default scene;
+```
+
+Vite resolves the `.jpg` and `.m4a` imports to asset URLs at build time. The
+`ir` field in `vibe` points to the IR file's URL; it is fetched by
+`ir-loader.ts` and decoded into an `AudioBuffer` for the ConvolverNode. Scenes
+without an IR file omit the `ir` import and field.
+
+**To add a new scene:**
+1. Create `js/scenes/<name>/` with the image, optional IR, and `index.ts`.
+2. Import the scene in `js/scenes/index.ts` and append it to the `SCENES` array.
+3. Tune vibe overrides using `?debug=vibe` in dev mode.
+
+**Asset loading:** `prefetchScene()` preloads both the background image (via
+`new Image()`) and IR bytes (via `fetchIR()`) before a scene transition begins.
+`loadSceneIR()` decodes the prefetched bytes into an `AudioBuffer` when an
+`AudioContext` is available. After each scene change, the next scene's assets
+are preloaded in the background via `preloadNextScene()`.

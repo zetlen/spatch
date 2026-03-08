@@ -163,7 +163,7 @@ describe('vibe.borderOctaveGain', () => {
 describe('Vibe — new parameters', () => {
   test('defaults are applied when no options given', () => {
     const v = new Vibe();
-    expect(v.reverbDuration).toBe(VIBE_DEFAULTS.reverbDuration);
+    expect(v.ir).toBe(VIBE_DEFAULTS.ir);
     expect(v.reverbMix).toBe(VIBE_DEFAULTS.reverbMix);
     expect(v.compThreshold).toBe(VIBE_DEFAULTS.compThreshold);
     expect(v.masterGain).toBe(VIBE_DEFAULTS.masterGain);
@@ -176,7 +176,7 @@ describe('Vibe — new parameters', () => {
     const v = new Vibe({ reverbMix: 0.6, warmth: 2.0 });
     expect(v.reverbMix).toBe(0.6);
     expect(v.warmth).toBe(2.0);
-    expect(v.reverbDuration).toBe(VIBE_DEFAULTS.reverbDuration);
+    expect(v.ir).toBe(VIBE_DEFAULTS.ir);
     expect(v.compThreshold).toBe(VIBE_DEFAULTS.compThreshold);
   });
 

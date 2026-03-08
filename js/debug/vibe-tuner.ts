@@ -1,12 +1,13 @@
 // Debug-only vibe tuner panel. Async-imported when ?debug=vibe is in URL.
 // Elided entirely from production builds via __VIBE_DEBUG__ define.
 
+import { effect } from '@preact/signals-core';
 import { Vibe, VIBE_DEFAULTS, setVibe } from '../audio/vibe.ts';
-import { SCENES } from '../audio/vibe-presets.ts';
+import { SCENES } from '../scenes';
 import type { VibeOptions } from '../audio/vibe.ts';
 import type { AudioEngine } from '../audio/engine.ts';
 import type { SigilStore } from '../state.ts';
-import type { WaveformType } from '../types.ts';
+import type { SigilData, WaveformType } from '../types.ts';
 
 interface TunerDeps {
   audio: AudioEngine;
@@ -46,9 +47,6 @@ const SECTIONS: SliderSection[] = [
   {
     title: 'Reverb / Ambience',
     sliders: [
-      { key: 'reverbDuration', label: 'reverbDuration', min: 0.1, max: 5.0, step: 0.1 },
-      { key: 'reverbDecay', label: 'reverbDecay', min: 0.5, max: 10.0, step: 0.1 },
-      { key: 'reverbTone', label: 'reverbTone', min: 0.0, max: 1.0, step: 0.05 },
       { key: 'reverbMix', label: 'reverbMix', min: 0.0, max: 1.0, step: 0.01 },
       { key: 'reverbPreDelay', label: 'reverbPreDelay', min: 0.0, max: 0.5, step: 0.01 },
     ],
@@ -120,9 +118,10 @@ function defaultForKey(key: string): number {
   return (VIBE_DEFAULTS as unknown as Record<string, number>)[key]!;
 }
 
-/** Build a VibeOptions from the flat state map. */
-function stateToVibeOptions(state: Record<string, number>): VibeOptions {
+/** Build a VibeOptions from the flat state map and current IR selection. */
+function stateToVibeOptions(state: Record<string, number>, ir: string | undefined): VibeOptions {
   return {
+    ir,
     norm: state['norm'],
     refMult: state['refMult'],
     exponents: {
@@ -130,9 +129,6 @@ function stateToVibeOptions(state: Record<string, number>): VibeOptions {
       pulse: state['exp:pulse'],
       blend: state['exp:blend'],
     },
-    reverbDuration: state['reverbDuration'],
-    reverbDecay: state['reverbDecay'],
-    reverbTone: state['reverbTone'],
     reverbMix: state['reverbMix'],
     reverbPreDelay: state['reverbPreDelay'],
     compThreshold: state['compThreshold'],
@@ -192,6 +188,45 @@ function applyVibeToState(state: Record<string, number>, opts: Partial<VibeOptio
   }
 }
 
+/** Format SigilData as a compact debug string. */
+function formatState(data: SigilData): string {
+  const lines: string[] = [];
+  lines.push(`scene: ${data.scene}`);
+  const e = data.envelope;
+  lines.push(
+    `envelope: A:${e.attack.toFixed(2)} D:${e.decay.toFixed(2)} S:${e.sustain.toFixed(2)} R:${e.release.toFixed(2)}`,
+  );
+  lines.push(`\nvoices (${data.voices.length}):`);
+  for (const v of data.voices) {
+    const timbre = 'timbre' in v ? ` timbre:${v.timbre.toFixed(2)}` : '';
+    let fill: string;
+    if (v.fill.mode === 'solid') {
+      fill = `solid h:${v.fill.h} s:${v.fill.s} l:${v.fill.l}`;
+    } else {
+      fill = `linear h:${v.fill.h}\u2192${v.fill.h2} s:${v.fill.s}\u2192${v.fill.s2} l:${v.fill.l}\u2192${v.fill.l2}`;
+    }
+    const border = v.border
+      ? `${v.border.color}${v.border.double ? '\u00d72' : ''} t:${v.border.thickness.toFixed(2)}`
+      : '\u2014';
+    lines.push(`  ${v.id} [${v.waveform}]`);
+    lines.push(`    pos:(${v.x.toFixed(2)}, ${v.y.toFixed(2)}) sz:${v.size.toFixed(2)}`);
+    lines.push(`    fill:${fill}`);
+    lines.push(`    blend:${v.blend} fx:${v.effect ?? '\u2014'}${timbre}`);
+    lines.push(`    border:${border}`);
+  }
+  return lines.join('\n');
+}
+
+const SECTION_HEADING_STYLE = {
+  padding: '8px 12px 4px',
+  color: '#999',
+  fontSize: '12px',
+  fontWeight: 'bold',
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+  borderTop: '1px solid #333',
+};
+
 export function init(deps: TunerDeps): void {
   const { audio, store } = deps;
 
@@ -201,21 +236,29 @@ export function init(deps: TunerDeps): void {
   const currentScene = SCENES[store.data.scene % SCENES.length];
   if (currentScene) applyVibeToState(state, currentScene.vibe);
 
+  // Track IR selection separately (not numeric)
+  let currentIR: string | undefined = currentScene?.vibe.ir;
+
   // --- Slider input references for syncing ---
   const sliderInputs: Record<string, HTMLInputElement> = {};
   const valueDisplays: Record<string, HTMLSpanElement> = {};
 
-  // --- Build drawer DOM ---
+  // Cleanup handles (assigned later, captured by close handler closure)
+  let rafId = 0;
+  let disposeEffect: (() => void) | undefined;
 
-  const drawer = document.createElement('div');
-  drawer.id = 'vibe-tuner';
-  Object.assign(drawer.style, {
-    position: 'fixed',
-    top: '0',
-    right: '0',
-    width: '360px',
+  // --- Layout: push #app left, panel right ---
+
+  const app = document.getElementById('app')!;
+  document.body.style.display = 'flex';
+  app.style.flex = '1';
+  app.style.minWidth = '0';
+
+  const panel = document.createElement('div');
+  panel.id = 'vibe-tuner';
+  Object.assign(panel.style, {
+    flex: '0 0 420px',
     height: '100vh',
-    zIndex: '99999',
     background: '#1a1a1a',
     color: '#ccc',
     fontFamily: 'monospace',
@@ -223,7 +266,6 @@ export function init(deps: TunerDeps): void {
     overflowY: 'auto',
     overflowX: 'hidden',
     borderLeft: '2px solid #444',
-    boxShadow: '-4px 0 12px rgba(0,0,0,0.5)',
     boxSizing: 'border-box',
   });
 
@@ -243,7 +285,7 @@ export function init(deps: TunerDeps): void {
   });
 
   const title = document.createElement('span');
-  title.textContent = 'Vibe Tuner';
+  title.textContent = 'Debug';
   Object.assign(title.style, { fontSize: '14px', fontWeight: 'bold', color: '#fff' });
 
   const closeBtn = document.createElement('button');
@@ -257,10 +299,17 @@ export function init(deps: TunerDeps): void {
     padding: '0 4px',
     lineHeight: '1',
   });
-  closeBtn.addEventListener('click', () => drawer.remove());
+  closeBtn.addEventListener('click', () => {
+    cancelAnimationFrame(rafId);
+    disposeEffect?.();
+    panel.remove();
+    document.body.style.display = '';
+    app.style.flex = '';
+    app.style.minWidth = '';
+  });
 
   header.append(title, closeBtn);
-  drawer.append(header);
+  panel.append(header);
 
   // --- Scene selector ---
 
@@ -294,17 +343,16 @@ export function init(deps: TunerDeps): void {
   sceneSelect.addEventListener('change', () => {
     const idx = Number(sceneSelect.value);
     store.updateScene(idx);
-    // Sync sliders to new scene vibe
+    // Sync sliders and IR to new scene vibe
     const sceneDef = SCENES[idx % SCENES.length];
     applyVibeToState(state, sceneDef?.vibe ?? {});
+    currentIR = sceneDef?.vibe.ir;
     syncAllSliders();
     rebuild();
   });
 
   sceneRow.append(sceneLabel, sceneSelect);
-  drawer.append(sceneRow);
-
-  // --- Sections with sliders ---
+  panel.append(sceneRow);
 
   /** Build a single slider row and append to container. */
   function createSliderRow(container: HTMLElement, def: SliderDef): void {
@@ -366,25 +414,17 @@ export function init(deps: TunerDeps): void {
   for (const section of SECTIONS) {
     const heading = document.createElement('div');
     heading.textContent = section.title;
-    Object.assign(heading.style, {
-      padding: '8px 12px 4px',
-      color: '#999',
-      fontSize: '12px',
-      fontWeight: 'bold',
-      textTransform: 'uppercase',
-      letterSpacing: '0.5px',
-      borderTop: '1px solid #333',
-    });
-    drawer.append(heading);
+    Object.assign(heading.style, SECTION_HEADING_STYLE);
+    panel.append(heading);
 
     for (const def of section.sliders) {
-      createSliderRow(drawer, def);
+      createSliderRow(panel, def);
     }
 
     // After Gain Curve section, insert canvas and readout
     if (section.title === 'Gain Curve') {
       canvas = document.createElement('canvas');
-      canvas.width = 320;
+      canvas.width = 380;
       canvas.height = 140;
       Object.assign(canvas.style, {
         display: 'block',
@@ -393,7 +433,7 @@ export function init(deps: TunerDeps): void {
         border: '1px solid #333',
         borderRadius: '3px',
       });
-      drawer.append(canvas);
+      panel.append(canvas);
 
       readout = document.createElement('div');
       Object.assign(readout.style, {
@@ -402,9 +442,80 @@ export function init(deps: TunerDeps): void {
         flexDirection: 'column',
         gap: '1px',
       });
-      drawer.append(readout);
+      panel.append(readout);
     }
   }
+
+  // --- State Inspector ---
+
+  const stateHeading = document.createElement('div');
+  stateHeading.textContent = 'State';
+  Object.assign(stateHeading.style, SECTION_HEADING_STYLE);
+  panel.append(stateHeading);
+
+  const statePre = document.createElement('pre');
+  Object.assign(statePre.style, {
+    padding: '0 12px 8px',
+    fontFamily: 'monospace',
+    fontSize: '10px',
+    color: '#bbb',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-all',
+    lineHeight: '1.4',
+    margin: '0',
+  });
+  panel.append(statePre);
+
+  // --- Engine State ---
+
+  const engineHeading = document.createElement('div');
+  engineHeading.textContent = 'Engine';
+  Object.assign(engineHeading.style, SECTION_HEADING_STYLE);
+  panel.append(engineHeading);
+
+  const enginePre = document.createElement('pre');
+  Object.assign(enginePre.style, {
+    padding: '0 12px 4px',
+    fontFamily: 'monospace',
+    fontSize: '10px',
+    color: '#bbb',
+    whiteSpace: 'pre',
+    lineHeight: '1.4',
+    margin: '0',
+  });
+  panel.append(enginePre);
+
+  const levelRow = document.createElement('div');
+  Object.assign(levelRow.style, {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '0 12px 8px',
+  });
+  const levelLabel = document.createElement('span');
+  levelLabel.textContent = 'level';
+  levelLabel.style.color = '#888';
+  const levelBar = document.createElement('div');
+  Object.assign(levelBar.style, {
+    flex: '1',
+    height: '8px',
+    background: '#333',
+    borderRadius: '2px',
+    overflow: 'hidden',
+  });
+  const levelFill = document.createElement('div');
+  Object.assign(levelFill.style, {
+    height: '100%',
+    width: '0%',
+    background: '#4a4',
+    borderRadius: '2px',
+  });
+  levelBar.append(levelFill);
+  const levelVal = document.createElement('span');
+  levelVal.textContent = '0.000';
+  Object.assign(levelVal.style, { color: '#fff', width: '40px', textAlign: 'right' });
+  levelRow.append(levelLabel, levelBar, levelVal);
+  panel.append(levelRow);
 
   // --- Bottom buttons ---
 
@@ -435,7 +546,7 @@ export function init(deps: TunerDeps): void {
   copyBtn.textContent = 'Copy';
   Object.assign(copyBtn.style, btnStyle);
   copyBtn.addEventListener('click', () => {
-    const literal = buildVibeOptionsLiteral(state);
+    const literal = buildVibeOptionsLiteral(state, currentIR);
     navigator.clipboard.writeText(literal).then(
       () => {
         copyBtn.textContent = 'Copied!';
@@ -462,9 +573,9 @@ export function init(deps: TunerDeps): void {
   });
 
   btnRow.append(copyBtn, resetBtn);
-  drawer.append(btnRow);
+  panel.append(btnRow);
 
-  document.body.append(drawer);
+  document.body.append(panel);
 
   // --- Helpers ---
 
@@ -490,7 +601,7 @@ export function init(deps: TunerDeps): void {
   }
 
   function rebuild(): void {
-    const opts = stateToVibeOptions(state);
+    const opts = stateToVibeOptions(state, currentIR);
     const newVibe = new Vibe(opts);
     setVibe(newVibe);
 
@@ -588,11 +699,35 @@ export function init(deps: TunerDeps): void {
 
   // Initial draw
   rebuild();
+
+  // --- Reactive state inspector ---
+
+  disposeEffect = effect(() => {
+    const data = store.data;
+    statePre.textContent = formatState(data);
+    sceneSelect.value = String(data.scene);
+  });
+
+  // --- Engine state + level meter (rAF loop) ---
+
+  function updateEngine(): void {
+    enginePre.textContent = `status: ${audio.isPlaying ? 'playing' : 'stopped'}\nvoices: ${audio.activeVoices.length}`;
+    const level = audio.getLevel();
+    const pct = Math.min(100, level * 200);
+    levelFill.style.width = `${pct}%`;
+    levelFill.style.background = pct > 80 ? '#c44' : pct > 50 ? '#ca4' : '#4a4';
+    levelVal.textContent = level.toFixed(3);
+    rafId = requestAnimationFrame(updateEngine);
+  }
+  rafId = requestAnimationFrame(updateEngine);
 }
 
 /** Build a Partial<VibeOptions> TypeScript literal with only non-default params. */
-function buildVibeOptionsLiteral(state: Record<string, number>): string {
+function buildVibeOptionsLiteral(state: Record<string, number>, ir: string | undefined): string {
   const diffs: string[] = [];
+  if (ir) {
+    diffs.push(`  ir: '${ir}'`);
+  }
   const expDiffs: string[] = [];
   const octDiffs: string[] = [];
 

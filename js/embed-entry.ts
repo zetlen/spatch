@@ -4,9 +4,9 @@ import { AudioEngine } from './audio/engine.ts';
 import { deserializeState } from './serialize.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { qel, svgEl } from './dom.ts';
-import { getSceneImageUrl } from './stage.ts';
 import { Vibe, setVibe } from './audio/vibe.ts';
-import { SCENES } from './audio/vibe-presets.ts';
+import { getScene } from './scenes';
+import { prefetchScene, loadSceneIR } from './scenes/loader';
 
 const hash = globalThis.location.hash.slice(1);
 if (!hash) {
@@ -22,13 +22,10 @@ if (!hash) {
   } else {
     const sigil = state; // Narrow for closures
 
-    // Apply scene background and vibe
-    const sceneIndex = sigil.scene;
-    const sceneDef = SCENES[sceneIndex % SCENES.length];
+    // Apply scene vibe and start prefetching assets
+    const sceneDef = getScene(sigil.scene);
     setVibe(new Vibe(sceneDef?.vibe));
-    document.body.style.backgroundImage = `url(${getSceneImageUrl(sceneIndex)})`;
-    document.body.style.backgroundSize = 'cover';
-    document.body.style.backgroundPosition = 'center';
+    const sceneReady = prefetchScene(sceneDef);
 
     const svgRoot = qel<SVGSVGElement>('#c');
     const frame = qel('#tile');
@@ -61,8 +58,13 @@ if (!hash) {
     }
     renderLoop();
 
-    // Reveal after first render + ADSR corners applied (no FOUC)
-    qel('#wrap').classList.add('ready');
+    // Reveal after first render + scene assets loaded (no FOUC)
+    sceneReady.then(() => {
+      document.body.style.backgroundImage = `url(${sceneDef.stageBackground})`;
+      document.body.style.backgroundSize = 'cover';
+      document.body.style.backgroundPosition = 'center';
+      qel('#wrap').classList.add('ready');
+    });
 
     // Play button: click-to-toggle works on both mouse and touch
     const btn = qel('#play-btn');
@@ -87,7 +89,10 @@ if (!hash) {
         if (sigil.voices.length === 0) {
           return;
         }
-        await audio.play(sigil, sigil.envelope);
+        audio.warmUp(); // Synchronous — must happen before any await (iOS Safari)
+        await sceneReady;
+        const irBuffer = audio.audioCtx ? await loadSceneIR(audio.audioCtx, sceneDef) : undefined;
+        await audio.play(sigil, sigil.envelope, { irBuffer });
         btn.classList.add('playing');
         setEmbedPlayIcon(true);
       }

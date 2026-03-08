@@ -467,23 +467,31 @@ describe('AudioEngine — vibe-based master reverb', () => {
     expect(engine._reverbWet).toBeUndefined();
   });
 
-  test('play with positive reverbMix creates convolver and wet gain', async () => {
-    setVibe(new Vibe({ reverbMix: 0.5 }));
+  test('play with positive reverbMix and ir creates convolver and wet gain', async () => {
+    setVibe(new Vibe({ ir: 'test.m4a', reverbMix: 0.5 }));
     await startWith([makeVoice('a')]);
 
     expect(engine._reverbConvolver).not.toBeUndefined();
     expect(engine._reverbWet).not.toBeUndefined();
   });
 
+  test('play with reverbMix but no ir creates no convolver', async () => {
+    setVibe(new Vibe({ reverbMix: 0.5 }));
+    await startWith([makeVoice('a')]);
+
+    expect(engine._reverbConvolver).toBeUndefined();
+    expect(engine._reverbWet).toBeUndefined();
+  });
+
   test('reverb wet gain matches vibe.reverbMix', async () => {
-    setVibe(new Vibe({ reverbMix: 0.75 }));
+    setVibe(new Vibe({ ir: 'test.m4a', reverbMix: 0.75 }));
     await startWith([makeVoice('a')]);
 
     expect(engine._reverbWet.gain.value).toBe(0.75);
   });
 
   test('cleanup nulls reverb nodes', async () => {
-    setVibe(new Vibe({ reverbMix: 0.5 }));
+    setVibe(new Vibe({ ir: 'test.m4a', reverbMix: 0.5 }));
     await startWith([makeVoice('a')]);
 
     expect(engine._reverbConvolver).not.toBeUndefined();
@@ -532,6 +540,16 @@ describe('AudioEngine — vibe-based master reverb', () => {
     expect(engine._eqMid).toBeUndefined();
     expect(engine._eqHigh).toBeUndefined();
   });
+
+  test('play with preloaded IR buffer sets convolver buffer synchronously', async () => {
+    const irBuffer = { duration: 1.5, length: 66150 };
+    setVibe(new Vibe({ ir: 'preloaded.m4a', reverbMix: 0.6 }));
+    const state = makeSigilState([makeVoice('a')]);
+    await engine.play(state, state.envelope, { irBuffer });
+
+    expect(engine._reverbConvolver).not.toBeUndefined();
+    expect(engine._reverbConvolver.buffer).toBe(irBuffer);
+  });
 });
 
 describe('AudioEngine — reverb tail cleanup delay (vibe-based)', () => {
@@ -544,7 +562,7 @@ describe('AudioEngine — reverb tail cleanup delay (vibe-based)', () => {
   });
 
   test('release without reverb uses normal cleanup delay', async () => {
-    setVibe(new Vibe({ reverbMix: 0 }));
+    setVibe(new Vibe());
     const state = makeSigilState([makeVoice('a')]);
     await engine.play(state, state.envelope);
 
@@ -554,49 +572,6 @@ describe('AudioEngine — reverb tail cleanup delay (vibe-based)', () => {
     const releaseMs = state.envelope.release * 1000 + 150;
     await new Promise((r) => setTimeout(r, releaseMs));
     expect(engine.isPlaying).toBe(false);
-  });
-
-  test('release with reverb delays cleanup for IR duration', async () => {
-    setVibe(new Vibe({ reverbMix: 0.5, reverbDuration: 0.5 }));
-    const state = makeSigilState([makeVoice('a')]);
-    await engine.play(state, state.envelope);
-
-    engine.release(state.envelope);
-
-    // After releaseTime + 100ms, reverb should STILL be connected (tail still ringing)
-    const releaseMs = state.envelope.release * 1000 + 100;
-    await new Promise((r) => setTimeout(r, releaseMs + 50));
-    expect(engine.isPlaying).toBe(true); // Not cleaned up yet
-
-    // After releaseTime + IR duration + 100ms, cleanup should have fired
-    const irDurationMs = 500; // vibe.reverbDuration = 0.5s
-    await new Promise((r) => setTimeout(r, irDurationMs));
-    expect(engine.isPlaying).toBe(false);
-  });
-});
-
-describe('AudioEngine — reverb IR caching (vibe-based)', () => {
-  let engine;
-
-  beforeEach(async () => {
-    engine = new AudioEngine();
-    engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
-  });
-
-  test('same vibe reuses cached IR buffer across plays', async () => {
-    setVibe(new Vibe({ reverbMix: 0.5 }));
-    const state = makeSigilState([makeVoice('a')]);
-
-    await engine.play(state, state.envelope);
-    const firstBuffer = engine._reverbConvolver.buffer;
-
-    engine.stop();
-
-    await engine.play(state, state.envelope);
-    const secondBuffer = engine._reverbConvolver.buffer;
-
-    expect(secondBuffer).toBe(firstBuffer);
   });
 });
 

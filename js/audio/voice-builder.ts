@@ -6,7 +6,7 @@
 import type { BlendEffect } from '../effects.ts';
 import { createBlendEffect } from '../effects.ts';
 import type { AudioEffect, BlendMode, PatternType, Voice, WaveformType } from '../types.ts';
-import { xToPan, yToFrequency } from './mapping.ts';
+import { yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
 import { vibe } from './vibe.ts';
 
@@ -26,7 +26,9 @@ export interface AudioVoiceBase {
   gain: GainNode;
   formantF1: BiquadFilterNode;
   formantF2: BiquadFilterNode;
+  formantMixer: GainNode;
   brightness: BiquadFilterNode;
+  warmthShaper: WaveShaperNode | undefined;
   panner: StereoPannerNode;
   start(time: number): void;
   stop(time: number): void;
@@ -88,25 +90,6 @@ export function safeDisconnect(node: AudioNode): void {
   } catch {}
 }
 
-/** Generate an algorithmic reverb impulse response buffer from vibe params. */
-export function generateImpulseResponse(ctx: AudioContext): AudioBuffer {
-  const { sampleRate } = ctx;
-  const duration = vibe.reverbDuration;
-  const length = Math.floor(sampleRate * duration);
-  const buffer = ctx.createBuffer(2, length, sampleRate);
-
-  for (let ch = 0; ch < 2; ch++) {
-    const data = buffer.getChannelData(ch);
-    for (let i = 0; i < length; i++) {
-      const t = i / length;
-      let sample = (Math.random() * 2 - 1) * Math.exp(-vibe.reverbDecay * t);
-      sample *= Math.max(0, 1 - t * (1 - vibe.reverbTone));
-      data[i] = sample;
-    }
-  }
-  return buffer;
-}
-
 // ---- Voice graph builder ----
 
 /**
@@ -153,7 +136,7 @@ export function buildVoice(
   applyFormantFilter(formantF1, formantF2, brightness, voice.fill, voice.waveform);
 
   const panner = ctx.createStereoPanner();
-  panner.pan.value = xToPan(voice.x);
+  panner.pan.value = vibe.xToPan(voice.x);
 
   // Blend effect: overlap-driven audio processing
   const blendFx = createBlendEffect(ctx, voice.blend);
@@ -228,12 +211,14 @@ export function buildVoice(
     effectDispose,
     formantF1,
     formantF2,
+    formantMixer,
     gain,
     octaveGainNode,
     octaveOsc,
     outputNode: panner,
     panner,
     shapeId: voice.id,
+    warmthShaper: undefined as WaveShaperNode | undefined,
   };
 
   if (voice.waveform === 'pulse') {
@@ -345,6 +330,7 @@ export function buildVoice(
   return {
     ...shared,
     oscillator: osc,
+    warmthShaper: sineWarm,
     start(time: number) {
       osc.start(time);
       if (octaveOsc) {

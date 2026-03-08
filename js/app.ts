@@ -8,9 +8,9 @@ import { AudioEngine } from './audio/engine.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, saveToURL } from './serialize.ts';
 import { bindShareMenu } from './share.ts';
-import { applyScene, initStage, loadFallbackScene } from './stage.ts';
+import { SCENES, applyScene, getScene, initStageLayers, randomSceneIndex } from './scenes';
+import { prefetchScene, loadSceneIR } from './scenes/loader';
 import { Vibe, setVibe } from './audio/vibe.ts';
-import { SCENES } from './audio/vibe-presets.ts';
 import { qel } from './dom.ts';
 import { SelectionManager } from './state.ts';
 import { PlaybackController } from './playback.ts';
@@ -63,19 +63,31 @@ const loaded = loadFromURL();
 if (loaded) {
   store.loadState(loaded);
 } else {
-  store.updateScene(loadFallbackScene());
+  store.updateScene(randomSceneIndex());
 }
 
 let needsRender = true;
 
-initStage(store);
+const appEl = qel('#app');
+initStageLayers(appEl);
 
-// React to scene changes: update background + vibe
+// Scene readiness promise — resolves when the current scene's image + IR bytes
+// are fetched. Reassigned on every scene change.
+let sceneReady: Promise<void> = Promise.resolve();
+
+// Stage button: advance scene through the store
+qel('#btn-stage').addEventListener('click', () => {
+  store.updateScene((store.data.scene + 1) % SCENES.length);
+});
+
+// React to scene changes (and apply the initial scene on first run):
+// update background crossfade + vibe + prefetch.
 effect(() => {
-  const scene = store.data.scene;
-  applyScene(scene);
-  const sceneDef = SCENES[scene % SCENES.length];
-  setVibe(new Vibe(sceneDef?.vibe));
+  const sceneIndex = store.data.scene;
+  const sceneDef = getScene(sceneIndex);
+  applyScene(appEl, sceneIndex);
+  setVibe(new Vibe(sceneDef.vibe));
+  sceneReady = prefetchScene(sceneDef);
 });
 
 // ---- DOM queries ----
@@ -92,6 +104,12 @@ const playback: PlaybackController = new PlaybackController({
     needsRender = true;
   },
   isSplashActive: (): boolean => splash.isActive,
+  getIRBuffer: async () => {
+    await sceneReady;
+    const ctx = audio.audioCtx;
+    if (!ctx) return undefined;
+    return loadSceneIR(ctx, getScene(store.data.scene));
+  },
 });
 
 // ---- Splash screen ----

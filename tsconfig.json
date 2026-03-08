@@ -16,6 +16,6 @@
     "baseUrl": ".",
     "paths": {}
   },
-  "include": ["js/**/*.ts", "js/**/*.js"],
+  "include": ["js/**/*.ts", "js/**/*.js", "vite.d.ts"],
   "exclude": ["dist", "node_modules", "tmp"]
 }

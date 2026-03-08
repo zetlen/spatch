@@ -1,24 +1,14 @@
 import { resolve } from 'path';
-import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { type HtmlTagDescriptor, type Plugin, defineConfig } from 'vite';
 import svgSpritePlugin from './scripts/vite-plugin-svg-sprite';
 
 // ---------------------------------------------------------------------------
-// Scene images (resolved at config time)
-// ---------------------------------------------------------------------------
-
-const sceneFiles = readdirSync(resolve(import.meta.dirname, 'img/scene'))
-  .filter((f) => f.endsWith('.jpg'))
-  .toSorted();
-
-// ---------------------------------------------------------------------------
-// SpatchHtmlPlugin — analytics injection, version stamp, scene image copy
+// SpatchHtmlPlugin — analytics injection, version stamp
 // ---------------------------------------------------------------------------
 
 function spatchPlugin(): Plugin {
-  const sceneImagePaths = sceneFiles.map((f) => `/img/scene/${f}`);
-
   return {
     closeBundle() {
       try {
@@ -41,19 +31,7 @@ function spatchPlugin(): Plugin {
       }
     },
 
-    load(id) {
-      if (id === '\0virtual:scene-images') {
-        return `export default ${JSON.stringify(sceneImagePaths)}`;
-      }
-    },
-
     name: 'spatch',
-
-    resolveId(id) {
-      if (id === 'virtual:scene-images') {
-        return '\0virtual:scene-images';
-      }
-    },
 
     transformIndexHtml: {
       handler(html) {
@@ -77,18 +55,6 @@ function spatchPlugin(): Plugin {
         return { html, tags };
       },
       order: 'post' as const,
-    },
-
-    writeBundle(options) {
-      // Copy scene images to dist/img/scene/
-      const outDir = resolve(options.dir ?? 'dist', 'img', 'scene');
-      mkdirSync(outDir, { recursive: true });
-
-      const sceneDir = resolve(import.meta.dirname, 'img/scene');
-      for (const file of sceneFiles) {
-        copyFileSync(resolve(sceneDir, file), resolve(outDir, file));
-      }
-      console.log(`Copied ${sceneFiles.length} scene image(s) to ${outDir}/`);
     },
   };
 }

@@ -13,9 +13,7 @@ export interface VibeOptions {
   exponents?: Partial<Record<WaveformType, number>>;
 
   // Reverb / Ambience
-  reverbDuration?: number;
-  reverbDecay?: number;
-  reverbTone?: number;
+  ir?: string;
   reverbMix?: number;
   reverbPreDelay?: number;
 
@@ -48,9 +46,7 @@ export const VIBE_DEFAULTS = {
   refMult: 1.1,
   exponents: { sine: 1.0, pulse: 1.6, blend: 1.3 } as Record<WaveformType, number>,
 
-  reverbDuration: 0.3,
-  reverbDecay: 3.0,
-  reverbTone: 1.0,
+  ir: undefined as string | undefined,
   reverbMix: 0.0,
   reverbPreDelay: 0.0,
 
@@ -93,9 +89,7 @@ export class Vibe {
   readonly WAVEFORM_GAIN: Record<WaveformType, number>;
 
   // Reverb / Ambience
-  readonly reverbDuration: number;
-  readonly reverbDecay: number;
-  readonly reverbTone: number;
+  readonly ir: string | undefined;
   readonly reverbMix: number;
   readonly reverbPreDelay: number;
 
@@ -138,9 +132,7 @@ export class Vibe {
     this.OCTAVE_GAIN_COEFF = mergedCoeffs;
 
     // Reverb / Ambience
-    this.reverbDuration = opts?.reverbDuration ?? VIBE_DEFAULTS.reverbDuration;
-    this.reverbDecay = opts?.reverbDecay ?? VIBE_DEFAULTS.reverbDecay;
-    this.reverbTone = opts?.reverbTone ?? VIBE_DEFAULTS.reverbTone;
+    this.ir = opts?.ir ?? VIBE_DEFAULTS.ir;
     this.reverbMix = opts?.reverbMix ?? VIBE_DEFAULTS.reverbMix;
     this.reverbPreDelay = opts?.reverbPreDelay ?? VIBE_DEFAULTS.reverbPreDelay;
 
@@ -203,6 +195,11 @@ export class Vibe {
   /** Returns the combined voice gain (areaToGain * waveformGain), clamped to GAIN_MAX. */
   voiceGain(waveform: WaveformType, size: number): number {
     return Math.min(this.GAIN_MAX, this.areaToGain(waveform, size) * this.WAVEFORM_GAIN[waveform]);
+  }
+
+  /** Map normalized X coordinate to stereo pan value, scaled by stereoWidth. */
+  xToPan(x: number): number {
+    return (x * 2 - 1) * this.stereoWidth;
   }
 
   /** Border octave oscillator gain, derived from voice gain, thickness, and octave direction. */

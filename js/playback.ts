@@ -27,6 +27,7 @@ export class PlaybackController {
   private getState: () => SigilData;
   private requestRender: () => void;
   private isSplashActive: () => boolean;
+  private getIRBuffer: () => Promise<AudioBuffer | undefined>;
 
   // DOM elements
   private playBtn: HTMLElement;
@@ -68,11 +69,13 @@ export class PlaybackController {
     getState: () => SigilData;
     requestRender: () => void;
     isSplashActive: () => boolean;
+    getIRBuffer: () => Promise<AudioBuffer | undefined>;
   }) {
     this.audio = deps.audio;
     this.getState = deps.getState;
     this.requestRender = deps.requestRender;
     this.isSplashActive = deps.isSplashActive;
+    this.getIRBuffer = deps.getIRBuffer;
 
     this.playBtn = qel('#btn-play');
     this.radialOverlay = qel('#radial-overlay');
@@ -118,7 +121,9 @@ export class PlaybackController {
     }
     const gen = this.playGeneration;
     const state = this.getState();
-    await this.audio.play(state, state.envelope);
+    const irBuffer = await this.getIRBuffer();
+    if (gen !== this.playGeneration) return;
+    await this.audio.play(state, state.envelope, { irBuffer: irBuffer ?? undefined });
     if (gen !== this.playGeneration) {
       this.audio.stop();
       return;

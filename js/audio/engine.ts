@@ -2,16 +2,15 @@
 
 import { computeTotalOverlap, createEffect } from '../effects.ts';
 import { type Envelope, type SigilData, type Voice } from '../types.ts';
-import { xToPan, yToFrequency } from './mapping.ts';
+import { yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
-import { vibe } from './vibe.ts';
-import {
-  type AudioVoice,
-  buildVoice,
-  generateImpulseResponse,
-  safeDisconnect,
-  safeStop,
-} from './voice-builder.ts';
+import { decodeIR } from './ir-loader.ts';
+import { type Vibe, vibe } from './vibe.ts';
+import { type AudioVoice, buildVoice, safeDisconnect, safeStop } from './voice-builder.ts';
+
+export interface PlayOptions {
+  irBuffer?: AudioBuffer;
+}
 
 // ---- Audio Engine ----
 
@@ -29,12 +28,16 @@ export class AudioEngine {
   private _reverbWet: GainNode | undefined;
   private _streamDest: MediaStreamAudioDestinationNode | undefined;
   private _audioEl: HTMLAudioElement | undefined;
-  private _irCache: AudioBuffer | undefined;
   private _eqLow: BiquadFilterNode | undefined;
   private _eqMid: BiquadFilterNode | undefined;
   private _eqHigh: BiquadFilterNode | undefined;
   private _muffleFilter: BiquadFilterNode | undefined;
   private _muffled: boolean = false;
+  private _reverbPreDelayNode: DelayNode | undefined;
+  private _appliedVibe: Vibe | undefined;
+  private _appliedIR: string | undefined;
+  private _appliedReverbPreDelay: number = 0;
+  private _pendingIRBuffer: AudioBuffer | undefined;
 
   /** Synchronously create and unlock the AudioContext.
    *  Everything here MUST be synchronous — iOS Safari revokes user-gesture
@@ -64,6 +67,7 @@ export class AudioEngine {
     this._streamDest = this.audioCtx.createMediaStreamDestination();
     this._audioEl = document.createElement('audio');
     this._audioEl.srcObject = this._streamDest.stream;
+    this._audioEl.volume = 0; // Must be silent — audio goes through ctx.destination
     this._audioEl.style.display = 'none';
     document.body.append(this._audioEl);
     this._audioEl.play().catch(() => {});
@@ -87,9 +91,10 @@ export class AudioEngine {
     this._init();
   }
 
-  async play(sigilState: SigilData, envelope: Envelope): Promise<void> {
+  async play(sigilState: SigilData, envelope: Envelope, opts?: PlayOptions): Promise<void> {
     this._init();
     this.stop();
+    this._pendingIRBuffer = opts?.irBuffer;
 
     const ctx = this.audioCtx!;
     // Don't await resume() — warmUp() already called it synchronously from
@@ -165,24 +170,7 @@ export class AudioEngine {
     }
 
     // Master reverb from vibe
-    if (vibe.reverbMix > 0) {
-      this._reverbConvolver = ctx.createConvolver();
-      this._reverbConvolver.buffer = this._getImpulseResponse(ctx);
-      this._reverbWet = ctx.createGain();
-      this._reverbWet.gain.value = vibe.reverbMix;
-
-      // Pre-delay
-      if (vibe.reverbPreDelay > 0) {
-        const preDelay = ctx.createDelay(1);
-        preDelay.delayTime.value = vibe.reverbPreDelay;
-        this.envelopeGain.connect(preDelay);
-        preDelay.connect(this._reverbConvolver);
-      } else {
-        this.envelopeGain.connect(this._reverbConvolver);
-      }
-      this._reverbConvolver.connect(this._reverbWet);
-      this._reverbWet.connect(this.compressor);
-    }
+    this._buildReverb();
 
     // Apply ADSR envelope
     const now = ctx.currentTime;
@@ -204,6 +192,7 @@ export class AudioEngine {
     // Set initial blend overlap levels
     this._updateBlendOverlaps(sigilState.voices);
 
+    this._appliedVibe = vibe;
     this.isPlaying = true;
   }
 
@@ -219,19 +208,25 @@ export class AudioEngine {
     this.envelopeGain.gain.setValueAtTime(this.envelopeGain.gain.value, now);
     this.envelopeGain.gain.linearRampToValueAtTime(0, now + releaseTime);
 
-    // Schedule cleanup after release + reverb tail have fully decayed.
-    // Without this, the convolver tail gets cut short by early cleanup.
-    const reverbTail =
-      this._reverbConvolver && this._irCache ? this._irCache.duration + vibe.reverbPreDelay : 0;
+    // Poll output level and clean up once inaudible, rather than guessing
+    // a fixed timeout from release + reverb tail duration.
+    const SILENCE_THRESHOLD = 0.001; // ~-60 dB
+    const reverbTail = this._reverbConvolver?.buffer
+      ? this._reverbConvolver.buffer.duration + vibe.reverbPreDelay
+      : 0;
+    const maxWaitMs = (releaseTime + reverbTail) * 1000 + 2000;
     const sid = this._sessionId;
-    setTimeout(
-      () => {
-        if (this._sessionId === sid) {
-          this._cleanup();
-        }
-      },
-      (releaseTime + reverbTail) * 1000 + 100,
-    );
+    const startTime = performance.now();
+    const pollSilence = () => {
+      if (this._sessionId !== sid) return;
+      if (this.getLevel() < SILENCE_THRESHOLD || performance.now() - startTime > maxWaitMs) {
+        this._cleanup();
+        return;
+      }
+      setTimeout(pollSilence, 50);
+    };
+    // Start polling after the envelope release finishes
+    setTimeout(pollSilence, releaseTime * 1000);
   }
 
   setEnvelopePosition(t: number, envelope: Envelope): void {
@@ -259,6 +254,7 @@ export class AudioEngine {
   update(sigilState: SigilData): void {
     this._updateVoices(sigilState);
     this._updateMasterChain();
+    this._syncReverb();
   }
 
   private _updateMasterChain(): void {
@@ -371,7 +367,7 @@ export class AudioEngine {
       }
 
       audioVoice.gain.gain.setValueAtTime(vibe.voiceGain(voice.waveform, voice.size), now);
-      audioVoice.panner.pan.setValueAtTime(xToPan(voice.x), now);
+      audioVoice.panner.pan.setValueAtTime(vibe.xToPan(voice.x), now);
       applyFormantFilter(
         audioVoice.formantF1,
         audioVoice.formantF2,
@@ -401,6 +397,24 @@ export class AudioEngine {
           now,
         );
       }
+    }
+
+    // Sync voice-level vibe params when vibe instance changed (scene or tuner)
+    if (vibe !== this._appliedVibe) {
+      for (const av of this.activeVoices) {
+        av.formantMixer.gain.setValueAtTime(vibe.formantMix, now);
+        av.brightness.Q.setValueAtTime(vibe.brightnessQ, now);
+        if (av.warmthShaper) {
+          const warmSamples = 1024;
+          const warmCurve = new Float32Array(warmSamples);
+          for (let i = 0; i < warmSamples; i++) {
+            const x = (i * 2) / warmSamples - 1;
+            warmCurve[i] = Math.tanh(x * vibe.warmth);
+          }
+          av.warmthShaper.curve = warmCurve;
+        }
+      }
+      this._appliedVibe = vibe;
     }
 
     // Update blend overlap levels
@@ -473,6 +487,70 @@ export class AudioEngine {
     }
   }
 
+  private _buildReverb(): void {
+    this._appliedIR = vibe.ir;
+    this._appliedReverbPreDelay = vibe.reverbPreDelay;
+    if (!vibe.ir || !this.audioCtx || !this.envelopeGain || !this.compressor) return;
+
+    const ctx = this.audioCtx;
+    this._reverbConvolver = ctx.createConvolver();
+    this._reverbWet = ctx.createGain();
+    this._reverbWet.gain.value = vibe.reverbMix;
+
+    if (vibe.reverbPreDelay > 0) {
+      this._reverbPreDelayNode = ctx.createDelay(1);
+      this._reverbPreDelayNode.delayTime.value = vibe.reverbPreDelay;
+      this.envelopeGain.connect(this._reverbPreDelayNode);
+      this._reverbPreDelayNode.connect(this._reverbConvolver);
+    } else {
+      this.envelopeGain.connect(this._reverbConvolver);
+    }
+    this._reverbConvolver.connect(this._reverbWet);
+    this._reverbWet.connect(this.compressor);
+
+    // Use pre-decoded buffer if provided, otherwise load async
+    if (this._pendingIRBuffer) {
+      this._reverbConvolver.buffer = this._pendingIRBuffer;
+      this._pendingIRBuffer = undefined;
+    } else {
+      const convolver = this._reverbConvolver;
+      decodeIR(ctx, vibe.ir)
+        .then((buf) => {
+          convolver.buffer = buf;
+        })
+        .catch(() => {});
+    }
+  }
+
+  private _teardownReverb(): void {
+    if (this._reverbPreDelayNode) {
+      try {
+        this.envelopeGain?.disconnect(this._reverbPreDelayNode);
+      } catch {}
+      safeDisconnect(this._reverbPreDelayNode);
+      this._reverbPreDelayNode = undefined;
+    } else if (this._reverbConvolver && this.envelopeGain) {
+      try {
+        this.envelopeGain.disconnect(this._reverbConvolver);
+      } catch {}
+    }
+    if (this._reverbConvolver) {
+      safeDisconnect(this._reverbConvolver);
+      this._reverbConvolver = undefined;
+    }
+    if (this._reverbWet) {
+      safeDisconnect(this._reverbWet);
+      this._reverbWet = undefined;
+    }
+  }
+
+  private _syncReverb(): void {
+    if (!this.isPlaying) return;
+    if (vibe.ir === this._appliedIR && vibe.reverbPreDelay === this._appliedReverbPreDelay) return;
+    this._teardownReverb();
+    this._buildReverb();
+  }
+
   _cleanup(): void {
     this._sessionId++;
 
@@ -504,14 +582,10 @@ export class AudioEngine {
       this._analyser = undefined;
       this._analyserBuf = undefined;
     }
-    if (this._reverbConvolver) {
-      safeDisconnect(this._reverbConvolver);
-      this._reverbConvolver = undefined;
-    }
-    if (this._reverbWet) {
-      safeDisconnect(this._reverbWet);
-      this._reverbWet = undefined;
-    }
+    this._teardownReverb();
+    this._appliedVibe = undefined;
+    this._appliedIR = undefined;
+    this._appliedReverbPreDelay = 0;
     if (this._eqLow) {
       safeDisconnect(this._eqLow);
       this._eqLow = undefined;
@@ -548,15 +622,6 @@ export class AudioEngine {
     safeDisconnect(audioVoice.outputNode);
     audioVoice.effectDispose?.();
     audioVoice.blendEffect?.dispose();
-  }
-
-  /** Return a cached impulse response buffer.
-   *  Caching ensures reverb sounds identical across repeated plays. */
-  _getImpulseResponse(ctx: AudioContext): AudioBuffer {
-    if (!this._irCache) {
-      this._irCache = generateImpulseResponse(ctx);
-    }
-    return this._irCache;
   }
 
   _buildVoice(ctx: AudioContext, voice: Voice): AudioVoice {

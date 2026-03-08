@@ -99,15 +99,6 @@ export function hardSnapYToNote(y: NormalizedCoord): NormalizedCoord {
   return normalizedCoord(1 - clamped * spacing);
 }
 
-/**
- * Map a normalized X coordinate (0-1) to a stereo pan value (-1 to +1).
- *
- * X=0 maps to full left (-1), X=0.5 maps to center (0), X=1 maps to full right (+1).
- */
-export function xToPan(x: NormalizedCoord): number {
-  return x * 2 - 1; // 0->-1 (left), 1->+1 (right)
-}
-
 // Map rotation to a periodic timbre parameter.
 // Each waveform's visual symmetry period determines the audio cycle:
 // a square repeats every 90 deg, a triangle every 120 deg.
