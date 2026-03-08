@@ -18,6 +18,8 @@ import { CanvasInteractionController } from './canvas/interaction.ts';
 import { bindKeyboardShortcuts } from './keyboard.ts';
 import { SplashController } from './splash.ts';
 import { initCredits } from './credits.ts';
+import { randomize } from './harmony.ts';
+import { createHarmonizePanel } from './toolbar/harmonize-panel.ts';
 
 // ---- Init ----
 
@@ -279,6 +281,23 @@ qel('#btn-new').addEventListener('click', () => {
   selection.clear();
   needsRender = true;
 });
+
+// ---- Randomize & Harmonize ----
+
+qel('#btn-randomize').addEventListener('click', () => {
+  randomize(store, undo);
+  selection.clear();
+  needsRender = true;
+});
+
+createHarmonizePanel({
+  area: qel('#harmonize-panel'),
+  store,
+  undo,
+  requestRender: () => {
+    needsRender = true;
+  },
+}).bindLongPress(qel('#btn-harmonize'));
 
 // ---- Splash preview button ----
 

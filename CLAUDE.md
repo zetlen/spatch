@@ -79,9 +79,15 @@ js/
     border-panel.ts  Border settings expansion panel
     fill-panel.ts    Fill color/gradient expansion panel
     pattern-panel.ts Pattern effect dropdown panel
+    harmonize-panel.ts Long-press scale picker for harmonize button
     dom-helpers.ts   Shared DOM construction helpers for toolbar panels
   debug/
     vibe-tuner.ts    Debug-only vibe tuner side drawer (?debug=vibe, elided in production)
+  harmony.ts         Randomize (create random spatch) and harmonize (snap
+                     pitches to a random musical scale). 9 scales: major/minor
+                     pentatonic, mixolydian, lydian, phrygian, dorian, natural
+                     minor, blues, mu. Randomize sets random scene, ADSR,
+                     voices with varied properties, then harmonizes.
   shapes.ts          Resize/rotate math, ADSR corner testing
   colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
   patterns.ts        SVG pattern definitions (stripes, checker, noise, gradient)

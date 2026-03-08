@@ -74,6 +74,9 @@ export default defineConfig(({ mode }) => ({
         embed: resolve(import.meta.dirname, 'embed.html'),
         main: resolve(import.meta.dirname, 'index.html'),
       },
+      output: {
+        assetFileNames: '[hash][extname]',
+      },
     },
   },
 
