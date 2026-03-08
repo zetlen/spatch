@@ -171,6 +171,8 @@ export interface InteractionDeps {
 export class CanvasInteractionController {
   private interaction: InteractionState = IDLE;
   private activePointers = new Map<number, { x: number; y: number }>();
+  /** Touch pointer that landed on empty canvas — deselect deferred to pointerup so pinch can start */
+  private pendingTouchDeselect: number | null = null;
 
   private readonly canvasWrap: HTMLElement;
   private readonly stage: HTMLElement;
@@ -228,8 +230,11 @@ export class CanvasInteractionController {
   private handleAreaPointerDown(e: PointerEvent): void {
     const target = e.target as HTMLElement;
     if (target === this.stage) {
-      this.selection.clear();
-      this.requestRender();
+      // Touch deselect is deferred to pointerup (handled in handlePointerDown)
+      if (e.pointerType !== 'touch') {
+        this.selection.clear();
+        this.requestRender();
+      }
     }
   }
 
@@ -269,6 +274,8 @@ export class CanvasInteractionController {
       if (this.interaction.mode !== 'idle') {
         this.interaction = IDLE;
       }
+      // Cancel pending deselect — a pinch is starting
+      this.pendingTouchDeselect = null;
 
       const [idA, posA] = [...this.activePointers.entries()][0]!;
       const [idB, posB] = [...this.activePointers.entries()][1]!;
@@ -384,10 +391,14 @@ export class CanvasInteractionController {
       return;
     }
 
-    // 4. Deselect
+    // 4. Deselect — for touch, defer to pointerup so pinch can still start
     if (!inClippedCorner) {
-      this.selection.clear();
-      this.requestRender();
+      if (e.pointerType === 'touch') {
+        this.pendingTouchDeselect = e.pointerId;
+      } else {
+        this.selection.clear();
+        this.requestRender();
+      }
     }
   }
 
@@ -506,7 +517,7 @@ export class CanvasInteractionController {
     if (this.interaction.mode === 'pinch-rotate') {
       if (e.pointerId === this.interaction.pointerA || e.pointerId === this.interaction.pointerB) {
         this.interaction = IDLE;
-
+        this.pendingTouchDeselect = null;
         this.requestRender();
       }
       return;
@@ -527,6 +538,13 @@ export class CanvasInteractionController {
       if (voice) {
         this.store.updateVoice(voice.id, { y: hardSnapYToNote(voice.y) });
       }
+    }
+
+    // Deferred touch deselect: only fires if no pinch occurred
+    if (this.pendingTouchDeselect === e.pointerId) {
+      this.pendingTouchDeselect = null;
+      this.selection.clear();
+      this.requestRender();
     }
 
     this.interaction = IDLE;
