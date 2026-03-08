@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 'chiclet',
   stageBackground,
   imageCredit: 'me',
+  creditUrl: 'https://jbz.fyi',
   vibe: {
     ir,
     reverbMix: 0.7,

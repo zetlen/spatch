@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 'the-metro',
   stageBackground,
   imageCredit: '/u/ramenov3lord',
+  creditUrl: 'https://reddit.com/u/ramenov3lord',
   vibe: {
     ir,
     reverbMix: 0.8,

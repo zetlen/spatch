@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 'gate-78',
   stageBackground,
   imageCredit: 'CarpetsInter',
+  creditUrl: 'https://carpetsinter.com/',
   vibe: {
     ir,
     reverbMix: 0.75,

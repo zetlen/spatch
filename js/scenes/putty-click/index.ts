@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 'putty-click',
   stageBackground,
   imageCredit: '/u/Born03',
+  creditUrl: 'https://reddit.com/u/Born03',
   vibe: {
     ir,
     reverbMix: 0.7,

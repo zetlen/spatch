@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 'finger-lakes',
   stageBackground,
   imageCredit: 'Ed the Punk Rock Guy',
+  creditUrl: 'https://reddit.com/u/Chicky_P00t',
   vibe: {
     ir,
     reverbMix: 0.75,

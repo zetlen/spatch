@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 'four-freedoms',
   stageBackground,
   imageCredit: 'Archetonic',
+  creditUrl: 'https://archetonic.mx/studio',
   vibe: {
     ir,
     reverbMix: 0.8,

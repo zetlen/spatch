@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 'coming-soon',
   stageBackground,
   imageCredit: 'Deven Smith',
+  creditUrl: 'https://reddit.com/u/deven_smith_',
   vibe: {
     ir,
     reverbMix: 0.7,

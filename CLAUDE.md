@@ -65,7 +65,7 @@ js/
     vibe.ts          Vibe class: perceptual gain tuning, reverb, mastering, synthesis params
     formants.ts      Formant filter bank for fill-driven vowel synthesis
   scenes/
-    scene-types.ts   Scene interface (name, stageBackground, imageCredit, vibe)
+    scene-types.ts   Scene interface (name, stageBackground, imageCredit, creditUrl?, vibe)
     index.ts         SCENES registry, getScene(), applyScene() crossfade,
                      initStageLayers() for two-layer background transition
     loader.ts        prefetchScene(), loadSceneIR(), preloadNextScene()
@@ -432,6 +432,7 @@ const scene: Scene = {
   name: 'scene-name',
   stageBackground,
   imageCredit: 'photographer or source',
+  creditUrl: 'https://link-to-credit',  // optional; omit if no URL available
   vibe: {
     ir,                       // IR file URL (resolved by Vite)
     reverbMix: 0.7,           // + any other Partial<VibeOptions> overrides

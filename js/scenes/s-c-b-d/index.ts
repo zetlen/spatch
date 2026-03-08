@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 's-c-b-d',
   stageBackground,
   imageCredit: 'Mohammed Alim',
+  creditUrl: 'https://www.pexels.com/@apyfz/',
   vibe: {
     ir,
     reverbMix: 0.75,

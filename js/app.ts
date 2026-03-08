@@ -254,7 +254,7 @@ function debouncedSave(): void {
 
 // ---- Credits overlay ----
 
-initCredits(audio);
+initCredits(audio, store);
 
 // ---- Pause audio when tab is hidden ----
 

@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 'structure-b',
   stageBackground,
   imageCredit: 'liminalsorting.tumblr.com',
+  creditUrl: 'https://liminalsorting.tumblr.com',
   vibe: {
     ir,
     reverbMix: 0.8,

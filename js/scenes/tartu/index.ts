@@ -6,6 +6,7 @@ const scene: Scene = {
   name: 'tartu',
   stageBackground,
   imageCredit: 'Indrek Mustimets',
+  creditUrl: 'https://www.instagram.com/indrekmustimets/',
   vibe: {
     ir,
     reverbMix: 0.75,
