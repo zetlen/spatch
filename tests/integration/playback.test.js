@@ -42,18 +42,20 @@ test.describe('Playback', () => {
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
     const playBtn = page.locator('#btn-play');
-    const useEl = playBtn.locator('.play-icon use');
+    const playIcon = playBtn.locator('.play-icon');
 
-    // Before playing — play icon
-    await expect(useEl).toHaveAttribute('href', /player-play/);
+    // Before playing — inline path (custom play triangle, no <use>)
+    await expect(playIcon.locator('path')).toBeVisible();
+    await expect(playIcon.locator('use')).toHaveCount(0);
 
     // Start playing via Space (latched)
     await page.keyboard.press('Space');
-    await expect(useEl).toHaveAttribute('href', /player-stop/);
+    await expect(playIcon.locator('use')).toHaveAttribute('href', /player-stop-filled/);
 
     // Press Space again to stop
     await page.keyboard.press('Space');
-    await expect(useEl).toHaveAttribute('href', /player-play/, { timeout: 5000 });
+    await expect(playIcon.locator('path')).toBeVisible({ timeout: 5000 });
+    await expect(playIcon.locator('use')).toHaveCount(0);
   });
 
   test('play does nothing with no shapes', async ({ page }) => {

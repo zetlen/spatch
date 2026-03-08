@@ -96,7 +96,6 @@ js/
                      compression, exciter, gating, comb filter, flanger) +
                      overlap computation
   envelope.ts        ADSR ↔ canvas corner radius conversion
-  share.ts           Share menu binding + embed snippet generator
   serialize.ts       Bespoke Base64 URL serialization (bitfield-packed, no keys)
 dist/                Build output (gitignored)
 docs/plans/              Design docs and implementation plans

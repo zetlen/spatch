@@ -20,12 +20,6 @@
             <h1 class="logo">SPATCH.</h1>
           </div>
 
-          <div class="toolbar-group play-group">
-            <button id="btn-share" class="action-btn" title="Share">
-              <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-user-share" /></svg>
-            </button>
-          </div>
-
           <div class="separator"></div>
 
           <div class="toolbar-group actions-group">
@@ -70,14 +64,6 @@
           </div>
         </div>
 
-        <div id="share-menu" class="toolbar-row toolbar-expansion hidden">
-          <button class="action-btn" data-action="share" title="Copy link">
-            <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-link" /></svg>
-          </button>
-          <button class="action-btn" data-action="embed" title="Copy embed code">
-            <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-code" /></svg>
-          </button>
-        </div>
         <div id="harmonize-panel" class="toolbar-row toolbar-expansion hidden"></div>
       </header>
 
@@ -88,7 +74,10 @@
         </div>
         <button id="btn-play" class="stage-play-btn" title="Play">
           <svg class="play-icon" viewBox="0 0 24 24">
-            <use href="tabler-sprite.svg#tabler-player-play" />
+            <path
+              d="M6 4.75a1.25 1.25 0 0 1 1.87-1.08l12.5 7.25a1.25 1.25 0 0 1 0 2.16l-12.5 7.25A1.25 1.25 0 0 1 6 19.25V4.75z"
+              fill="currentColor"
+            />
           </svg>
           <span class="play-mode-badge hidden"></span>
           <svg class="play-ring" viewBox="0 0 68 68">
@@ -131,6 +120,9 @@
             </ul>
             <p class="credits-tagline">Make your own spatch, why don't you</p>
           </div>
+        </div>
+        <div id="landscape-block" class="landscape-block hidden" aria-hidden="true">
+          <p class="landscape-message">Rotate to portrait to edit</p>
         </div>
       </main>
 

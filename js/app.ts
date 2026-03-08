@@ -7,7 +7,6 @@ import { Toolbar } from './toolbar/toolbar.ts';
 import { AudioEngine } from './audio/engine.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, saveToURL } from './serialize.ts';
-import { bindShareMenu } from './share.ts';
 import { SCENES, applyScene, getScene, initStageLayers, randomSceneIndex } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
 import { Vibe, setVibe } from './audio/vibe.ts';
@@ -84,13 +83,20 @@ qel('#btn-stage').addEventListener('click', () => {
 
 // React to scene changes (and apply the initial scene on first run):
 // update background crossfade + vibe + prefetch.
-effect(() => {
-  const sceneIndex = store.data.scene;
-  const sceneDef = getScene(sceneIndex);
-  applyScene(appEl, sceneIndex);
-  setVibe(new Vibe(sceneDef.vibe));
-  sceneReady = prefetchScene(sceneDef);
-});
+// Guard: store.data is a single signal, so this effect fires on ANY state
+// change. Track previous scene index to skip when unchanged.
+{
+  let prevScene = -1;
+  effect(() => {
+    const sceneIndex = store.data.scene;
+    if (sceneIndex === prevScene) return;
+    prevScene = sceneIndex;
+    const sceneDef = getScene(sceneIndex);
+    applyScene(appEl, sceneIndex);
+    setVibe(new Vibe(sceneDef.vibe));
+    sceneReady = prefetchScene(sceneDef);
+  });
+}
 
 // ---- DOM queries ----
 
@@ -212,11 +218,6 @@ toolbar.onDuplicate = () => {
   }
 };
 
-// ---- Share menu (hoisted for keyboard handler) ----
-
-const shareBtn = qel('#btn-share');
-const shareMenu = qel('#share-menu');
-
 // ---- Keyboard shortcuts ----
 
 bindKeyboardShortcuts({
@@ -226,7 +227,6 @@ bindKeyboardShortcuts({
     needsRender = true;
   },
   selection,
-  shareMenu,
   store,
   toolbar,
   undo,
@@ -234,6 +234,7 @@ bindKeyboardShortcuts({
 
 playback.bindEvents();
 splash.bindEvents();
+splash.bindLandscapeLock();
 
 // ---- Auto-save to URL (debounced) ----
 
@@ -245,13 +246,11 @@ function debouncedSave(): void {
   saveTimeout = setTimeout(() => {
     if (store.data.voices.length > 0) {
       saveToURL(store.data);
+    } else if (location.hash) {
+      history.replaceState(null, '', location.pathname + location.search);
     }
   }, 1000);
 }
-
-// ---- Share menu ----
-
-bindShareMenu({ shareBtn, shareMenu, store });
 
 // ---- Credits overlay ----
 

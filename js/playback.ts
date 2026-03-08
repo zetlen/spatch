@@ -296,7 +296,7 @@ export class PlaybackController {
 
   // ---- Private helpers ----
 
-  // Icon refs for sprite scanner: #tabler-repeat #tabler-lock
+  // Icon refs for sprite scanner: #tabler-repeat #tabler-lock-filled
   private createZoneElements(): void {
     // Floating zone icon — follows pointer, switches between loop/latch icons
     const zoneIcon = document.createElement('div');
@@ -341,7 +341,11 @@ export class PlaybackController {
 
     // Mode badge: show lock/repeat icon inside the stop button
     if (this.playState === 'latched') {
-      const svg = svgEl('svg', { viewBox: '0 0 24 24' }, svgEl('use', { href: '#tabler-lock' }));
+      const svg = svgEl(
+        'svg',
+        { viewBox: '0 0 24 24' },
+        svgEl('use', { href: '#tabler-lock-filled' }),
+      );
       this.modeBadge.replaceChildren(svg);
       this.modeBadge.classList.remove('hidden');
     } else if (this.playState === 'looping') {
@@ -353,10 +357,18 @@ export class PlaybackController {
     }
   }
 
-  // Icon references for sprite scanner: #tabler-player-stop #tabler-player-play
+  // Icon ref for sprite scanner: #tabler-player-stop-filled
   private setPlayIcon(playing: boolean): void {
-    const symbol = playing ? 'tabler-player-stop' : 'tabler-player-play';
-    const svg = svgEl('svg', { viewBox: '0 0 24 24' }, svgEl('use', { href: `#${symbol}` }));
+    const svg = svgEl('svg', { viewBox: '0 0 24 24' });
+    if (playing) {
+      svg.appendChild(svgEl('use', { href: '#tabler-player-stop-filled' }));
+    } else {
+      const path = svgEl('path', {
+        d: 'M6 4.75a1.25 1.25 0 0 1 1.87-1.08l12.5 7.25a1.25 1.25 0 0 1 0 2.16l-12.5 7.25A1.25 1.25 0 0 1 6 19.25V4.75z',
+        fill: 'currentColor',
+      });
+      svg.appendChild(path);
+    }
     svg.classList.add('play-icon');
     this.playBtn.querySelector('.play-icon')!.replaceWith(svg);
   }
@@ -415,11 +427,8 @@ export class PlaybackController {
     this.overlayInnerRadius = innerR;
     this.overlayLatchStart = latchStart;
 
-    // Initialize floating zone icon (hidden until loop/latch zone entered)
-    const iconSize = r.width;
+    // Reset floating zone icon (hidden until loop/latch zone entered)
     if (this.pointerZoneIcon) {
-      this.pointerZoneIcon.style.width = `${iconSize}px`;
-      this.pointerZoneIcon.style.height = `${iconSize}px`;
       this.pointerZoneIcon.style.opacity = '0';
     }
 
@@ -486,23 +495,20 @@ export class PlaybackController {
     if (this.pointerZoneIcon) {
       if (zone === 'loop' || zone === 'latch') {
         // Swap icon based on zone
-        const href = zone === 'latch' ? '#tabler-lock' : '#tabler-repeat';
+        const href = zone === 'latch' ? '#tabler-lock-filled' : '#tabler-repeat';
         const use = this.pointerZoneIcon.querySelector('use');
         if (use && use.getAttribute('href') !== href) {
           use.setAttribute('href', href);
         }
 
-        const half = this.pointerZoneIcon.offsetWidth / 2;
         const angle = Math.atan2(clientY - this.overlayCenterY, clientX - this.overlayCenterX);
-        const ix = this.overlayCenterX + Math.cos(angle) * dist - half;
-        const iy = this.overlayCenterY + Math.sin(angle) * dist - half;
+        const ix = this.overlayCenterX + Math.cos(angle) * dist;
+        const iy = this.overlayCenterY + Math.sin(angle) * dist;
         this.pointerZoneIcon.style.left = `${ix}px`;
         this.pointerZoneIcon.style.top = `${iy}px`;
         this.pointerZoneIcon.style.opacity = '1';
-        this.pointerZoneIcon.classList.toggle('active', true);
       } else {
         this.pointerZoneIcon.style.opacity = '0';
-        this.pointerZoneIcon.classList.toggle('active', false);
       }
     }
 

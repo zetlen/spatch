@@ -26,10 +26,8 @@ export function bindKeyboardShortcuts(deps: {
   playback: PlaybackController;
   requestRender: () => void;
   isSplashActive: () => boolean;
-  shareMenu: HTMLElement;
 }): void {
-  const { store, undo, selection, toolbar, playback, requestRender, isSplashActive, shareMenu } =
-    deps;
+  const { store, undo, selection, toolbar, playback, requestRender, isSplashActive } = deps;
 
   let clipboard: Voice | undefined;
 
@@ -97,7 +95,6 @@ export function bindKeyboardShortcuts(deps: {
       selection.clear();
       toolbar.currentTool = 'select';
       toolbar._updateToolActive();
-      shareMenu.classList.add('hidden');
       requestRender();
     }
     if (e.key === 'v' && !mod) {

@@ -211,8 +211,10 @@ body {
 #stage {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   padding: 12px;
   overflow: hidden;
   background: transparent;
@@ -220,13 +222,7 @@ body {
   z-index: 1;
   isolation: isolate;
   container-type: size;
-  --play-btn-size: clamp(62px, 13vmin, 84px);
-}
-
-@media (orientation: portrait) {
-  #stage {
-    padding-bottom: calc(var(--play-btn-size) + 24px);
-  }
+  --play-btn-size: clamp(86px, 18vmin, 118px);
 }
 
 #canvas-wrap {
@@ -234,7 +230,7 @@ body {
   overflow: hidden;
   touch-action: none;
   z-index: 1;
-  width: min(100cqh - 48px, 100cqw - 48px, 800px); /* extra padding for ADSR corner drag hitbox */
+  width: min(100cqh - var(--play-btn-size) - 60px, 100cqw - 48px, 800px);
   aspect-ratio: 1;
   visibility: hidden;
   box-shadow:
@@ -363,13 +359,43 @@ body.is-editing .credits-btn:hover {
   opacity: 0.8;
 }
 
+/* ---- Landscape block overlay ---- */
+
+.landscape-block {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.landscape-message {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+
+/* Landscape lock: fully hide toolbars so tile fills viewport */
+body.landscape-locked #toolbar-top,
+body.landscape-locked #toolbar-bottom {
+  display: none !important;
+}
+
+body.landscape-locked #stage {
+  padding: 12px;
+  gap: 0;
+}
+
 /* ---- Stage play button ---- */
 
 .stage-play-btn {
-  position: absolute;
   z-index: 2;
   width: var(--play-btn-size);
   height: var(--play-btn-size);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -383,18 +409,16 @@ body.is-editing .credits-btn:hover {
   pointer-events: none;
   transition: opacity 0.2s;
   touch-action: none;
-  /* Portrait default: centered below tile, above expansion panel clearance */
-  left: 50%;
-  bottom: max(60px, calc((100cqh - min(100cqh - 48px, 100cqw - 48px, 800px)) / 4 + 68px));
-  transform: translateX(-50%);
 }
 
 @media (orientation: landscape) {
+  #canvas-wrap {
+    width: min(100cqh - 48px, 100cqw - 48px, 800px);
+  }
   .stage-play-btn {
-    /* Landscape: bottom-left corner */
+    position: absolute;
     left: 12px;
     bottom: 68px;
-    transform: none;
   }
 }
 
@@ -409,22 +433,21 @@ body.is-editing .credits-btn:hover {
   height: 70%;
 }
 
-/* Mode badge (lock/repeat icon shown overlapping stop icon, bottom-right) */
+/* Mode badge (lock/repeat icon centered over stop icon as contrasting cutout) */
 .play-mode-badge {
   position: absolute;
-  bottom: 2%;
-  right: 2%;
+  inset: 0;
   z-index: 2;
-  width: 28%;
-  height: 28%;
-  color: #fff;
-  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
   pointer-events: none;
 }
 
 .play-mode-badge svg {
-  width: 100%;
-  height: 100%;
+  width: 28%;
+  height: 28%;
 }
 
 /* Loop progress ring — viewBox 68x68, r=31, circumference = 194.78 */
@@ -478,24 +501,22 @@ body.is-editing .credits-btn:hover {
   opacity: 1;
 }
 
-/* Zone icons — positioned by JS, sized to match play button */
+/* Zone icons — positioned by JS, large viewport-relative */
 .radial-zone-icon {
   position: absolute;
+  width: 300px;
+  height: 300px;
+  translate: -50% -50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: rgba(255, 255, 255, 0.4);
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.4));
-  transition: color 0.15s;
 }
 
 .radial-zone-icon svg {
   width: 60%;
   height: 60%;
-}
-
-.radial-zone-icon.active {
-  color: rgba(255, 255, 255, 0.85);
 }
 
 /* ---- Dropdown items (inside toolbar-expansion rows) ---- */

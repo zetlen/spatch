@@ -23,6 +23,9 @@ export class SplashController {
   private _isActive: boolean;
   private splashDownTime = 0;
   private splashPointerDown = false;
+  private readonly landscapeMql: MediaQueryList;
+  private readonly handleLandscapeChange: (e: MediaQueryListEvent | MediaQueryList) => void;
+  private landscapeBlock: HTMLElement | undefined;
 
   // Bound handlers for cleanup
   private readonly handleDown: (e: PointerEvent) => void;
@@ -43,6 +46,10 @@ export class SplashController {
     // Pre-bind handlers so we can remove them later
     this.handleDown = (e: PointerEvent) => this.splashDown(e);
     this.handleUp = () => this.splashUp();
+    this.landscapeMql = matchMedia('(orientation: landscape) and (max-height: 500px)');
+    this.handleLandscapeChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      this.onLandscapeChange(e.matches);
+    };
   }
 
   /** Whether the splash screen is currently displayed. */
@@ -68,9 +75,18 @@ export class SplashController {
     this.stage.addEventListener('click', this.handleUp);
   }
 
+  /** Start monitoring for cramped landscape orientation. */
+  bindLandscapeLock(): void {
+    this.landscapeBlock = document.getElementById('landscape-block') ?? undefined;
+    this.landscapeMql.addEventListener('change', this.handleLandscapeChange as EventListener);
+    // Check initial state
+    this.handleLandscapeChange(this.landscapeMql);
+  }
+
   /** Remove all splash event listeners. */
   dispose(): void {
     this.removeSplashListeners();
+    this.landscapeMql.removeEventListener('change', this.handleLandscapeChange as EventListener);
   }
 
   // ---- Private ----
@@ -85,6 +101,8 @@ export class SplashController {
 
   private splashUp(): void {
     if (!this.splashPointerDown) return;
+    // Don't dismiss splash in cramped landscape
+    if (this.landscapeMql.matches) return;
     this.splashPointerDown = false;
     this.removeSplashListeners();
 
@@ -99,6 +117,31 @@ export class SplashController {
 
     // Audio sustains for remainder, then toolbars fade in after release.
     this.splashReveal(remaining, playReady);
+  }
+
+  private onLandscapeChange(isCrampedLandscape: boolean): void {
+    if (isCrampedLandscape) {
+      // Landscape lock: hide toolbars entirely (not just opacity) so tile fills viewport
+      this._isActive = true;
+      document.body.classList.add('landscape-locked');
+      document.body.classList.remove('is-editing');
+      if (this.landscapeBlock) {
+        this.landscapeBlock.classList.remove('hidden');
+        this.landscapeBlock.setAttribute('aria-hidden', 'false');
+      }
+    } else {
+      document.body.classList.remove('landscape-locked');
+      if (this.landscapeBlock) {
+        this.landscapeBlock.classList.add('hidden');
+        this.landscapeBlock.setAttribute('aria-hidden', 'true');
+      }
+      // If user already dismissed splash before rotating, restore editing
+      if (localStorage.getItem(this.splashKey)) {
+        this._isActive = false;
+        document.body.classList.add('is-editing');
+      }
+      // Otherwise, keep splash active — normal dismiss flow applies
+    }
   }
 
   private splashReveal(delayAudioRelease: number, playReady: Promise<void>): void {
