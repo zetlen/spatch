@@ -12,78 +12,103 @@
         padding: 0;
         box-sizing: border-box;
       }
+      html,
       body {
-        background: #e8e4e0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-        font-family: 'Imbue', serif;
-      }
-      #wrap {
-        position: relative;
-        width: min(90vw, 90vh, 600px);
-        height: min(90vw, 90vh, 600px);
+        width: 100%;
+        height: 100%;
         overflow: hidden;
-        visibility: hidden;
-        box-shadow:
-          0 8px 32px rgba(0, 0, 0, 0.25),
-          0 2px 8px rgba(0, 0, 0, 0.2);
+        background: transparent;
       }
-      #wrap.ready {
+      #scene-bg {
+        position: fixed;
+        inset: 0;
+        background-size: cover;
+        background-position: center;
+      }
+      #embed {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        visibility: hidden;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        touch-action: none;
+      }
+      #embed.ready {
         visibility: visible;
       }
       #tile {
         position: absolute;
-        inset: 0;
-        background: linear-gradient(135deg, #404040 0%, #222222 100%);
+        inset: 8px;
+        background: linear-gradient(135deg, #404040d1 0%, #222222e2 100%);
+        border: 1px solid rgba(255, 255, 255, 0.12);
         box-shadow:
-          inset 4px 4px 12px rgba(255, 255, 255, 0.18),
-          inset -4px -4px 12px rgba(0, 0, 0, 0.4);
+          inset 0 1px 0 rgba(255, 255, 255, 0.1),
+          0 20px 40px rgba(0, 0, 0, 0.4);
+        overflow: hidden;
+        transition: transform 0.12s ease-out;
       }
       svg#c {
         position: absolute;
-        inset: 10px;
+        inset: 18px;
         display: block;
-        width: calc(100% - 20px);
-        height: calc(100% - 20px);
+        width: calc(100% - 36px);
+        height: calc(100% - 36px);
         background: transparent;
         overflow: hidden;
+        transition: transform 0.12s ease-out;
       }
-      #play-btn {
+      #embed.pressing #tile,
+      #embed.pressing svg#c {
+        transform: scale(0.97);
+      }
+      /* Gleam animation */
+      #tile::after {
+        content: '';
         position: absolute;
-        bottom: 12px;
-        right: 12px;
-        background: #d5d0cb;
-        border-width: 1px;
-        border-style: solid;
-        border-color: #f0ece8 #a8a39d #a8a39d #f0ece8;
-        color: #2a2a2a;
-        width: 44px;
-        height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 2px;
-        cursor: pointer;
-        transition: background 0.15s;
+        inset: 0;
+        z-index: 3;
+        pointer-events: none;
+        background: linear-gradient(
+          115deg,
+          transparent 0%,
+          transparent 40%,
+          rgba(255, 255, 255, 0.15) 50%,
+          transparent 60%,
+          transparent 100%
+        );
+        transform: translateX(-120%);
+        opacity: 0;
       }
-      #play-btn:hover {
-        background: #ccc7c1;
+      #embed.gleam #tile::after {
+        animation: gleam 0.8s ease-in-out forwards;
       }
-      #play-btn.playing {
-        background: #c5c0ba;
-        border-color: #a8a39d #f0ece8 #f0ece8 #a8a39d;
+      @keyframes gleam {
+        0% {
+          transform: translateX(-120%);
+          opacity: 1;
+        }
+        100% {
+          transform: translateX(120%);
+          opacity: 1;
+        }
+      }
+      .error-msg {
+        color: #999;
+        text-align: center;
+        padding: 2em;
+        font-family: sans-serif;
+        font-size: 14px;
       }
     </style>
   </head>
   <body>
-    <div id="wrap">
+    <div id="scene-bg"></div>
+    <div id="embed">
       <div id="tile"></div>
       <svg id="c" viewBox="0 0 1 1" preserveAspectRatio="xMidYMid meet"></svg>
-      <button id="play-btn" title="Play">
-        <svg width="20" height="20"><use href="tabler-sprite.svg#tabler-player-play-filled" /></svg>
-      </button>
     </div>
     <script type="module" src="js/embed-entry.ts"></script>
   </body>

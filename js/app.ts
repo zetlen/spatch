@@ -17,6 +17,7 @@ import { CanvasInteractionController } from './canvas/interaction.ts';
 import { bindKeyboardShortcuts } from './keyboard.ts';
 import { SplashController } from './splash.ts';
 import { initCredits } from './credits.ts';
+import { initShare } from './share.ts';
 import { randomize } from './harmony.ts';
 import { createHarmonizePanel } from './toolbar/harmonize-panel.ts';
 
@@ -254,7 +255,15 @@ function debouncedSave(): void {
 
 // ---- Credits overlay ----
 
-initCredits(audio, store);
+const credits = initCredits(audio, store);
+
+// ---- Share overlay ----
+
+const share = initShare(audio, store);
+
+// Cross-wire: each overlay dismisses the other when opening
+credits.onShow = () => share.hide();
+share.onShow = () => credits.hide();
 
 // ---- Pause audio when tab is hidden ----
 

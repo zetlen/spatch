@@ -8,7 +8,12 @@ import { qel } from './dom.ts';
 import { getScene } from './scenes/index.ts';
 import type { SigilStore } from './state.ts';
 
-export function initCredits(audio: AudioEngine, store: SigilStore): void {
+interface OverlayHandle {
+  hide(): void;
+  onShow: (() => void) | null;
+}
+
+export function initCredits(audio: AudioEngine, store: SigilStore): OverlayHandle {
   const btn = qel('#btn-credits');
   const overlay = qel('#credits-overlay');
 
@@ -29,13 +34,17 @@ export function initCredits(audio: AudioEngine, store: SigilStore): void {
     }
   });
 
+  const handle: OverlayHandle = { hide, onShow: null };
+
   function show(): void {
+    handle.onShow?.();
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
     audio.muffle();
   }
 
   function hide(): void {
+    if (overlay.classList.contains('hidden')) return;
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
     audio.unmuffle();
@@ -55,4 +64,12 @@ export function initCredits(audio: AudioEngine, store: SigilStore): void {
     }
     hide();
   });
+
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && !overlay.classList.contains('hidden')) {
+      hide();
+    }
+  });
+
+  return handle;
 }

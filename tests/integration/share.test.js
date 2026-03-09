@@ -1,0 +1,88 @@
+import { expect, test } from '@playwright/test';
+import path from 'path';
+
+test.describe('Share overlay', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
+  });
+
+  test('share button opens overlay with link and embed code', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#sigil-canvas');
+
+    // Place a shape so there's something to share
+    await page.click('[data-tool="circle"]');
+    const canvas = page.locator('#sigil-canvas');
+    const box = await canvas.boundingBox();
+    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+
+    // Wait for URL hash to be set
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
+
+    // Click share button
+    await page.click('#btn-share');
+
+    // Overlay should be visible
+    const overlay = page.locator('#share-overlay');
+    await expect(overlay).toBeVisible();
+
+    // Link code should contain origin URL with hash
+    const linkCode = page.locator('#share-link');
+    const linkText = await linkCode.textContent();
+    expect(linkText).toContain('/#');
+
+    // Embed code should contain iframe
+    const embedCode = page.locator('#share-embed-code');
+    const embedText = await embedCode.textContent();
+    expect(embedText).toContain('<iframe');
+    expect(embedText).toContain('embed.html');
+  });
+
+  test('size slider updates embed snippet', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#sigil-canvas');
+
+    await page.click('[data-tool="circle"]');
+    const canvas = page.locator('#sigil-canvas');
+    const box = await canvas.boundingBox();
+    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
+
+    await page.click('#btn-share');
+
+    // Change size slider
+    await page.fill('#share-size', '450');
+    await page.dispatchEvent('#share-size', 'input');
+
+    const embedText = await page.locator('#share-embed-code').textContent();
+    expect(embedText).toContain('width="450"');
+    expect(embedText).toContain('height="450"');
+  });
+
+  test('clicking overlay background dismisses it', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#sigil-canvas');
+
+    await page.click('[data-tool="circle"]');
+    const canvas = page.locator('#sigil-canvas');
+    const box = await canvas.boundingBox();
+    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+
+    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+      timeout: 3000,
+    });
+
+    await page.click('#btn-share');
+    const overlay = page.locator('#share-overlay');
+    await expect(overlay).toBeVisible();
+
+    // Click overlay background (top-left corner, outside content)
+    await overlay.click({ position: { x: 10, y: 10 } });
+    await expect(overlay).toBeHidden();
+  });
+});

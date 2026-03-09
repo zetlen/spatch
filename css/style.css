@@ -359,6 +359,155 @@ body.is-editing .credits-btn:hover {
   opacity: 0.8;
 }
 
+/* ---- Share button ---- */
+
+.share-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+body.is-editing .share-btn {
+  opacity: 0.5;
+  pointer-events: auto;
+}
+
+body.is-editing .share-btn:hover {
+  opacity: 0.8;
+}
+
+/* ---- Share overlay ---- */
+
+.share-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.share-overlay.hidden {
+  display: none !important;
+}
+
+.share-content {
+  min-width: 320px;
+  max-width: 440px;
+  padding: 24px;
+  color: #fff;
+  font-family: 'Imbue', serif;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.share-section {
+  margin-bottom: 20px;
+}
+
+.share-section:last-child {
+  margin-bottom: 0;
+}
+
+.share-label {
+  display: block;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  margin-bottom: 8px;
+}
+
+.share-copy-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.share-code {
+  flex: 1;
+  display: block;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-code-multi {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.share-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.share-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.share-control-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.share-control-label {
+  min-width: 32px;
+}
+
+.share-control-row input[type='range'] {
+  flex: 1;
+  accent-color: #fff;
+}
+
+.share-control-value {
+  min-width: 28px;
+  text-align: right;
+  font-family: monospace;
+  font-size: 12px;
+}
+
 /* ---- Landscape block overlay ---- */
 
 .landscape-block {
@@ -401,7 +550,7 @@ body.landscape-locked #stage {
   justify-content: center;
   border: none;
   border-radius: 50%;
-  background: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 60%);
   color: #fff;
   cursor: pointer;
   filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));

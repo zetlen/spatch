@@ -1,101 +1,159 @@
-// Embed-entry.ts — entry point for the embed viewer
+// Embed-entry.ts — Minimal press-to-play embed viewer
+
 import { render } from './canvas/render.ts';
 import { AudioEngine } from './audio/engine.ts';
 import { deserializeState } from './serialize.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
-import { qel, svgEl } from './dom.ts';
+import { qel } from './dom.ts';
 import { Vibe, setVibe } from './audio/vibe.ts';
 import { getScene } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
+import type { SigilData } from './types.ts';
+
+const MIN_PLAY_MS = 2000;
 
 const hash = globalThis.location.hash.slice(1);
 if (!hash) {
-  // Static content only — no user input involved
-  document.body.innerHTML =
-    '<p style="color:#2a2a2a;text-align:center;padding:2em;">No sigil data found.</p>';
+  showError('No sigil data found.');
 } else {
   const state = deserializeState(hash);
   if (!state) {
-    // Static content only — no user input involved
-    document.body.innerHTML =
-      '<p style="color:#2a2a2a;text-align:center;padding:2em;">Invalid sigil data.</p>';
+    showError('Invalid sigil data.');
   } else {
-    const sigil = state; // Narrow for closures
-
-    // Apply scene vibe and start prefetching assets
-    const sceneDef = getScene(sigil.scene);
-    setVibe(new Vibe(sceneDef?.vibe));
-    const sceneReady = prefetchScene(sceneDef);
-
-    const svgRoot = qel<SVGSVGElement>('#c');
-    const frame = qel('#tile');
-    const audio = new AudioEngine();
-
-    // Pre-warm AudioContext on first user gesture. iOS Safari only allows
-    // Audio from touchend/click/keydown — NOT pointerdown/mousedown.
-    {
-      const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
-      function onFirstGesture(): void {
-        audio.warmUp();
-        for (const evt of warmUpEvents) {
-          document.removeEventListener(evt, onFirstGesture);
-        }
-      }
-      for (const evt of warmUpEvents) {
-        document.addEventListener(evt, onFirstGesture);
-      }
-    }
-
-    // Apply ADSR border radius to frame (static in embed — only needs to run once)
-    updateCanvasBorderRadius(qel('#wrap'), sigil.envelope);
-    updateCanvasBorderRadius(frame, sigil.envelope);
-    updateCanvasBorderRadius(svgRoot, sigil.envelope, 10);
-
-    // Render loop: continuously re-render so playback glow effects animate
-    function renderLoop(): void {
-      render(svgRoot, sigil, undefined);
-      requestAnimationFrame(renderLoop);
-    }
-    renderLoop();
-
-    // Reveal after first render + scene assets loaded (no FOUC)
-    sceneReady.then(() => {
-      document.body.style.backgroundImage = `url(${sceneDef.stageBackground})`;
-      document.body.style.backgroundSize = 'cover';
-      document.body.style.backgroundPosition = 'center';
-      qel('#wrap').classList.add('ready');
-    });
-
-    // Play button: click-to-toggle works on both mouse and touch
-    const btn = qel('#play-btn');
-
-    function setEmbedPlayIcon(playing: boolean): void {
-      const symbol = playing ? 'tabler-player-stop-filled' : 'tabler-player-play-filled';
-      btn.replaceChildren(
-        svgEl(
-          'svg',
-          { width: 20, height: 20 },
-          svgEl('use', { href: `tabler-sprite.svg#${symbol}` }),
-        ),
-      );
-    }
-
-    btn.addEventListener('click', async () => {
-      if (audio.isPlaying) {
-        audio.release(sigil.envelope);
-        btn.classList.remove('playing');
-        setEmbedPlayIcon(false);
-      } else {
-        if (sigil.voices.length === 0) {
-          return;
-        }
-        audio.warmUp(); // Synchronous — must happen before any await (iOS Safari)
-        await sceneReady;
-        const irBuffer = audio.audioCtx ? await loadSceneIR(audio.audioCtx, sceneDef) : undefined;
-        await audio.play(sigil, sigil.envelope, { irBuffer });
-        btn.classList.add('playing');
-        setEmbedPlayIcon(true);
-      }
-    });
+    boot(state);
   }
+}
+
+function showError(msg: string): void {
+  const p = document.createElement('p');
+  p.className = 'error-msg';
+  p.textContent = msg;
+  document.body.replaceChildren(p);
+}
+
+function boot(sigil: SigilData): void {
+  // Scene + vibe
+  const sceneDef = getScene(sigil.scene);
+  setVibe(new Vibe(sceneDef.vibe));
+  const sceneReady = prefetchScene(sceneDef);
+
+  // DOM
+  const embed = qel('#embed');
+  const sceneBg = qel('#scene-bg');
+  const tile = qel('#tile');
+  const svgRoot = qel<SVGSVGElement>('#c');
+
+  // Audio
+  const audio = new AudioEngine();
+
+  // Pre-warm AudioContext on first qualifying gesture
+  {
+    const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
+    function onFirstGesture(): void {
+      audio.warmUp();
+      for (const evt of warmUpEvents) {
+        document.removeEventListener(evt, onFirstGesture);
+      }
+    }
+    for (const evt of warmUpEvents) {
+      document.addEventListener(evt, onFirstGesture);
+    }
+  }
+
+  // ADSR corner radii (static — only set once, not on embed so scene bg shows through corners)
+  updateCanvasBorderRadius(tile, sigil.envelope);
+  updateCanvasBorderRadius(svgRoot, sigil.envelope, 10);
+
+  // Initial render (one-shot — state never changes in embed)
+  render(svgRoot, sigil, undefined);
+
+  // Reveal after scene assets loaded
+  sceneReady
+    .then(() => {
+      sceneBg.style.backgroundImage = `url(${sceneDef.stageBackground})`;
+      embed.classList.add('ready');
+
+      // Gleam on load
+      requestAnimationFrame(() => {
+        embed.classList.add('gleam');
+      });
+    })
+    .catch(() => {
+      embed.classList.add('ready');
+    });
+
+  // ---- Press-to-play interaction ----
+
+  let playing = false;
+  let playStartTime = 0;
+  let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function startPlay(): Promise<void> {
+    if (releaseTimer !== undefined) {
+      clearTimeout(releaseTimer);
+      releaseTimer = undefined;
+      return;
+    }
+    if (playing) return;
+    if (sigil.voices.length === 0) return;
+
+    playing = true;
+    playStartTime = Date.now();
+    embed.classList.add('pressing');
+
+    audio.warmUp();
+    try {
+      await sceneReady;
+      const irBuffer = audio.audioCtx ? await loadSceneIR(audio.audioCtx, sceneDef) : undefined;
+      await audio.play(sigil, sigil.envelope, { irBuffer });
+    } catch {
+      doRelease();
+    }
+  }
+
+  function stopPlay(): void {
+    if (!playing) return;
+
+    const elapsed = Date.now() - playStartTime;
+    const remaining = MIN_PLAY_MS - elapsed;
+
+    if (remaining > 0) {
+      // Hold for minimum duration, then release
+      releaseTimer = setTimeout(() => {
+        doRelease();
+      }, remaining);
+    } else {
+      doRelease();
+    }
+  }
+
+  function doRelease(): void {
+    embed.classList.remove('pressing');
+    audio.release(sigil.envelope);
+    playing = false;
+    releaseTimer = undefined;
+  }
+
+  // Pointer events for press-and-hold
+  embed.addEventListener('pointerdown', (e: PointerEvent) => {
+    e.preventDefault();
+    startPlay();
+  });
+
+  embed.addEventListener('pointerup', () => {
+    stopPlay();
+  });
+
+  embed.addEventListener('pointerleave', () => {
+    stopPlay();
+  });
+
+  embed.addEventListener('pointercancel', () => {
+    stopPlay();
+  });
+
+  // Prevent context menu on long-press (mobile)
+  embed.addEventListener('contextmenu', (e: Event) => {
+    e.preventDefault();
+  });
 }
