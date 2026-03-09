@@ -98,8 +98,7 @@ js/
   envelope.ts        ADSR ↔ canvas corner radius conversion
   serialize.ts       Bespoke Base64 URL serialization (bitfield-packed, no keys)
 dist/                Build output (gitignored)
-docs/plans/              Design docs and implementation plans
-                         Convention: YYYY-MM-DD-{topic}-{design|plan}.md
+docs/CHRONICLE.md        High-level changelog of architecture and feature evolution
 tests/
   unit/*.test.js         Unit tests (bun test, plain JS)
   integration/*.test.js  Playwright integration tests
@@ -205,8 +204,8 @@ merely discouraged by convention. If you add a visual field, it must have an
 audio mapping. If you add an audio parameter, it must be visible in the SVG.
 No exceptions.
 
-See `docs/plans/2026-03-01-bijective-audio-visual-design.md` for the full
-design rationale and enumeration of past violations.
+See the "Bijective Audio-Visual Mapping" section in `docs/CHRONICLE.md` for
+design rationale.
 
 ## Key Concepts
 
