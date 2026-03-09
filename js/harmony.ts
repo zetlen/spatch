@@ -39,11 +39,13 @@ const SCALES: Scale[] = [
 // ---- Semitone ↔ Y coordinate conversion ----
 // The canvas maps 37 chromatic semitones (G2–G5) across Y 0–1.
 // Y=0 is top (high pitch, semitone 36), Y=1 is bottom (low pitch, semitone 0).
+// yToSemitone returns a float to preserve sub-semitone precision for
+// accurate nearest-note snapping (rounding would create false ties).
 
 const TOTAL_SEMITONES = 36;
 
 function yToSemitone(y: NormalizedCoord): number {
-  return Math.round((1 - y) * TOTAL_SEMITONES);
+  return (1 - y) * TOTAL_SEMITONES;
 }
 
 function semitoneToY(semitone: number): NormalizedCoord {
@@ -77,7 +79,7 @@ function nearestInScale(target: number, notes: number[]): number {
   let bestDist = Math.abs(target - best);
   for (const n of notes) {
     const dist = Math.abs(target - n);
-    if (dist < bestDist) {
+    if (dist < bestDist || (dist === bestDist && Math.random() < 0.5)) {
       best = n;
       bestDist = dist;
     }
