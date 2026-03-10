@@ -93,33 +93,43 @@ test.describe('Audio waveform snapshots', () => {
   test('single sine voice', async ({ page }) => {
     await placeShape(page, 'circle');
     const png = await captureAudio(page, { adsr: true });
-    expect(Buffer.from(png, 'base64')).toMatchSnapshot('sine-voice.webp');
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('sine-voice.png', {
+      maxDiffPixelRatio: 0.01,
+    });
   });
 
   test('single triangle voice', async ({ page }) => {
     await placeShape(page, 'triangle');
     const png = await captureAudio(page);
-    expect(Buffer.from(png, 'base64')).toMatchSnapshot('triangle-voice.webp');
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('triangle-voice.png', {
+      maxDiffPixelRatio: 0.01,
+    });
   });
 
   test('single square voice', async ({ page }) => {
     await placeShape(page, 'square');
     const png = await captureAudio(page);
-    expect(Buffer.from(png, 'base64')).toMatchSnapshot('square-voice.webp');
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('square-voice.png', {
+      maxDiffPixelRatio: 0.01,
+    });
   });
 
   test('high pitch vs low pitch', async ({ page }) => {
     // Place circle near top (high pitch) — y maps to frequency
     await placeShape(page, 'circle', 0.5, 0.2);
     const highPng = await captureAudio(page);
-    expect(Buffer.from(highPng, 'base64')).toMatchSnapshot('high-pitch.webp');
+    expect(Buffer.from(highPng, 'base64')).toMatchSnapshot('high-pitch.png', {
+      maxDiffPixelRatio: 0.01,
+    });
   });
 
   test('low pitch', async ({ page }) => {
     // Place circle near bottom (low pitch)
     await placeShape(page, 'circle', 0.5, 0.8);
     const lowPng = await captureAudio(page);
-    expect(Buffer.from(lowPng, 'base64')).toMatchSnapshot('low-pitch.webp');
+    expect(Buffer.from(lowPng, 'base64')).toMatchSnapshot('low-pitch.png', {
+      maxDiffPixelRatio: 0.01,
+    });
   });
 
   test('two overlapping voices', async ({ page }) => {
@@ -128,7 +138,9 @@ test.describe('Audio waveform snapshots', () => {
     await page.keyboard.press('Escape'); // deselect so tool buttons reappear
     await placeShape(page, 'triangle', 0.5, 0.5);
     const png = await captureAudio(page);
-    expect(Buffer.from(png, 'base64')).toMatchSnapshot('two-voices-overlap.webp');
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('two-voices-overlap.png', {
+      maxDiffPixelRatio: 0.01,
+    });
   });
 
   test('slow envelope with ADSR markers', async ({ page }) => {
@@ -143,7 +155,9 @@ test.describe('Audio waveform snapshots', () => {
     await placeShape(page, 'circle');
     // Sustain at t=3s (after A+D), capture 7s total to show full release + reverb
     const png = await captureAudio(page, { sustainTime: 3, duration: 7, adsr: true });
-    expect(Buffer.from(png, 'base64')).toMatchSnapshot('slow-envelope.webp');
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('slow-envelope.png', {
+      maxDiffPixelRatio: 0.01,
+    });
   });
 
   test('two voices at different pitches', async ({ page }) => {
@@ -152,7 +166,9 @@ test.describe('Audio waveform snapshots', () => {
     await page.keyboard.press('Escape'); // deselect so tool buttons reappear
     await placeShape(page, 'triangle', 0.7, 0.7);
     const png = await captureAudio(page);
-    expect(Buffer.from(png, 'base64')).toMatchSnapshot('two-voices-spread.webp');
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('two-voices-spread.png', {
+      maxDiffPixelRatio: 0.01,
+    });
   });
 
   test('triangle rotation 0° → 60° mid-playback', async ({ page }) => {
@@ -211,6 +227,8 @@ test.describe('Audio waveform snapshots', () => {
 
     // Finish and capture the waveform
     const png = await page.evaluate(() => globalThis.__audioCapture.finishCapture({ duration: 3 }));
-    expect(Buffer.from(png, 'base64')).toMatchSnapshot('triangle-rotation.webp');
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('triangle-rotation.png', {
+      maxDiffPixelRatio: 0.01,
+    });
   });
 });

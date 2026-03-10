@@ -300,7 +300,7 @@
       g.restore();
     }
 
-    return canvas.toDataURL('image/webp', 1.0).split(',')[1];
+    return canvas.toDataURL('image/png').split(',')[1];
   }
 
   // Expose capture API
