@@ -6,6 +6,7 @@
 import {
   BLEND_MODES,
   type Border,
+  type Fill,
   type NormalizedCoord,
   PATTERN_TYPES,
   type Voice,
@@ -147,6 +148,20 @@ export function harmonizeWithScale(
   return scale.name;
 }
 
+/** Create a random linear gradient fill with two distinct hues and a random angle. */
+function createRandomLinearFill(): Fill {
+  return {
+    mode: 'linear',
+    h: Math.floor(Math.random() * 360),
+    s: 70 + Math.floor(Math.random() * 20),
+    l: 45 + Math.floor(Math.random() * 15),
+    h2: Math.floor(Math.random() * 360),
+    s2: 70 + Math.floor(Math.random() * 20),
+    l2: 45 + Math.floor(Math.random() * 15),
+    gradAngle: Math.floor(Math.random() * 8) * 45,
+  };
+}
+
 /** Waveform types to pick from when randomizing. */
 const WAVEFORMS: WaveformType[] = ['sine', 'pulse', 'blend'];
 
@@ -188,6 +203,11 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
     const updates: Partial<Voice> = {
       size: normalizedCoord(0.1 + Math.random() * 0.35),
     };
+
+    // 35% chance of a gradient fill (diphthong sweep)
+    if (Math.random() < 0.35) {
+      updates.fill = createRandomLinearFill();
+    }
 
     // 75% chance of random rotation (drives timbre on pulse/blend)
     if (waveform !== 'sine' && Math.random() < 0.75) {

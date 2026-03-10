@@ -718,14 +718,10 @@ body.landscape-locked #stage {
   background-image: radial-gradient(var(--text-primary) 1px, transparent 1px);
   background-size: 4px 4px;
 }
-.pattern-preview-gradient {
-  background: repeating-linear-gradient(
-    90deg,
-    var(--text-primary) 0 2px,
-    transparent 2px 4px,
-    var(--text-primary) 4px 5px,
-    transparent 5px 9px
-  );
+.pattern-preview-plaid {
+  background:
+    repeating-linear-gradient(0deg, var(--text-primary) 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(90deg, var(--text-primary) 0 2px, transparent 2px 5px);
 }
 
 /* ---- Expansion row controls ---- */

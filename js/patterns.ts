@@ -22,6 +22,14 @@ export function ensurePatternDefs(defs: SVGDefsElement): void {
   );
   defs.append(checker);
 
+  // Plaid: cross-hatched horizontal + vertical stripes
+  const plaid = createPattern('pat-plaid', 0.01, 0.01);
+  plaid.append(
+    svgEl('rect', { width: 0.01, height: 0.003, fill: 'rgba(0,0,0,0.3)' }),
+    svgEl('rect', { width: 0.003, height: 0.01, fill: 'rgba(0,0,0,0.3)' }),
+  );
+  defs.append(plaid);
+
   // Noise: feTurbulence filter
   const noiseFilter = svgEl(
     'filter',
@@ -73,9 +81,8 @@ export function getPatternOverlay(pattern: PatternType): { attr: string; value: 
     case 'noise': {
       return { attr: 'filter', value: 'url(#pat-noise)' };
     }
-    case 'gradient': {
-      // Gradient overlay is handled per-voice with a dedicated gradient def
-      return { attr: 'fill', value: '' };
+    case 'plaid': {
+      return { attr: 'fill', value: 'url(#pat-plaid)' };
     }
   }
 }

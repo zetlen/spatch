@@ -18,7 +18,7 @@ export function createEffect(
     case 'noise': {
       return createFlanger(audioCtx);
     }
-    case 'gradient': {
+    case 'plaid': {
       return createPhaser(audioCtx);
     }
     default: {

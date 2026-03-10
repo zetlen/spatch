@@ -20,9 +20,9 @@ describe('getPatternOverlay', () => {
     expect(result.value).toBe('url(#pat-noise)');
   });
 
-  test('gradient returns fill with empty value (handled per-voice)', () => {
-    const result = getPatternOverlay('gradient');
+  test('plaid returns fill with pattern URL', () => {
+    const result = getPatternOverlay('plaid');
     expect(result.attr).toBe('fill');
-    expect(result.value).toBe('');
+    expect(result.value).toBe('url(#pat-plaid)');
   });
 });

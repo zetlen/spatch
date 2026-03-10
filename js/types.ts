@@ -39,7 +39,7 @@ export function cents(n: number): Cents {
 export type WaveformType = 'sine' | 'pulse' | 'blend';
 
 /** Pattern overlay type applied to a voice shape for visual texture and audio effect. */
-export const PATTERN_TYPES = ['stripes', 'checker', 'noise', 'gradient'] as const;
+export const PATTERN_TYPES = ['stripes', 'checker', 'noise', 'plaid'] as const;
 export type PatternType = (typeof PATTERN_TYPES)[number];
 
 /** CSS mix-blend-mode value that maps to an overlap-driven audio effect. */

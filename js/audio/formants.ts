@@ -3,7 +3,7 @@
 // No Web Audio API node creation — just parameter computation (except applyFormantFilter
 // which sets values on pre-existing BiquadFilterNodes).
 
-import type { Fill, WaveformType } from '../types.ts';
+import type { Fill, LinearFill, WaveformType } from '../types.ts';
 import { vibe } from './vibe.ts';
 
 // ---- Formant filter mapping ----
@@ -81,6 +81,21 @@ export function lightnessToCutoff(lightness: number): number {
 }
 
 /**
+ * Compute the formant Q (resonance) from saturation and waveform type.
+ *
+ * Sine waveforms cap Q lower than harmonics-rich waveforms because high Q on a
+ * single partial kills the signal when the fundamental is far from formant centers.
+ *
+ * @param saturation - HSL saturation value (0-100)
+ * @param waveform - The voice's waveform type (affects max Q)
+ * @returns Computed Q value scaled by vibe.formantQ
+ */
+export function computeFormantQ(saturation: number, waveform: WaveformType = 'pulse'): number {
+  const maxQ = waveform === 'sine' ? 4 : 8;
+  return (1 + (saturation / 100) * maxQ) * vibe.formantQ;
+}
+
+/**
  * Apply formant filter settings to pre-existing BiquadFilterNodes based on a Fill.
  *
  * Maps the fill's hue to formant frequencies (F1/F2 bandpass filters), saturation
@@ -118,10 +133,7 @@ export function applyFormantFilter(
   }
 
   const formants = hueToFormants(h);
-  // Sine has no harmonics -- high Q kills the signal when the fundamental
-  // is far from formant centers. Cap Q lower for sine (#82).
-  const maxQ = waveform === 'sine' ? 4 : 8;
-  const q = (1 + (s / 100) * maxQ) * vibe.formantQ;
+  const q = computeFormantQ(s, waveform);
 
   f1Node.frequency.value = formants.f1;
   f1Node.Q.value = q;
@@ -130,4 +142,112 @@ export function applyFormantFilter(
 
   // Lightness -> lowpass cutoff: dark = muffled, light = open
   brightnessNode.frequency.value = lightnessToCutoff(l);
+}
+
+// ---- Gradient-angle → sweep parameters ----
+//
+// For linear gradient fills, the gradient angle (always a multiple of 45°)
+// determines how the formant filter sweeps between the two colors over time.
+// `durationFrac` controls sweep speed (fraction of the decay phase) and
+// `exponent` shapes the easing curve (1 = linear, >1 = ease-in, <1 = ease-out).
+
+interface SweepParams {
+  durationFrac: number;
+  exponent: number;
+}
+
+const SWEEP_TABLE: SweepParams[] = [
+  { durationFrac: 1.0, exponent: 1 }, // 0°   LR     — slowest, linear
+  { durationFrac: 0.8, exponent: 2 }, // 45°  TL→BR  — medium, ease-in
+  { durationFrac: 0.6, exponent: 1 }, // 90°  TB     — moderate, linear
+  { durationFrac: 0.8, exponent: 0.5 }, // 135° TR→BL  — medium, ease-out
+  { durationFrac: 0.4, exponent: 1 }, // 180° RL     — fastest, linear
+  { durationFrac: 0.8, exponent: 2 }, // 225° BR→TL  — medium, ease-in
+  { durationFrac: 0.6, exponent: 1 }, // 270° BT     — moderate, linear
+  { durationFrac: 0.8, exponent: 0.5 }, // 315° BL→TR  — medium, ease-out
+];
+
+/**
+ * Look up sweep parameters for a gradient angle.
+ *
+ * The angle is snapped to the nearest multiple of 45° and wrapped to [0, 360).
+ * Returns the `durationFrac` (sweep speed as a fraction of the decay phase) and
+ * `exponent` (easing curve power) for that direction.
+ *
+ * @param angleDeg - Gradient angle in degrees (wraps and rounds to nearest 45°)
+ * @returns SweepParams for the closest cardinal/ordinal direction
+ */
+export function sweepParamsForAngle(angleDeg: number): SweepParams {
+  const a = ((angleDeg % 360) + 360) % 360;
+  const index = Math.round(a / 45) & 7;
+  return SWEEP_TABLE[index]!;
+}
+
+/**
+ * Build a monotonic sweep curve as a Float32Array.
+ *
+ * Each sample is `(i / (samples - 1)) ** exponent`, producing values in [0, 1].
+ * Exponent 1 = linear, >1 = ease-in (slow start), <1 = ease-out (fast start).
+ * Intended for use as a `setValueCurveAtTime` automation array.
+ *
+ * @param exponent - Power curve exponent (must be > 0)
+ * @param samples - Number of samples in the output array (must be >= 2)
+ * @returns Float32Array of length `samples` with values from 0 to 1
+ */
+export function buildSweepCurve(exponent: number, samples: number): Float32Array {
+  const curve = new Float32Array(samples);
+  for (let i = 0; i < samples; i++) {
+    curve[i] = (i / (samples - 1)) ** exponent;
+  }
+  return curve;
+}
+
+const SWEEP_CURVE_SAMPLES = 64;
+
+/** True when the gradient's anchor bit (bit 2) is set, meaning the sweep direction is reversed. */
+export function isSweepReversed(gradAngle: number): boolean {
+  return (Math.round(gradAngle / 45) & 4) !== 0;
+}
+
+export function scheduleFormantSweep(
+  f1Node: BiquadFilterNode,
+  f2Node: BiquadFilterNode,
+  brightnessNode: BiquadFilterNode,
+  fill: LinearFill,
+  waveform: WaveformType,
+  startTime: number,
+  decayDuration: number,
+): void {
+  const reversed = isSweepReversed(fill.gradAngle);
+  const startF = hueToFormants(reversed ? fill.h2 : fill.h);
+  const endF = hueToFormants(reversed ? fill.h : fill.h2);
+  const startQ = computeFormantQ(reversed ? fill.s2 : fill.s, waveform);
+  const endQ = computeFormantQ(reversed ? fill.s : fill.s2, waveform);
+  const startCutoff = lightnessToCutoff(reversed ? fill.l2 : fill.l);
+  const endCutoff = lightnessToCutoff(reversed ? fill.l : fill.l2);
+
+  const params = sweepParamsForAngle(fill.gradAngle);
+  const easing = buildSweepCurve(params.exponent, SWEEP_CURVE_SAMPLES);
+  const duration = Math.max(0.01, decayDuration * params.durationFrac);
+
+  const f1Freq = new Float32Array(SWEEP_CURVE_SAMPLES);
+  const f2Freq = new Float32Array(SWEEP_CURVE_SAMPLES);
+  const f1Q = new Float32Array(SWEEP_CURVE_SAMPLES);
+  const f2Q = new Float32Array(SWEEP_CURVE_SAMPLES);
+  const bright = new Float32Array(SWEEP_CURVE_SAMPLES);
+
+  for (let i = 0; i < SWEEP_CURVE_SAMPLES; i++) {
+    const t = easing[i]!;
+    f1Freq[i] = startF.f1 + (endF.f1 - startF.f1) * t;
+    f2Freq[i] = startF.f2 + (endF.f2 - startF.f2) * t;
+    f1Q[i] = startQ + (endQ - startQ) * t;
+    f2Q[i] = (startQ + (endQ - startQ) * t) * 0.7;
+    bright[i] = startCutoff + (endCutoff - startCutoff) * t;
+  }
+
+  f1Node.frequency.setValueCurveAtTime(f1Freq, startTime, duration);
+  f2Node.frequency.setValueCurveAtTime(f2Freq, startTime, duration);
+  f1Node.Q.setValueCurveAtTime(f1Q, startTime, duration);
+  f2Node.Q.setValueCurveAtTime(f2Q, startTime, duration);
+  brightnessNode.frequency.setValueCurveAtTime(bright, startTime, duration);
 }

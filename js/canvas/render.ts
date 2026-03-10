@@ -198,18 +198,12 @@ function applyFill(shapeEl: SVGElement, voice: Voice, defs: SVGDefsElement): voi
 
 // ---- Pattern overlays ----
 
-function applyPatternOverlay(group: SVGGElement, voice: Voice, defs: SVGDefsElement): void {
+function applyPatternOverlay(group: SVGGElement, voice: Voice): void {
   // Remove existing overlay elements (marked with data-overlay)
   const existing = group.querySelectorAll('[data-overlay]');
   for (const el of existing) {
     el.remove();
   }
-  // Remove old gradient overlay def
-  const oldGradOverlay = defs.querySelector(`#grad-overlay-${voice.id}`);
-  if (oldGradOverlay) {
-    oldGradOverlay.remove();
-  }
-
   if (!voice.effect) {
     return;
   }
@@ -226,40 +220,7 @@ function applyPatternOverlay(group: SVGGElement, voice: Voice, defs: SVGDefsElem
   }
   mainShape.removeAttribute('filter');
 
-  if (voice.effect === 'gradient') {
-    // Create a per-voice gradient overlay
-    const gradId = `grad-overlay-${voice.id}`;
-    const grad = svgEl('linearGradient');
-    grad.id = gradId;
-    grad.setAttribute('gradientUnits', 'objectBoundingBox');
-    grad.setAttribute('x1', '0');
-    grad.setAttribute('y1', '0');
-    grad.setAttribute('x2', '1');
-    grad.setAttribute('y2', '1');
-    const stop1 = svgEl('stop');
-    stop1.setAttribute('offset', '0%');
-    stop1.setAttribute('stop-color', 'white');
-    stop1.setAttribute('stop-opacity', '0.35');
-    const stop2 = svgEl('stop');
-    stop2.setAttribute('offset', '100%');
-    stop2.setAttribute('stop-color', 'black');
-    stop2.setAttribute('stop-opacity', '0.35');
-    grad.append(stop1);
-    grad.append(stop2);
-    defs.append(grad);
-
-    const overlay = createShapeElement(voice);
-    overlay.setAttribute('fill', `url(#${gradId})`);
-    overlay.dataset.overlay = 'true';
-    const transform = voiceTransform(voice);
-    if (transform) {
-      overlay.setAttribute('transform', transform);
-    }
-    group.append(overlay);
-    return;
-  }
-
-  // Stripes or checker: clone shape geometry with pattern fill
+  // Stripes, checker, or plaid: clone shape geometry with pattern fill
   const { value } = getPatternOverlay(voice.effect);
   if (!value) {
     return;
@@ -365,7 +326,7 @@ function reconcileVoice(group: SVGGElement, voice: Voice, defs: SVGDefsElement):
   }
 
   // Apply pattern overlay
-  applyPatternOverlay(group, voice, defs);
+  applyPatternOverlay(group, voice);
 
   // Apply borders
   applyBorders(group, voice);
@@ -384,10 +345,6 @@ function reconcileVoices(voiceLayer: SVGGElement, voices: Voice[], defs: SVGDefs
       const grad = defs.querySelector(`#grad-${id}`);
       if (grad) {
         grad.remove();
-      }
-      const gradOverlay = defs.querySelector(`#grad-overlay-${id}`);
-      if (gradOverlay) {
-        gradOverlay.remove();
       }
     }
   }

@@ -167,7 +167,7 @@ describe('serializeState / deserializeState round-trip', () => {
   });
 
   test('all effects survive round-trip', () => {
-    const effects = ['stripes', 'checker', 'noise', 'gradient'];
+    const effects = ['stripes', 'checker', 'noise', 'plaid'];
     const state = makeState({
       voices: effects.map((e) => makeVoice({ effect: e })),
     });

@@ -3,10 +3,23 @@
 import { computeTotalOverlap, createEffect } from '../effects.ts';
 import { type Envelope, type SigilData, type Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
-import { applyFormantFilter } from './formants.ts';
+import {
+  applyFormantFilter,
+  computeFormantQ,
+  hueToFormants,
+  isSweepReversed,
+  lightnessToCutoff,
+  scheduleFormantSweep,
+} from './formants.ts';
 import { decodeIR } from './ir-loader.ts';
 import { type Vibe, vibe } from './vibe.ts';
-import { type AudioVoice, buildVoice, safeDisconnect, safeStop } from './voice-builder.ts';
+import {
+  type AudioVoice,
+  buildVoice,
+  fillToKey,
+  safeDisconnect,
+  safeStop,
+} from './voice-builder.ts';
 
 export interface PlayOptions {
   irBuffer?: AudioBuffer;
@@ -34,6 +47,7 @@ export class AudioEngine {
   private _muffleFilter: BiquadFilterNode | undefined;
   private _muffled: boolean = false;
   private _reverbPreDelayNode: DelayNode | undefined;
+  private _playEnvelope: Envelope | undefined;
   private _appliedVibe: Vibe | undefined;
   private _appliedIR: string | undefined;
   private _appliedReverbPreDelay: number = 0;
@@ -192,6 +206,37 @@ export class AudioEngine {
     // Set initial blend overlap levels
     this._updateBlendOverlaps(sigilState.voices);
 
+    this._playEnvelope = envelope;
+
+    // Schedule diphthong sweeps for linear-fill voices
+    const sweepStart = now + attack;
+    for (let i = 0; i < sigilState.voices.length; i++) {
+      const voice = sigilState.voices[i]!;
+      const av = this.activeVoices[i]!;
+      if (voice.fill.mode === 'linear') {
+        const rev = isSweepReversed(voice.fill.gradAngle);
+        const startF = hueToFormants(rev ? voice.fill.h2 : voice.fill.h);
+        const startQ = computeFormantQ(rev ? voice.fill.s2 : voice.fill.s, voice.waveform);
+        const startCutoff = lightnessToCutoff(rev ? voice.fill.l2 : voice.fill.l);
+        av.formantF1.frequency.setValueAtTime(startF.f1, now);
+        av.formantF1.Q.setValueAtTime(startQ, now);
+        av.formantF2.frequency.setValueAtTime(startF.f2, now);
+        av.formantF2.Q.setValueAtTime(startQ * 0.7, now);
+        av.brightness.frequency.setValueAtTime(startCutoff, now);
+
+        scheduleFormantSweep(
+          av.formantF1,
+          av.formantF2,
+          av.brightness,
+          voice.fill,
+          voice.waveform,
+          sweepStart,
+          decay,
+        );
+        av.hasSweep = true;
+      }
+    }
+
     this._appliedVibe = vibe;
     this.isPlaying = true;
   }
@@ -314,6 +359,29 @@ export class AudioEngine {
       if (!activeIds.has(voice.id)) {
         const audioVoice = this._buildVoice(ctx, voice);
         audioVoice.start(now);
+        // Schedule diphthong sweep for new linear-fill voices added mid-playback
+        if (voice.fill.mode === 'linear') {
+          const rev = isSweepReversed(voice.fill.gradAngle);
+          const startF = hueToFormants(rev ? voice.fill.h2 : voice.fill.h);
+          const startQ = computeFormantQ(rev ? voice.fill.s2 : voice.fill.s, voice.waveform);
+          const startCutoff = lightnessToCutoff(rev ? voice.fill.l2 : voice.fill.l);
+          audioVoice.formantF1.frequency.setValueAtTime(startF.f1, now);
+          audioVoice.formantF1.Q.setValueAtTime(startQ, now);
+          audioVoice.formantF2.frequency.setValueAtTime(startF.f2, now);
+          audioVoice.formantF2.Q.setValueAtTime(startQ * 0.7, now);
+          audioVoice.brightness.frequency.setValueAtTime(startCutoff, now);
+          const midDecay = Math.max(0.01, this._playEnvelope?.decay ?? 0.2);
+          scheduleFormantSweep(
+            audioVoice.formantF1,
+            audioVoice.formantF2,
+            audioVoice.brightness,
+            voice.fill,
+            voice.waveform,
+            now,
+            midDecay,
+          );
+          audioVoice.hasSweep = true;
+        }
         this.activeVoices.push(audioVoice);
       }
     }
@@ -368,13 +436,52 @@ export class AudioEngine {
 
       audioVoice.gain.gain.setValueAtTime(vibe.voiceGain(voice.waveform, voice.size), now);
       audioVoice.panner.pan.setValueAtTime(vibe.xToPan(voice.x), now);
-      applyFormantFilter(
-        audioVoice.formantF1,
-        audioVoice.formantF2,
-        audioVoice.brightness,
-        voice.fill,
-        voice.waveform,
-      );
+
+      // Retrig diphthong sweep when linear fill params change during playback
+      const fillKey = fillToKey(voice.fill);
+      if (
+        audioVoice.hasSweep &&
+        fillKey !== audioVoice.currentFillKey &&
+        voice.fill.mode === 'linear'
+      ) {
+        audioVoice.formantF1.frequency.cancelScheduledValues(now);
+        audioVoice.formantF1.Q.cancelScheduledValues(now);
+        audioVoice.formantF2.frequency.cancelScheduledValues(now);
+        audioVoice.formantF2.Q.cancelScheduledValues(now);
+        audioVoice.brightness.frequency.cancelScheduledValues(now);
+
+        const rev = isSweepReversed(voice.fill.gradAngle);
+        const startF = hueToFormants(rev ? voice.fill.h2 : voice.fill.h);
+        const startQ = computeFormantQ(rev ? voice.fill.s2 : voice.fill.s, voice.waveform);
+        const startCutoff = lightnessToCutoff(rev ? voice.fill.l2 : voice.fill.l);
+        audioVoice.formantF1.frequency.setValueAtTime(startF.f1, now);
+        audioVoice.formantF1.Q.setValueAtTime(startQ, now);
+        audioVoice.formantF2.frequency.setValueAtTime(startF.f2, now);
+        audioVoice.formantF2.Q.setValueAtTime(startQ * 0.7, now);
+        audioVoice.brightness.frequency.setValueAtTime(startCutoff, now);
+
+        const retrigDecay = Math.max(0.01, this._playEnvelope?.decay ?? 0.2);
+        scheduleFormantSweep(
+          audioVoice.formantF1,
+          audioVoice.formantF2,
+          audioVoice.brightness,
+          voice.fill,
+          voice.waveform,
+          now,
+          retrigDecay,
+        );
+        audioVoice.currentFillKey = fillKey;
+      }
+
+      if (!audioVoice.hasSweep) {
+        applyFormantFilter(
+          audioVoice.formantF1,
+          audioVoice.formantF2,
+          audioVoice.brightness,
+          voice.fill,
+          voice.waveform,
+        );
+      }
 
       // Update octave oscillator frequency if border is present
       if (audioVoice.octaveOsc && voice.border) {
@@ -583,6 +690,7 @@ export class AudioEngine {
       this._analyserBuf = undefined;
     }
     this._teardownReverb();
+    this._playEnvelope = undefined;
     this._appliedVibe = undefined;
     this._appliedIR = undefined;
     this._appliedReverbPreDelay = 0;

@@ -5,7 +5,7 @@
 
 import type { BlendEffect } from '../effects.ts';
 import { createBlendEffect } from '../effects.ts';
-import type { AudioEffect, BlendMode, PatternType, Voice, WaveformType } from '../types.ts';
+import type { AudioEffect, BlendMode, Fill, PatternType, Voice, WaveformType } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
 import { vibe } from './vibe.ts';
@@ -19,6 +19,8 @@ export interface AudioVoiceBase {
   currentEffect: string | undefined;
   currentBlend: BlendMode;
   currentBorder: string | undefined; // Serialized border for change detection
+  currentFillKey: string | undefined;
+  hasSweep: boolean;
   blendEffect: BlendEffect | undefined;
   octaveOsc: OscillatorNode | undefined;
   octaveGainNode: GainNode | undefined;
@@ -88,6 +90,12 @@ export function safeDisconnect(node: AudioNode): void {
   try {
     node.disconnect();
   } catch {}
+}
+
+/** Compute a stable key for a linear fill, or undefined for solid fills. */
+export function fillToKey(fill: Fill): string | undefined {
+  if (fill.mode !== 'linear') return undefined;
+  return `${fill.h}:${fill.s}:${fill.l}:${fill.h2}:${fill.s2}:${fill.l2}:${fill.gradAngle}`;
 }
 
 // ---- Voice graph builder ----
@@ -208,6 +216,8 @@ export function buildVoice(
     currentBlend: voice.blend,
     currentBorder: borderKey,
     currentEffect: voice.effect,
+    currentFillKey: fillToKey(voice.fill),
+    hasSweep: false,
     effectDispose,
     formantF1,
     formantF2,

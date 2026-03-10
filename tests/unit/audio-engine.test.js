@@ -16,6 +16,7 @@ function createStubAudioParam(initial = 0) {
     setValueAtTime(v) {
       this.value = v;
     },
+    setValueCurveAtTime() {},
     value: initial,
   };
 }
@@ -627,5 +628,95 @@ describe('AudioEngine — getLevel()', () => {
     engine.stop();
 
     expect(engine.getLevel()).toBe(0);
+  });
+});
+
+describe('AudioEngine — diphthong sweep', () => {
+  let engine;
+
+  beforeEach(async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = engine.audioCtx.createGain();
+  });
+
+  async function startWith(voices) {
+    const state = makeSigilState(voices);
+    await engine.play(state, state.envelope);
+    return state;
+  }
+
+  test('linear fill voice gets hasSweep=true after play', async () => {
+    const voice = makeVoice('a', 'sine', {
+      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 120, s2: 60, l2: 70, gradAngle: 0 },
+    });
+    await startWith([voice]);
+
+    const audioVoice = engine.activeVoices[0];
+    expect(audioVoice.hasSweep).toBe(true);
+  });
+
+  test('solid fill voice gets hasSweep=false after play', async () => {
+    const voice = makeVoice('a', 'sine', {
+      fill: { mode: 'solid', h: 200, s: 80, l: 50 },
+    });
+    await startWith([voice]);
+
+    const audioVoice = engine.activeVoices[0];
+    expect(audioVoice.hasSweep).toBe(false);
+  });
+
+  test('linear fill change retrigs sweep without voice rebuild', async () => {
+    const voice = makeVoice('a', 'sine', {
+      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 120, s2: 60, l2: 70, gradAngle: 0 },
+    });
+    await startWith([voice]);
+
+    const originalVoice = engine.activeVoices[0];
+
+    const updated = makeVoice('a', 'sine', {
+      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 120, s2: 60, l2: 70, gradAngle: 90 },
+    });
+    engine.update(makeSigilState([updated]));
+
+    const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(sameVoice).toBe(originalVoice);
+    expect(sameVoice.hasSweep).toBe(true);
+    expect(sameVoice.currentFillKey).toContain('90');
+  });
+
+  test('linear fill color change retrigs sweep', async () => {
+    const voice = makeVoice('a', 'sine', {
+      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 120, s2: 60, l2: 70, gradAngle: 0 },
+    });
+    await startWith([voice]);
+
+    const originalVoice = engine.activeVoices[0];
+
+    const updated = makeVoice('a', 'sine', {
+      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 200, s2: 60, l2: 70, gradAngle: 0 },
+    });
+    engine.update(makeSigilState([updated]));
+
+    const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(sameVoice).toBe(originalVoice);
+    expect(sameVoice.hasSweep).toBe(true);
+  });
+
+  test('solid fill hue change updates formant smoothly (no rebuild)', async () => {
+    const voice = makeVoice('a', 'sine', {
+      fill: { mode: 'solid', h: 200, s: 80, l: 50 },
+    });
+    await startWith([voice]);
+
+    const originalVoice = engine.activeVoices[0];
+
+    const updated = makeVoice('a', 'sine', {
+      fill: { mode: 'solid', h: 100, s: 80, l: 50 },
+    });
+    engine.update(makeSigilState([updated]));
+
+    const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(sameVoice).toBe(originalVoice);
   });
 });
