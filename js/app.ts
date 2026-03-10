@@ -31,6 +31,14 @@ const undo = new UndoManager(store);
 const toolbar = new Toolbar(store, undo);
 const audio = new AudioEngine();
 
+// Expose store and audio engine for integration tests (e.g. setting ADSR
+// envelope directly, scheduling parameter automation on active voices).
+// Only available when __audioCapture is present (test helper injected).
+if ('__audioCapture' in globalThis) {
+  (globalThis as Record<string, unknown>).__testStore = store;
+  (globalThis as Record<string, unknown>).__testAudio = audio;
+}
+
 // Pre-warm AudioContext on first user gesture. iOS Safari only allows audio
 // From touchend, click, doubleclick, or keydown — NOT pointerdown/mousedown.
 {

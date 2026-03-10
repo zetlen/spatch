@@ -17,7 +17,11 @@ export function fetchIR(filename: string): Promise<ArrayBuffer> {
   const inflight = bytePending.get(filename);
   if (inflight) return inflight;
 
-  const promise = fetch(filename)
+  // Wrap in Promise.resolve().then() so that synchronous throws from fetch()
+  // (e.g. Bun throws ERR_INVALID_URL for relative URLs) become rejections
+  // instead of uncatchable synchronous exceptions.
+  const promise = Promise.resolve()
+    .then(() => fetch(filename))
     .then((res) => {
       if (!res.ok) throw new Error(`Failed to load IR: ${res.status} ${filename}`);
       return res.arrayBuffer();
@@ -26,6 +30,10 @@ export function fetchIR(filename: string): Promise<ArrayBuffer> {
       byteCache.set(filename, buf);
       bytePending.delete(filename);
       return buf;
+    })
+    .catch((err) => {
+      bytePending.delete(filename);
+      throw err;
     });
 
   bytePending.set(filename, promise);
