@@ -35,18 +35,14 @@ scripts/
   vite-plugin-svg-sprite.ts  Reusable Vite plugin: scans sources for icon refs,
                              builds SVG sprite, inlines into HTML
 js/
-  virtual.d.ts       Type declaration for __VIBE_DEBUG__ compile-time flag
   dom.ts             Typed DOM helper: qel() wraps querySelector with type
                      parameter and runtime null check
   types.ts           Shared type definitions: branded primitives, Voice
                      (discriminated union), Fill (discriminated union),
                      Envelope, branding functions
-  state.ts           SigilStore (data CRUD + @preact/signals change notification)
-                     and UndoManager (undo/redo wrapping a store)
-  state/
-    selection.ts     SelectionManager: app-level voice selection backed by signals
-  interaction.ts     InteractionState discriminated union (idle, dragging,
-                     resizing, rotating, adsr, pinch-rotate)
+  state.ts           SigilStore (data CRUD + @preact/signals change notification),
+                     UndoManager (undo/redo wrapping a store), and
+                     SelectionManager (app-level voice selection backed by signals)
   app.ts             Entry point: init, event wiring, render loop, selection
   embed-entry.ts     Entry point for embed.html viewer
   keyboard.ts        Global keyboard shortcut handler (delete, copy/paste,
@@ -55,7 +51,9 @@ js/
   splash.ts          SplashController: first-visit splash screen
   canvas/
     render.ts        SVG DOM reconciler (voices, selection UI)
-    interaction.ts   CanvasInteractionController: pointer/touch input on canvas
+    interaction.ts   CanvasInteractionController: pointer/touch input on canvas,
+                     InteractionState discriminated union (idle, dragging,
+                     resizing, rotating, adsr, pinch-rotate)
   audio/
     engine.ts        AudioEngine class: Web Audio lifecycle, voice management,
                      vibe-driven reverb/EQ/compression, analyser
@@ -82,21 +80,25 @@ js/
     harmonize-panel.ts Long-press scale picker for harmonize button
     dom-helpers.ts   Shared DOM construction helpers for toolbar panels
   debug/
-    vibe-tuner.ts    Debug-only vibe tuner side drawer (?debug=vibe, elided in production)
+    vibe-tuner.ts    Vibe tuner side drawer (shipped in prod, dynamically imported
+                     behind a hidden URL param)
   harmony.ts         Randomize (create random spatch) and harmonize (snap
                      pitches to a random musical scale). 9 scales: major/minor
                      pentatonic, mixolydian, lydian, phrygian, dorian, natural
                      minor, blues, mu. Randomize sets random scene, ADSR,
                      voices with varied properties, then harmonizes.
-  shapes.ts          Resize/rotate math, ADSR corner testing
+  shapes.ts          Resize/rotate math, ADSR corner testing,
+                     ADSR ↔ canvas corner radius conversion
   colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
   patterns.ts        SVG pattern definitions (stripes, checker, noise, gradient)
   effects.ts         Audio effect builders: pattern effects (chorus, tremolo,
                      flanger, phaser) and blend effects (saturation,
                      compression, exciter, gating, comb filter, flanger) +
                      overlap computation
-  envelope.ts        ADSR ↔ canvas corner radius conversion
   serialize.ts       Bespoke Base64 URL serialization (bitfield-packed, no keys)
+  share.ts           Share overlay: link + embed snippet generation
+  credits.ts         Credits overlay toggle + audio muffling + dynamic photo credit
+  tutorial.ts        Interactive tutorial overlay with punch-out highlights
 dist/                Build output (gitignored)
 docs/plans/              Design docs and implementation plans
                          Convention: YYYY-MM-DD-{topic}-{design|plan}.md
@@ -263,7 +265,7 @@ design rationale and enumeration of past violations.
   two-phase cache (`audio/ir-loader.ts`): `fetchIR()` fetches raw bytes
   (no AudioContext needed, enabling prefetch before user gesture), and
   `decodeIR()` decodes to an `AudioBuffer` on demand. The debug tuner
-  (`?debug=vibe`) exposes all params in a side drawer and auto-syncs
+  (hidden URL param) exposes all params in a side drawer and auto-syncs
   sliders when the scene changes externally.
 
 - **Canvas frame**: The canvas is split into `#canvas-wrap` (div) and
@@ -350,7 +352,7 @@ boundary (including `await`). This means:
 - The splash handler must fire from `touchend` or `click` — **never**
   `pointerup`, which fires before `touchend` on iOS and races the audio unlock.
 
-The current unlock strategy (in `audio.ts:_init()`) uses three layers:
+The current unlock strategy (in `audio/engine.ts:_init()`) uses three layers:
 1. **Silent buffer trick**: Play a 1-sample silent buffer through
    `ctx.destination` to "warm" the context.
 2. **Synchronous `resume()`**: Call `ctx.resume()` without awaiting — the
@@ -372,6 +374,38 @@ The current unlock strategy (in `audio.ts:_init()`) uses three layers:
 - Play button: `pointerdown` for eager `warmUp()` (creates the context early,
   even though the gesture doesn't qualify — so it's ready when a qualifying
   event fires). Actual playback starts in the same handler.
+
+## Pre-Commit Checklist
+
+Before committing any change, verify:
+
+1. **Comments match code.** Read every comment in and near the changed code.
+   If the code no longer does what a comment says, update or remove the comment.
+   Check doc comments, inline comments, and any CLAUDE.md sections that describe
+   the changed functionality.
+2. **Documentation is current.** If the change affects behavior described in
+   CLAUDE.md (project structure, conventions, key concepts, "When Making
+   Changes" recipes), update those sections in the same commit.
+
+## Pre-PR Checklist
+
+Before opening or updating a pull request, verify:
+
+1. **No orphaned comments.** After squashing, comments that reference earlier
+   attempts, reverted approaches, or intermediate states become non sequiturs.
+   Search for comments like `// previously`, `// old approach`, `// workaround
+   for`, `// TODO: revert`, or any comment that only makes sense in the context
+   of the branch history. Remove or rewrite them.
+2. **No dead code.** Check for unused imports, unexported functions that lost
+   their only caller, variables assigned but never read, and unreachable
+   branches introduced by the change.
+3. **No dead or tautological tests.** If the change removed or renamed
+   functionality, check that tests covering it were updated or removed — not
+   left passing vacuously. A test that asserts a default value equals itself,
+   or that mocks the thing it's testing, is tautological.
+4. **CLAUDE.md is accurate.** Re-read every section of CLAUDE.md. If any
+   description, file path, convention, or recipe no longer matches the
+   codebase after this PR's changes, fix it before opening.
 
 ## When Making Changes
 
@@ -411,11 +445,11 @@ The current unlock strategy (in `audio.ts:_init()`) uses three layers:
 - To add a new scene: create a directory under `js/scenes/<name>/` with a
   background `.jpg`, an optional IR `.m4a`, and an `index.ts` that default-
   exports a `Scene` object. Import and add it to `SCENES` in
-  `js/scenes/index.ts`. Tune vibe params using `?debug=vibe`. See "Scene
+  `js/scenes/index.ts`. Tune vibe params using the hidden vibe tuner URL param. See "Scene
   convention" below for the full format.
 - The `embed.html` page imports the same modules as the main app but only uses
   `canvas/render.ts`, `audio/engine.ts`, `serialize.ts`, `scenes/`,
-  `audio/ir-loader.ts`, and `envelope.ts`. It blocks reveal and playback
+  `audio/ir-loader.ts`, and `shapes.ts`. It blocks reveal and playback
   until scene assets are loaded.
 
 ## Scene Convention
@@ -458,7 +492,7 @@ without an IR file omit the `ir` import and field.
 **To add a new scene:**
 1. Create `js/scenes/<name>/` with the image, optional IR, and `index.ts`.
 2. Import the scene in `js/scenes/index.ts` and append it to the `SCENES` array.
-3. Tune vibe overrides using `?debug=vibe` in dev mode.
+3. Tune vibe overrides using the hidden vibe tuner URL param in dev mode.
 
 **Asset loading:** `prefetchScene()` preloads both the background image (via
 `new Image()`) and IR bytes (via `fetchIR()`) before a scene transition begins.

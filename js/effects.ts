@@ -250,7 +250,7 @@ function wireGate(ctx: AudioContext, input: GainNode, wet: GainNode, dry: GainNo
   // The caller sets wet.gain = overlap, but we want dry.gain = 1 - overlap.
   // We'll handle this in the overlap update by also adjusting dry.
   // Wire wet to pass silence (just connect input to wet for the node graph,
-  // But the actual gating happens via dry.gain adjustment in updateOverlap).
+  // But the actual gating happens via dry.gain adjustment in _updateBlendOverlaps).
   input.connect(wet);
   // Store reference to dry on wet for the update function to find
   (wet as GainNode & { _dryGain?: GainNode })._dryGain = dry;

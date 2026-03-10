@@ -1,8 +1,8 @@
 // tutorial.ts — Interactive tutorial overlay with punch-out highlights
 //
-// Opens in a dedicated tab (?tutorial) so the tutorial has its own audio
-// context and doesn't fight the user's existing spatch. The tutorial button
-// opens the new tab; close/finish closes it.
+// In-page overlay that dims the screen and punches out highlighted UI
+// targets. Shares the main AudioEngine (injected via TutorialDeps).
+// Saves and restores sigil state on show/hide so the user's work is preserved.
 //
 // Icon references for sprite scanner:
 // #tabler-mood-puzzled #tabler-chevron-left #tabler-x

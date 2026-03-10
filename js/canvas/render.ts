@@ -1,4 +1,4 @@
-// Canvas.ts — SVG DOM reconciler
+// render.ts — SVG DOM reconciler
 //
 // Creates, updates, and removes SVG elements to match SigilData.
 // Elements are keyed by voice ID for efficient reconciliation.
