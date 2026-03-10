@@ -106,7 +106,7 @@ js/
                      flanger, phaser) and blend effects (saturation,
                      compression, exciter, gating, comb filter, flanger) +
                      overlap computation
-  serialize.ts       Bespoke Base64 URL serialization (bitfield-packed, no keys)
+  serialize.ts       Versioned Base64 URL serialization (bitfield-packed, no keys)
   share.ts           Share overlay: link + embed snippet generation
   credits.ts         Credits overlay toggle + audio muffling + dynamic photo credit
   tutorial.ts        Interactive tutorial overlay with punch-out highlights
@@ -298,11 +298,13 @@ design rationale and enumeration of past violations.
   app-level in `SelectionManager` (js/state/selection.ts), backed by
   @preact/signals-core signals.
 
-- **Serialization** uses a bespoke Base64 encoding with bitfield-packed flags →
+- **Serialization** uses a versioned Base64 encoding with bitfield-packed flags →
   URL hash fragment. No keys, no IDs in wire format. HSL and normalized values
-  are quantized to integers during packing. **No backwards compatibility
-  until v1.** Old URLs will break. Do not write migration code, version checks,
-  or legacy deserializers. Just change the format and move on.
+  are quantized to integers during packing. The wire format has a 2-char version
+  prefix (`.` marker + 1 B64 char, versions 0–63). Strings without the prefix
+  are parsed as v0 (the original unversioned format). `loadFromURL()` rewrites
+  old v0 URLs to the current version on load. When changing the format, bump
+  `CURRENT_VERSION` in `serialize.ts` and add a new unpacker branch.
 
 ## The Triple Sec Rule
 

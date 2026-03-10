@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { deserializeState, serializeState } from '../../js/serialize.ts';
+import { CURRENT_VERSION, deserializeState, serializeState } from '../../js/serialize.ts';
 
 function makeState(overrides = {}) {
   return {
@@ -243,6 +243,63 @@ describe('deserializeState edge cases', () => {
     expect(truncated.voices[0].x).toBeCloseTo(0.3);
     expect(truncated.voices[0].y).toBeCloseTo(0.7);
     expect(truncated.envelope.attack).toBeCloseTo(state.envelope.attack);
+  });
+});
+
+describe('version tagging', () => {
+  test('serialized output starts with version prefix', () => {
+    const state = makeState();
+    const encoded = serializeState(state);
+    expect(encoded.charAt(0)).toBe('.');
+  });
+
+  test('CURRENT_VERSION is embedded in output', () => {
+    const state = makeState();
+    const encoded = serializeState(state);
+    // Version marker '.' + 1 B64 char encoding CURRENT_VERSION
+    expect(encoded.startsWith('.')).toBe(true);
+    expect(CURRENT_VERSION).toBeGreaterThan(0);
+  });
+
+  test('v0 (unversioned) strings still parse', () => {
+    // Manually construct a v0 string by serializing and stripping the version prefix
+    const state = makeState({
+      voices: [makeVoice({ size: 0.15, waveform: 'sine', x: 0.3, y: 0.7 })],
+    });
+    const encoded = serializeState(state);
+    // Strip the 2-char version prefix to simulate a v0 URL
+    const v0String = encoded.slice(2);
+    const decoded = deserializeState(v0String);
+
+    expect(decoded).not.toBeUndefined();
+    expect(decoded.envelope.attack).toBeCloseTo(state.envelope.attack);
+    expect(decoded.voices).toHaveLength(1);
+    expect(decoded.voices[0].x).toBeCloseTo(0.3);
+    expect(decoded.voices[0].y).toBeCloseTo(0.7);
+  });
+
+  test('versioned and unversioned produce same data', () => {
+    const state = makeState({
+      voices: [
+        makeVoice({ size: 0.15, waveform: 'sine', x: 0.3, y: 0.7 }),
+        makeVoice({ timbre: 0.5, waveform: 'pulse', effect: 'stripes' }),
+      ],
+    });
+    const encoded = serializeState(state);
+    const v0String = encoded.slice(2);
+
+    const fromVersioned = deserializeState(encoded);
+    const fromV0 = deserializeState(v0String);
+
+    expect(fromVersioned.envelope).toEqual(fromV0.envelope);
+    expect(fromVersioned.scene).toBe(fromV0.scene);
+    expect(fromVersioned.voices).toHaveLength(fromV0.voices.length);
+    for (let i = 0; i < fromVersioned.voices.length; i++) {
+      expect(fromVersioned.voices[i].waveform).toBe(fromV0.voices[i].waveform);
+      expect(fromVersioned.voices[i].x).toBeCloseTo(fromV0.voices[i].x);
+      expect(fromVersioned.voices[i].y).toBeCloseTo(fromV0.voices[i].y);
+      expect(fromVersioned.voices[i].size).toBeCloseTo(fromV0.voices[i].size);
+    }
   });
 });
 

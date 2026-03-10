@@ -1,8 +1,10 @@
 // Serialize.ts — URL encode/decode sigil state with a custom Base64 format
 //
-// Wire format: A single Base64 string
+// Wire format: A single Base64 string with an optional version prefix.
 // The layout packs variables into 64-char dictionary indices (A-Z, a-z, 0-9, -, _)
 //
+//   [Version] (0 or 2 chars): '.' marker + 1 B64 char (0–63).
+//     Absent = v0 (original unversioned format). Present = v1+.
 //   [Envelope] (8 chars): attack, decay, sustain, release (2 chars each, 12-bit, x1000)
 //   [Scene] (1 char): scene index (0-63)
 //   [Voices] (variable length):
@@ -60,19 +62,30 @@ export function saveToURL(state: SigilData): void {
   history.replaceState(undefined, '', '#' + encoded);
 }
 
-/** Read and deserialize state from the current URL hash fragment, or undefined if empty/invalid. */
+/** Read and deserialize state from the current URL hash fragment, or undefined if empty/invalid.
+ *  If the hash contains an old unversioned (v0) format, it is re-serialized with the current
+ *  version tag and the URL fragment is rewritten in place. */
 export function loadFromURL(): SigilData | undefined {
   const hash = globalThis.location.hash.slice(1);
   if (!hash) {
     return;
   }
-  return deserializeState(hash);
+  const state = deserializeState(hash);
+  if (state && hash.charAt(0) !== VERSION_MARKER) {
+    saveToURL(state);
+  }
+  return state;
 }
 
 // ---- Base64 Custom Packing ----
 
 const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const B64_MAP = new Map(B64_CHARS.split('').map((c, i) => [c, i]));
+
+// Version tag: a non-B64 marker char followed by 1 B64 char (0–63).
+// Strings without this prefix are parsed as v0 (the original unversioned format).
+const VERSION_MARKER = '.';
+export const CURRENT_VERSION = 1;
 
 function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
@@ -102,7 +115,7 @@ function decodeInt(str: string, startIndex: number, chars: number): number {
 const EFFECT_KEYS: (PatternType | undefined)[] = [undefined, ...PATTERN_TYPES].sort();
 
 function packB64(state: SigilData): string {
-  let out = '';
+  let out = VERSION_MARKER + encodeInt(CURRENT_VERSION, 1);
   // Env (8 chars)
   out += encodeInt(round3(state.envelope.attack) * 1000, 2);
   out += encodeInt(round3(state.envelope.decay) * 1000, 2);
@@ -168,6 +181,12 @@ function packB64(state: SigilData): string {
 
 function unpackB64(str: string): SigilData {
   let idx = 0;
+  let version = 0;
+
+  if (str.charAt(0) === VERSION_MARKER) {
+    version = decodeInt(str, 1, 1);
+    idx = 2;
+  }
 
   // Env (8 chars)
   const attack = decodeInt(str, idx, 2) / 1000;
