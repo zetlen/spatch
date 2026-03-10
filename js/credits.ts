@@ -9,6 +9,7 @@ import { getScene } from './scenes/index.ts';
 import type { SigilStore } from './state.ts';
 
 interface OverlayHandle {
+  show(): void;
   hide(): void;
   onShow: (() => void) | null;
 }
@@ -34,7 +35,7 @@ export function initCredits(audio: AudioEngine, store: SigilStore): OverlayHandl
     }
   });
 
-  const handle: OverlayHandle = { hide, onShow: null };
+  const handle: OverlayHandle = { show, hide, onShow: null };
 
   function show(): void {
     handle.onShow?.();

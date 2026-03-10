@@ -302,6 +302,10 @@ body.is-editing .credits-btn:hover {
   opacity: 0.7;
 }
 
+.toolbar-spacer {
+  flex: 1;
+}
+
 /* ---- Credits overlay ---- */
 
 .credits-overlay {
@@ -831,4 +835,138 @@ body.is-editing #toolbar-bottom {
 body.is-editing .stage-play-btn {
   opacity: 0.8;
   pointer-events: auto;
+}
+
+/* ---- Tutorial overlay ---- */
+
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: auto;
+}
+
+.tutorial-overlay.hidden {
+  display: none !important;
+}
+
+/* SVG mask: full-screen dark blur with a punch-out rectangle */
+.tutorial-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.tutorial-backdrop-fill {
+  fill: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+/* The punch-out is done via clip-path on a backdrop div */
+.tutorial-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: clip-path 0.3s ease;
+}
+
+.tutorial-text {
+  position: absolute;
+  color: #fff;
+  font-family: 'Imbue', serif;
+  font-size: 22px;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 4px;
+  max-width: 320px;
+  text-wrap: pretty;
+  pointer-events: none;
+  transition:
+    top 0.3s ease,
+    left 0.3s ease;
+}
+
+.tutorial-nav-stack {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tutorial-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.tutorial-nav:hover {
+  opacity: 1;
+}
+
+.tutorial-nav:disabled {
+  opacity: 0.15;
+  cursor: default;
+}
+
+/* Intro sequence (pre-tutorial) */
+.tutorial-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 202;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
+  font-family: 'Imbue', serif;
+  gap: 24px;
+}
+
+.tutorial-intro.hidden {
+  display: none !important;
+}
+
+.tutorial-intro-text {
+  font-size: 26px;
+  letter-spacing: 0.03em;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.tutorial-intro-btn {
+  padding: 10px 32px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  background: none;
+  color: #fff;
+  font-family: 'Imbue', serif;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tutorial-intro-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
 }

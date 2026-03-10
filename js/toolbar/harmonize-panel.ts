@@ -10,7 +10,7 @@ import { createIconButton } from './dom-helpers.ts';
 // Icon references for sprite scanner:
 // #tabler-award #tabler-bell-school #tabler-chart-histogram #tabler-mailbox-off
 // #tabler-fish #tabler-currency-dram #tabler-circuit-cell-plus #tabler-joker
-// #tabler-mood-puzzled
+// #tabler-torii
 
 const SCALE_ICONS: { symbol: string; title: string }[] = [
   { symbol: 'tabler-award', title: 'Major Pentatonic' },
@@ -21,7 +21,7 @@ const SCALE_ICONS: { symbol: string; title: string }[] = [
   { symbol: 'tabler-currency-dram', title: 'Dorian' },
   { symbol: 'tabler-circuit-cell-plus', title: 'Natural Minor' },
   { symbol: 'tabler-joker', title: 'Blues' },
-  { symbol: 'tabler-mood-puzzled', title: 'Mu' },
+  { symbol: 'tabler-torii', title: 'Mu' },
 ];
 
 const LONG_PRESS_MS = 400;

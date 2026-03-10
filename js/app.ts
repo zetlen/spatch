@@ -261,9 +261,50 @@ const credits = initCredits(audio, store);
 
 const share = initShare(audio, store);
 
-// Cross-wire: each overlay dismisses the other when opening
-credits.onShow = () => share.hide();
-share.onShow = () => credits.hide();
+// ---- Tutorial overlay (lazy-loaded on first click) ----
+
+let tutorial:
+  | { show(): void; hide(): void; readonly isVisible: boolean; onShow: (() => void) | null }
+  | undefined;
+
+async function loadTutorial() {
+  const { initTutorial } = await import('./tutorial.ts');
+  tutorial = initTutorial({
+    audio,
+    store,
+    undo,
+    selection,
+    requestRender: () => {
+      needsRender = true;
+    },
+    showCredits: () => credits.show(),
+  });
+  tutorial.onShow = () => {
+    credits.hide();
+    share.hide();
+  };
+  return tutorial;
+}
+
+qel('#btn-tutorial').addEventListener('click', async () => {
+  if (tutorial?.isVisible) {
+    tutorial.hide();
+    return;
+  }
+  if (playback.isPlaying) playback.stop();
+  const t = tutorial ?? (await loadTutorial());
+  t.show();
+});
+
+// Cross-wire: each overlay dismisses the others when opening
+credits.onShow = () => {
+  share.hide();
+  tutorial?.hide();
+};
+share.onShow = () => {
+  credits.hide();
+  tutorial?.hide();
+};
 
 // ---- Pause audio when tab is hidden ----
 
