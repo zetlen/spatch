@@ -1,5 +1,16 @@
 # CLAUDE.md — spatch
 
+## Repository Origin
+
+The canonical repo is on Gitea at `got.colonpipe.org`. Use the Gitea MCP tools
+(`mcp__gitea__*`) for all repo interactions: PRs, issues, releases, etc. Do NOT
+use `gh` CLI or GitHub MCP tools.
+
+A GitHub remote may exist as a read-only mirror. The `main` branch on GitHub is
+automatically pushed from Gitea. The GitHub mirror exists only so external
+contributors can open PRs there; those PRs are imported into Gitea for review
+and merge.
+
 ## Branch Rebase Rule
 
 Working branches must be fully rebased on `origin/main`. Stale branches
