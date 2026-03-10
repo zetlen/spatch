@@ -29,85 +29,104 @@ function createStubNode(extraProps = {}) {
   };
 }
 
-function createStubOscillator() {
+// Stub Web Audio constructors on globalThis so production code using
+// `new GainNode(ctx, opts)` etc. works in the test environment.
+
+function stubAudioBuffer(opts = {}) {
+  const channels = opts.numberOfChannels ?? 1;
+  const length = opts.length ?? 1;
+  const sampleRate = opts.sampleRate ?? 44_100;
+  const channelData = [];
+  for (let i = 0; i < channels; i++) {
+    channelData.push(new Float32Array(length));
+  }
+  return {
+    duration: length / sampleRate,
+    getChannelData(ch) {
+      return channelData[ch];
+    },
+    length,
+    numberOfChannels: channels,
+    sampleRate,
+  };
+}
+
+globalThis.AudioBuffer = function (opts) {
+  return stubAudioBuffer(opts);
+};
+globalThis.AudioBufferSourceNode = function (_ctx, opts = {}) {
+  return createStubNode({ buffer: opts.buffer ?? null, start() {}, stop() {} });
+};
+globalThis.GainNode = function (_ctx, opts = {}) {
+  return createStubNode({ gain: createStubAudioParam(opts.gain ?? 1) });
+};
+globalThis.OscillatorNode = function (_ctx, opts = {}) {
   return {
     connect() {},
     detune: createStubAudioParam(0),
     disconnect() {},
-    frequency: createStubAudioParam(440),
+    frequency: createStubAudioParam(opts.frequency ?? 440),
     start() {},
     stop() {},
-    type: 'sine',
+    type: opts.type ?? 'sine',
   };
-}
+};
+globalThis.BiquadFilterNode = function (_ctx, opts = {}) {
+  return createStubNode({
+    Q: createStubAudioParam(opts.Q ?? 1),
+    frequency: createStubAudioParam(opts.frequency ?? 350),
+    gain: createStubAudioParam(opts.gain ?? 0),
+    type: opts.type ?? 'lowpass',
+  });
+};
+globalThis.DynamicsCompressorNode = function (_ctx, opts = {}) {
+  return createStubNode({
+    attack: createStubAudioParam(opts.attack ?? 0.003),
+    knee: createStubAudioParam(opts.knee ?? 30),
+    ratio: createStubAudioParam(opts.ratio ?? 12),
+    release: createStubAudioParam(opts.release ?? 0.25),
+    threshold: createStubAudioParam(opts.threshold ?? -24),
+  });
+};
+globalThis.StereoPannerNode = function (_ctx, opts = {}) {
+  return createStubNode({ pan: createStubAudioParam(opts.pan ?? 0) });
+};
+globalThis.WaveShaperNode = function (_ctx, opts = {}) {
+  return createStubNode({ curve: opts.curve ?? null, oversample: opts.oversample ?? 'none' });
+};
+globalThis.DelayNode = function (_ctx, opts = {}) {
+  return createStubNode({ delayTime: createStubAudioParam(opts.delayTime ?? 0) });
+};
+globalThis.ConstantSourceNode = function (_ctx, opts = {}) {
+  return {
+    connect() {},
+    disconnect() {},
+    offset: createStubAudioParam(opts.offset ?? 0),
+    start() {},
+    stop() {},
+  };
+};
+globalThis.ConvolverNode = function (_ctx) {
+  return createStubNode({ buffer: undefined });
+};
+globalThis.AnalyserNode = function (_ctx, opts = {}) {
+  return createStubNode({
+    fftSize: opts.fftSize ?? 256,
+    getFloatTimeDomainData() {},
+  });
+};
+globalThis.MediaStreamAudioDestinationNode = function (_ctx) {
+  return createStubNode({
+    stream: {
+      getTracks() {
+        return [];
+      },
+    },
+  });
+};
 
 function createStubAudioContext() {
   return {
-    createAnalyser() {
-      return createStubNode({
-        fftSize: 256,
-        getFloatTimeDomainData() {},
-      });
-    },
-    createBiquadFilter() {
-      return createStubNode({
-        Q: createStubAudioParam(1),
-        frequency: createStubAudioParam(350),
-        gain: createStubAudioParam(0),
-        type: 'lowpass',
-      });
-    },
-    createBuffer(channels, length, sampleRate) {
-      const channelData = [];
-      for (let i = 0; i < channels; i++) {
-        channelData.push(new Float32Array(length));
-      }
-      return {
-        duration: length / sampleRate,
-        getChannelData(ch) {
-          return channelData[ch];
-        },
-        length,
-        numberOfChannels: channels,
-        sampleRate,
-      };
-    },
-    createConstantSource() {
-      return {
-        connect() {},
-        disconnect() {},
-        offset: createStubAudioParam(0),
-        start() {},
-        stop() {},
-      };
-    },
-    createConvolver() {
-      return createStubNode({ buffer: undefined });
-    },
-    createDelay() {
-      return createStubNode({ delayTime: createStubAudioParam(0) });
-    },
-    createDynamicsCompressor() {
-      return createStubNode({
-        attack: createStubAudioParam(0.003),
-        knee: createStubAudioParam(30),
-        ratio: createStubAudioParam(12),
-        release: createStubAudioParam(0.25),
-        threshold: createStubAudioParam(-24),
-      });
-    },
-    createGain() {
-      return createStubNode({ gain: createStubAudioParam(1) });
-    },
-    createOscillator() {
-      return createStubOscillator();
-    },
-    createStereoPanner() {
-      return createStubNode({ pan: createStubAudioParam(0) });
-    },
-    createWaveShaper() {
-      return createStubNode({ curve: undefined, oversample: 'none' });
-    },
     currentTime: 0,
     destination: createStubNode(),
     resume() {
@@ -152,7 +171,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine = new AudioEngine();
     // Inject stub context so we skip real AudioContext
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
+    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {
@@ -250,7 +269,7 @@ describe('AudioEngine — blend effects', () => {
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
+    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {
@@ -310,7 +329,7 @@ describe('AudioEngine — border / octave doubling', () => {
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
+    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {
@@ -451,7 +470,7 @@ describe('AudioEngine — vibe-based master reverb', () => {
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
+    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {
@@ -559,7 +578,7 @@ describe('AudioEngine — reverb tail cleanup delay (vibe-based)', () => {
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
+    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   test('release without reverb uses normal cleanup delay', async () => {
@@ -587,7 +606,7 @@ describe('AudioEngine — getLevel()', () => {
   test('returns 0 for silent buffer', async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
+    engine.masterGain = new GainNode(engine.audioCtx);
 
     const state = makeSigilState([makeVoice('a')]);
     await engine.play(state, state.envelope);
@@ -599,7 +618,7 @@ describe('AudioEngine — getLevel()', () => {
   test('returns correct RMS for known signal', async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
+    engine.masterGain = new GainNode(engine.audioCtx);
 
     const state = makeSigilState([makeVoice('a')]);
     await engine.play(state, state.envelope);
@@ -621,7 +640,7 @@ describe('AudioEngine — getLevel()', () => {
   test('returns 0 after stop', async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
+    engine.masterGain = new GainNode(engine.audioCtx);
 
     const state = makeSigilState([makeVoice('a')]);
     await engine.play(state, state.envelope);
@@ -637,7 +656,7 @@ describe('AudioEngine — diphthong sweep', () => {
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = engine.audioCtx.createGain();
+    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {

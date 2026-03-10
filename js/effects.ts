@@ -35,12 +35,10 @@ function dryWet(
   dryLevel: number,
   wetLevel: number,
 ): { input: GainNode; output: GainNode; dry: GainNode; wet: GainNode } {
-  const input = ctx.createGain();
-  const output = ctx.createGain();
-  const dry = ctx.createGain();
-  dry.gain.value = dryLevel;
-  const wet = ctx.createGain();
-  wet.gain.value = wetLevel;
+  const input = new GainNode(ctx);
+  const output = new GainNode(ctx);
+  const dry = new GainNode(ctx, { gain: dryLevel });
+  const wet = new GainNode(ctx, { gain: wetLevel });
   input.connect(dry);
   dry.connect(output);
   wet.connect(output);
@@ -54,11 +52,8 @@ function createLFO(
   depth: number,
   target: AudioParam,
 ): OscillatorNode {
-  const lfo = ctx.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = freq;
-  const gain = ctx.createGain();
-  gain.gain.value = depth;
+  const lfo = new OscillatorNode(ctx, { type: 'sine', frequency: freq });
+  const gain = new GainNode(ctx, { gain: depth });
   lfo.connect(gain);
   gain.connect(target);
   lfo.start();
@@ -70,8 +65,7 @@ function createLFO(
 // Raster stripes → Chorus
 function createChorus(ctx: AudioContext): AudioEffect {
   const { input, output, wet } = dryWet(ctx, 0.7, 0.5);
-  const delay = ctx.createDelay(0.1);
-  delay.delayTime.value = 0.025;
+  const delay = new DelayNode(ctx, { maxDelayTime: 0.1, delayTime: 0.025 });
   const lfo = createLFO(ctx, 1.5, 0.002, delay.delayTime);
 
   input.connect(delay);
@@ -82,10 +76,9 @@ function createChorus(ctx: AudioContext): AudioEffect {
 
 // Checkerboard → LFO Tremolo
 function createTremolo(ctx: AudioContext): AudioEffect {
-  const input = ctx.createGain();
-  const output = ctx.createGain();
-  const tremoloGain = ctx.createGain();
-  tremoloGain.gain.value = 0.7;
+  const input = new GainNode(ctx);
+  const output = new GainNode(ctx);
+  const tremoloGain = new GainNode(ctx, { gain: 0.7 });
   const lfo = createLFO(ctx, 6, 0.3, tremoloGain.gain);
 
   input.connect(tremoloGain);
@@ -97,10 +90,8 @@ function createTremolo(ctx: AudioContext): AudioEffect {
 // Noise texture → Flanger
 function createFlanger(ctx: AudioContext): AudioEffect {
   const { input, output, wet } = dryWet(ctx, 0.7, 0.7);
-  const delay = ctx.createDelay(0.02);
-  delay.delayTime.value = 0.005;
-  const feedback = ctx.createGain();
-  feedback.gain.value = 0.6;
+  const delay = new DelayNode(ctx, { maxDelayTime: 0.02, delayTime: 0.005 });
+  const feedback = new GainNode(ctx, { gain: 0.6 });
   const lfo = createLFO(ctx, 0.25, 0.004, delay.delayTime);
 
   input.connect(delay);
@@ -117,19 +108,13 @@ function createPhaser(ctx: AudioContext): AudioEffect {
 
   const allpassFreqs = [350, 1100, 2700, 5500];
   const filters = allpassFreqs.map((freq) => {
-    const f = ctx.createBiquadFilter();
-    f.type = 'allpass';
-    f.frequency.value = freq;
-    f.Q.value = 0.7;
+    const f = new BiquadFilterNode(ctx, { type: 'allpass', frequency: freq, Q: 0.7 });
     return f;
   });
 
-  const lfo = ctx.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = 0.5;
+  const lfo = new OscillatorNode(ctx, { type: 'sine', frequency: 0.5 });
   for (const f of filters) {
-    const lg = ctx.createGain();
-    lg.gain.value = 500;
+    const lg = new GainNode(ctx, { gain: 500 });
     lfo.connect(lg);
     lg.connect(f.frequency);
   }
@@ -160,12 +145,10 @@ export interface BlendEffect {
 const noop = () => {};
 
 export function createBlendEffect(ctx: AudioContext, mode: BlendMode): BlendEffect {
-  const input = ctx.createGain();
-  const output = ctx.createGain();
-  const dry = ctx.createGain();
-  dry.gain.value = 1;
-  const wet = ctx.createGain();
-  wet.gain.value = 0; // Overlap drives this
+  const input = new GainNode(ctx);
+  const output = new GainNode(ctx);
+  const dry = new GainNode(ctx);
+  const wet = new GainNode(ctx, { gain: 0 }); // Overlap drives this
 
   input.connect(dry);
   dry.connect(output);
@@ -215,15 +198,13 @@ function wireSaturation(
   wet: GainNode,
   drive: number,
 ): () => void {
-  const ws = ctx.createWaveShaper();
   const samples = 1024;
   const curve = new Float32Array(samples);
   for (let i = 0; i < samples; i++) {
     const x = (i * 2) / samples - 1;
     curve[i] = Math.tanh(x * drive);
   }
-  ws.curve = curve;
-  ws.oversample = '2x';
+  const ws = new WaveShaperNode(ctx, { curve, oversample: '2x' });
   input.connect(ws);
   ws.connect(wet);
   return () => {};
@@ -231,19 +212,19 @@ function wireSaturation(
 
 // Additive with soft compression — DynamicsCompressor
 function wireCompression(ctx: AudioContext, input: GainNode, wet: GainNode): void {
-  const comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -20;
-  comp.knee.value = 30;
-  comp.ratio.value = 8;
-  comp.attack.value = 0.003;
-  comp.release.value = 0.1;
+  const comp = new DynamicsCompressorNode(ctx, {
+    threshold: -20,
+    knee: 30,
+    ratio: 8,
+    attack: 0.003,
+    release: 0.1,
+  });
   input.connect(comp);
   comp.connect(wet);
 }
 
 // Harmonic exciter — asymmetric waveshaper that adds even harmonics
 function wireExciter(ctx: AudioContext, input: GainNode, wet: GainNode): () => void {
-  const ws = ctx.createWaveShaper();
   const samples = 1024;
   const curve = new Float32Array(samples);
   for (let i = 0; i < samples; i++) {
@@ -251,14 +232,10 @@ function wireExciter(ctx: AudioContext, input: GainNode, wet: GainNode): () => v
     // Asymmetric: positive half gets more drive than negative
     curve[i] = x >= 0 ? Math.tanh(x * 4) : Math.tanh(x * 2) * 0.8;
   }
-  ws.curve = curve;
-  ws.oversample = '2x';
+  const ws = new WaveShaperNode(ctx, { curve, oversample: '2x' });
 
   // High-pass to keep only the added harmonics
-  const hp = ctx.createBiquadFilter();
-  hp.type = 'highpass';
-  hp.frequency.value = 2000;
-  hp.Q.value = 0.5;
+  const hp = new BiquadFilterNode(ctx, { type: 'highpass', frequency: 2000, Q: 0.5 });
 
   input.connect(ws);
   ws.connect(hp);
@@ -281,10 +258,8 @@ function wireGate(ctx: AudioContext, input: GainNode, wet: GainNode, dry: GainNo
 
 // Comb filter — creates hollow, phasey tones from spectral notches
 function wireCombFilter(ctx: AudioContext, input: GainNode, wet: GainNode): () => void {
-  const delay = ctx.createDelay(0.05);
-  delay.delayTime.value = 0.008; // ~125 Hz comb frequency
-  const feedback = ctx.createGain();
-  feedback.gain.value = -0.7; // Negative = destructive interference
+  const delay = new DelayNode(ctx, { maxDelayTime: 0.05, delayTime: 0.008 }); // ~125 Hz comb frequency
+  const feedback = new GainNode(ctx, { gain: -0.7 }); // Negative = destructive interference
 
   input.connect(delay);
   delay.connect(feedback);
@@ -296,10 +271,8 @@ function wireCombFilter(ctx: AudioContext, input: GainNode, wet: GainNode): () =
 
 // Flanging — swept comb filter
 function wireFlanger(ctx: AudioContext, input: GainNode, wet: GainNode): () => void {
-  const delay = ctx.createDelay(0.02);
-  delay.delayTime.value = 0.003;
-  const feedback = ctx.createGain();
-  feedback.gain.value = 0.5;
+  const delay = new DelayNode(ctx, { maxDelayTime: 0.02, delayTime: 0.003 });
+  const feedback = new GainNode(ctx, { gain: 0.5 });
   const lfo = createLFO(ctx, 0.3, 0.002, delay.delayTime);
 
   input.connect(delay);

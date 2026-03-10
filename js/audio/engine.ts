@@ -64,9 +64,8 @@ export class AudioEngine {
 
     // Classic iOS Safari unlock: play a silent buffer to "warm" the context.
     // This is the most widely battle-tested workaround.
-    const silent = this.audioCtx.createBuffer(1, 1, 22_050);
-    const src = this.audioCtx.createBufferSource();
-    src.buffer = silent;
+    const silent = new AudioBuffer({ numberOfChannels: 1, length: 1, sampleRate: 22_050 });
+    const src = new AudioBufferSourceNode(this.audioCtx, { buffer: silent });
     src.connect(this.audioCtx.destination);
     src.start(0);
 
@@ -78,7 +77,7 @@ export class AudioEngine {
     // Route audio through a MediaStreamDestination → <audio> element.
     // Safari aggressively suspends bare AudioContext output but treats
     // <audio> srcObject streams as "real" media that keeps playing.
-    this._streamDest = this.audioCtx.createMediaStreamDestination();
+    this._streamDest = new MediaStreamAudioDestinationNode(this.audioCtx);
     this._audioEl = document.createElement('audio');
     this._audioEl.srcObject = this._streamDest.stream;
     this._audioEl.volume = 0; // Must be silent — audio goes through ctx.destination
@@ -119,40 +118,41 @@ export class AudioEngine {
     }
 
     // Master chain
-    this.compressor = ctx.createDynamicsCompressor();
-    this.compressor.threshold.value = vibe.compThreshold;
-    this.compressor.knee.value = vibe.compKnee;
-    this.compressor.ratio.value = vibe.compRatio;
-    this.compressor.attack.value = vibe.compAttack;
-    this.compressor.release.value = vibe.compRelease;
+    this.compressor = new DynamicsCompressorNode(ctx, {
+      threshold: vibe.compThreshold,
+      knee: vibe.compKnee,
+      ratio: vibe.compRatio,
+      attack: vibe.compAttack,
+      release: vibe.compRelease,
+    });
 
-    this.envelopeGain = ctx.createGain();
-    this.envelopeGain.gain.value = 0;
+    this.envelopeGain = new GainNode(ctx, { gain: 0 });
 
-    this.masterGain = ctx.createGain();
-    this.masterGain.gain.value = vibe.masterGain;
+    this.masterGain = new GainNode(ctx, { gain: vibe.masterGain });
 
     // Analyser for level metering (drives play glow)
-    this._analyser = ctx.createAnalyser();
-    this._analyser.fftSize = 256;
+    this._analyser = new AnalyserNode(ctx, { fftSize: 256 });
     this._analyserBuf = new Float32Array(this._analyser.fftSize);
 
     // 3-band EQ from vibe
-    this._eqLow = ctx.createBiquadFilter();
-    this._eqLow.type = 'lowshelf';
-    this._eqLow.frequency.value = vibe.eqLowFreq;
-    this._eqLow.gain.value = vibe.eqLowGain;
+    this._eqLow = new BiquadFilterNode(ctx, {
+      type: 'lowshelf',
+      frequency: vibe.eqLowFreq,
+      gain: vibe.eqLowGain,
+    });
 
-    this._eqMid = ctx.createBiquadFilter();
-    this._eqMid.type = 'peaking';
-    this._eqMid.frequency.value = vibe.eqMidFreq;
-    this._eqMid.gain.value = vibe.eqMidGain;
-    this._eqMid.Q.value = vibe.eqMidQ;
+    this._eqMid = new BiquadFilterNode(ctx, {
+      type: 'peaking',
+      frequency: vibe.eqMidFreq,
+      gain: vibe.eqMidGain,
+      Q: vibe.eqMidQ,
+    });
 
-    this._eqHigh = ctx.createBiquadFilter();
-    this._eqHigh.type = 'highshelf';
-    this._eqHigh.frequency.value = vibe.eqHighFreq;
-    this._eqHigh.gain.value = vibe.eqHighGain;
+    this._eqHigh = new BiquadFilterNode(ctx, {
+      type: 'highshelf',
+      frequency: vibe.eqHighFreq,
+      gain: vibe.eqHighGain,
+    });
 
     // Wire: masterGain -> envelopeGain -> compressor -> eqLow -> eqMid -> eqHigh -> analyser -> dest
     this.masterGain.connect(this.envelopeGain);
@@ -163,10 +163,11 @@ export class AudioEngine {
     this._eqHigh.connect(this._analyser);
     // Muffle filter: low-pass that's normally transparent (20 kHz cutoff)
     // but drops to ~600 Hz when muffled (e.g. credits overlay).
-    this._muffleFilter = ctx.createBiquadFilter();
-    this._muffleFilter.type = 'lowpass';
-    this._muffleFilter.frequency.value = this._muffled ? 600 : 20000;
-    this._muffleFilter.Q.value = 0.7;
+    this._muffleFilter = new BiquadFilterNode(ctx, {
+      type: 'lowpass',
+      frequency: this._muffled ? 600 : 20000,
+      Q: 0.7,
+    });
     this._analyser.connect(this._muffleFilter);
     // Actual audio output goes through ctx.destination as normal.
     this._muffleFilter.connect(ctx.destination);
@@ -600,13 +601,14 @@ export class AudioEngine {
     if (!vibe.ir || !this.audioCtx || !this.envelopeGain || !this.compressor) return;
 
     const ctx = this.audioCtx;
-    this._reverbConvolver = ctx.createConvolver();
-    this._reverbWet = ctx.createGain();
-    this._reverbWet.gain.value = vibe.reverbMix;
+    this._reverbConvolver = new ConvolverNode(ctx);
+    this._reverbWet = new GainNode(ctx, { gain: vibe.reverbMix });
 
     if (vibe.reverbPreDelay > 0) {
-      this._reverbPreDelayNode = ctx.createDelay(1);
-      this._reverbPreDelayNode.delayTime.value = vibe.reverbPreDelay;
+      this._reverbPreDelayNode = new DelayNode(ctx, {
+        maxDelayTime: 1,
+        delayTime: vibe.reverbPreDelay,
+      });
       this.envelopeGain.connect(this._reverbPreDelayNode);
       this._reverbPreDelayNode.connect(this._reverbConvolver);
     } else {

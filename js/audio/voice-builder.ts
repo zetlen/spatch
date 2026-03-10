@@ -65,15 +65,13 @@ export type AudioVoice = SineAudioVoice | SquareAudioVoice | TriangleAudioVoice;
 
 /** Create a hard-clipping waveshaper curve for pulse-width modulation. */
 function createPWMWaveshaper(audioCtx: AudioContext): WaveShaperNode {
-  const ws = audioCtx.createWaveShaper();
   const samples = 1024;
   const curve = new Float32Array(samples);
   for (let i = 0; i < samples; i++) {
     const x = (i * 2) / samples - 1;
     curve[i] = x > 0 ? 1 : -1;
   }
-  ws.curve = curve;
-  ws.oversample = '4x';
+  const ws = new WaveShaperNode(audioCtx, { curve, oversample: '4x' });
   return ws;
 }
 
@@ -125,26 +123,19 @@ export function buildVoice(
   createPatternEffect: (ctx: AudioContext, effect: PatternType) => AudioEffect | undefined,
 ): AudioVoice {
   const timbre = 'timbre' in voice ? voice.timbre : 0;
-  const gain = ctx.createGain();
-  gain.gain.value = vibe.voiceGain(voice.waveform, voice.size);
+  const gain = new GainNode(ctx, { gain: vibe.voiceGain(voice.waveform, voice.size) });
 
   const freq = yToFrequency(voice.y);
 
   // Dual formant filter bank + brightness shelf
-  const formantF1 = ctx.createBiquadFilter();
-  formantF1.type = 'bandpass';
-  const formantF2 = ctx.createBiquadFilter();
-  formantF2.type = 'bandpass';
-  const formantMixer = ctx.createGain();
-  formantMixer.gain.value = vibe.formantMix;
-  const brightness = ctx.createBiquadFilter();
-  brightness.type = 'lowpass';
-  brightness.Q.value = vibe.brightnessQ;
+  const formantF1 = new BiquadFilterNode(ctx, { type: 'bandpass' });
+  const formantF2 = new BiquadFilterNode(ctx, { type: 'bandpass' });
+  const formantMixer = new GainNode(ctx, { gain: vibe.formantMix });
+  const brightness = new BiquadFilterNode(ctx, { type: 'lowpass', Q: vibe.brightnessQ });
 
   applyFormantFilter(formantF1, formantF2, brightness, voice.fill, voice.waveform);
 
-  const panner = ctx.createStereoPanner();
-  panner.pan.value = vibe.xToPan(voice.x);
+  const panner = new StereoPannerNode(ctx, { pan: vibe.xToPan(voice.x) });
 
   // Blend effect: overlap-driven audio processing
   const blendFx = createBlendEffect(ctx, voice.blend);
@@ -183,24 +174,26 @@ export function buildVoice(
     const direction = voice.border.color === 'white' ? 1 : -1;
     const octaveFreq = freq * 2 ** (direction * octaveShift);
 
-    octaveOsc = ctx.createOscillator();
     // Match oscillator type to voice waveform (#83)
     const oscTypeMap: Record<WaveformType, OscillatorType> = {
       blend: 'sawtooth',
       pulse: 'square',
       sine: 'sine',
     };
-    octaveOsc.type = oscTypeMap[voice.waveform];
-    octaveOsc.frequency.value = octaveFreq;
+    octaveOsc = new OscillatorNode(ctx, {
+      type: oscTypeMap[voice.waveform],
+      frequency: octaveFreq,
+    });
 
-    octaveGainNode = ctx.createGain();
-    octaveGainNode.gain.value = vibe.borderOctaveGain(
-      voice.waveform,
-      voice.size,
-      voice.border.thickness,
-      voice.border.color,
-      voice.border.double,
-    );
+    octaveGainNode = new GainNode(ctx, {
+      gain: vibe.borderOctaveGain(
+        voice.waveform,
+        voice.size,
+        voice.border.thickness,
+        voice.border.color,
+        voice.border.double,
+      ),
+    });
     octaveOsc.connect(octaveGainNode);
     // Connect to formantMixer to avoid double gain application (#81)
     octaveGainNode.connect(formantMixer);
@@ -232,12 +225,9 @@ export function buildVoice(
   };
 
   if (voice.waveform === 'pulse') {
-    const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.value = freq;
+    const osc = new OscillatorNode(ctx, { type: 'sawtooth', frequency: freq });
 
-    const pwmOffset = ctx.createConstantSource();
-    pwmOffset.offset.value = (timbre * 2 - 1) * 0.9;
+    const pwmOffset = new ConstantSourceNode(ctx, { offset: (timbre * 2 - 1) * 0.9 });
 
     const ws = createPWMWaveshaper(ctx);
 
@@ -273,16 +263,12 @@ export function buildVoice(
   }
 
   if (voice.waveform === 'blend') {
-    const oscSaw = ctx.createOscillator();
-    oscSaw.type = 'sawtooth';
-    oscSaw.frequency.value = freq;
+    const oscSaw = new OscillatorNode(ctx, { type: 'sawtooth', frequency: freq });
 
-    const oscTri = ctx.createOscillator();
-    oscTri.type = 'triangle';
-    oscTri.frequency.value = freq;
+    const oscTri = new OscillatorNode(ctx, { type: 'triangle', frequency: freq });
 
-    const gainSaw = ctx.createGain();
-    const gainTri = ctx.createGain();
+    const gainSaw = new GainNode(ctx);
+    const gainTri = new GainNode(ctx);
 
     const mix = 1 - Math.abs(timbre - 0.5) * 2;
     gainTri.gain.value = Math.sin((mix * Math.PI) / 2);
@@ -320,11 +306,9 @@ export function buildVoice(
   }
 
   // Sine -- default, with subtle harmonic enrichment (analog impurity)
-  const osc = ctx.createOscillator();
-  osc.type = 'sine';
-  osc.frequency.value = freq;
+  const osc = new OscillatorNode(ctx, { type: 'sine', frequency: freq });
 
-  const sineWarm = ctx.createWaveShaper();
+  const sineWarm = new WaveShaperNode(ctx);
   const warmSamples = 1024;
   const warmCurve = new Float32Array(warmSamples);
   for (let i = 0; i < warmSamples; i++) {
