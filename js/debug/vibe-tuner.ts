@@ -481,6 +481,28 @@ const PANEL_CSS = `
   font-family: monospace;
   font-size: 11px;
 }
+@media (max-width: 600px) {
+  .vt-panel {
+    position: fixed;
+    inset: 0;
+    height: 100dvh;
+    border-left: none;
+    z-index: 9999;
+  }
+  .vt-close {
+    font-size: 28px;
+    padding: 0 12px;
+  }
+  .vt-canvas {
+    max-width: calc(100% - 24px);
+  }
+  .vt-bottom {
+    max-height: 30%;
+  }
+  .vt-slider-label {
+    width: 72px;
+  }
+}
 @keyframes vt-wiggle {
   0%   { transform: scale(1) rotate(0); }
   6%   { transform: scale(1.3) rotate(-12deg); }
