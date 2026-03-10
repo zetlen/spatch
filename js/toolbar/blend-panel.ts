@@ -37,16 +37,11 @@ export function createBlendPanel(deps: {
   }
 
   // Icon references for sprite scanner:
-  // #tabler-ghost #tabler-skull #tabler-diamond #tabler-meteor
-  // #tabler-virus #tabler-spiral #tabler-biohazard
+  // #tabler-diamond #tabler-skull #tabler-spiral
   const modes: { value: BlendMode; symbol: string; title: string }[] = [
-    { symbol: 'tabler-ghost', title: 'Soft Light', value: 'soft-light' },
-    { symbol: 'tabler-skull', title: 'Multiply', value: 'multiply' },
     { symbol: 'tabler-diamond', title: 'Screen', value: 'screen' },
-    { symbol: 'tabler-meteor', title: 'Overlay', value: 'overlay' },
-    { symbol: 'tabler-virus', title: 'Burn', value: 'color-burn' },
+    { symbol: 'tabler-skull', title: 'Multiply', value: 'multiply' },
     { symbol: 'tabler-spiral', title: 'Difference', value: 'difference' },
-    { symbol: 'tabler-biohazard', title: 'Exclusion', value: 'exclusion' },
   ];
 
   function open(): void {

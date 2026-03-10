@@ -1,6 +1,6 @@
 // engine.ts — Web Audio engine: AudioEngine class
 
-import { computeTotalOverlap, createEffect } from '../effects.ts';
+import { computeOverlap, createEffect, FM_PARAMS, computeFMDepth } from '../effects.ts';
 import { type Envelope, type SigilData, type Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import {
@@ -17,6 +17,8 @@ import {
   type AudioVoice,
   buildVoice,
   fillToKey,
+  getCarrierFrequencyParams,
+  getModulatorNode,
   safeDisconnect,
   safeStop,
 } from './voice-builder.ts';
@@ -25,12 +27,21 @@ export interface PlayOptions {
   irBuffer?: AudioBuffer;
 }
 
+/** A cross-voice FM connection: top voice modulates bottom voice's frequency. */
+interface FMConnection {
+  depthGain: GainNode;
+  feedbackGain: GainNode | undefined;
+  lfo: OscillatorNode | undefined;
+  lfoGain: GainNode | undefined;
+}
+
 // ---- Audio Engine ----
 
 export class AudioEngine {
   audioCtx: AudioContext | undefined = undefined;
   activeVoices: AudioVoice[] = [];
   masterGain: GainNode | undefined;
+  private _fmConnections = new Map<string, FMConnection>();
   envelopeGain: GainNode | undefined;
   compressor: DynamicsCompressorNode | undefined;
   isPlaying: boolean = false;
@@ -204,8 +215,8 @@ export class AudioEngine {
       this.activeVoices.push(audioVoice);
     }
 
-    // Set initial blend overlap levels
-    this._updateBlendOverlaps(sigilState.voices);
+    // Sync FM connections (only created for overlapping pairs)
+    this._syncFMConnections(sigilState.voices);
 
     this._playEnvelope = envelope;
 
@@ -344,6 +355,7 @@ export class AudioEngine {
     const ctx = this.audioCtx;
     const now = ctx.currentTime;
     const voiceMap = new Map(sigilState.voices.map((v) => [v.id, v]));
+    let voicesChanged = false;
 
     // Remove audio voices for deleted voices
     for (let i = this.activeVoices.length - 1; i >= 0; i--) {
@@ -351,6 +363,7 @@ export class AudioEngine {
       if (!voiceMap.has(audioVoice.shapeId)) {
         this._stopVoice(audioVoice);
         this.activeVoices.splice(i, 1);
+        voicesChanged = true;
       }
     }
 
@@ -384,6 +397,7 @@ export class AudioEngine {
           audioVoice.hasSweep = true;
         }
         this.activeVoices.push(audioVoice);
+        voicesChanged = true;
       }
     }
 
@@ -409,6 +423,7 @@ export class AudioEngine {
         const rebuilt = this._buildVoice(ctx, voice);
         rebuilt.start(now);
         this.activeVoices.push(rebuilt);
+        voicesChanged = true;
         continue;
       }
 
@@ -525,8 +540,11 @@ export class AudioEngine {
       this._appliedVibe = vibe;
     }
 
-    // Update blend overlap levels
-    this._updateBlendOverlaps(sigilState.voices);
+    // Tear down stale FM connections when voices changed, then sync all
+    if (voicesChanged) {
+      this._disposeFMConnections();
+    }
+    this._syncFMConnections(sigilState.voices);
   }
 
   stop(): void {
@@ -570,29 +588,139 @@ export class AudioEngine {
     }
   }
 
-  _updateBlendOverlaps(voices: readonly Voice[]): void {
-    for (const audioVoice of this.activeVoices) {
-      const blendFx = audioVoice.blendEffect;
-      if (!blendFx) {
-        continue;
-      }
+  /** Tear down all FM connections. */
+  private _disposeFMConnections(): void {
+    for (const conn of this._fmConnections.values()) {
+      this._disposeFMConnection(conn);
+    }
+    this._fmConnections.clear();
+  }
 
-      const voiceIndex = voices.findIndex((v) => v.id === audioVoice.shapeId);
-      if (voiceIndex === -1) {
-        continue;
-      }
+  /** Tear down a single FM connection, silencing it first to avoid clicks. */
+  private _disposeFMConnection(conn: FMConnection): void {
+    conn.depthGain.gain.value = 0;
+    safeDisconnect(conn.depthGain);
+    if (conn.feedbackGain) {
+      conn.feedbackGain.gain.value = 0;
+      safeDisconnect(conn.feedbackGain);
+    }
+    if (conn.lfo) {
+      safeStop(conn.lfo);
+    }
+    if (conn.lfoGain) {
+      safeDisconnect(conn.lfoGain);
+    }
+  }
 
-      const overlap = computeTotalOverlap(voiceIndex, voices);
+  /**
+   * Lazily create, update, and tear down FM connections based on current overlap.
+   * Connections are only created when overlap > 0 — non-overlapping voices have
+   * NO nodes attached to their frequency AudioParams, keeping the audio graph clean.
+   */
+  private _syncFMConnections(voices: readonly Voice[]): void {
+    const ctx = this.audioCtx;
+    if (!ctx) return;
 
-      // For color-burn, overlap reduces dry signal instead of adding wet
-      const dryGain = (blendFx.wetGain as GainNode & { _dryGain?: GainNode })._dryGain;
-      if (dryGain) {
-        blendFx.wetGain.gain.value = 0;
-        dryGain.gain.value = 1 - overlap;
-      } else {
-        blendFx.wetGain.gain.value = overlap;
+    const audioById = new Map(this.activeVoices.map((v) => [v.shapeId, v]));
+    const activeKeys = new Set<string>();
+
+    for (let i = 0; i < voices.length; i++) {
+      for (let j = i + 1; j < voices.length; j++) {
+        const carrierData = voices[i]!;
+        const modulatorData = voices[j]!;
+
+        const overlap = computeOverlap(
+          modulatorData.x,
+          modulatorData.y,
+          modulatorData.size,
+          carrierData.x,
+          carrierData.y,
+          carrierData.size,
+        );
+
+        if (overlap <= 0) continue;
+
+        // Skip FM for blend modes with no modulation (e.g. screen)
+        const params = FM_PARAMS[modulatorData.blend];
+        if (params.maxIndex <= 0) continue;
+
+        const key = `${modulatorData.id}:${carrierData.id}`;
+        activeKeys.add(key);
+
+        const carrierAudio = audioById.get(carrierData.id);
+        const modulatorAudio = audioById.get(modulatorData.id);
+        if (!carrierAudio || !modulatorAudio) continue;
+
+        let conn = this._fmConnections.get(key);
+        if (!conn) {
+          conn = this._createFMConnection(ctx, modulatorData, modulatorAudio, carrierAudio);
+          this._fmConnections.set(key, conn);
+        }
+
+        // Update depth
+        const modNode = getModulatorNode(modulatorAudio);
+        const modFreq = modNode.frequency.value;
+        const depth = computeFMDepth(overlap, params, modFreq);
+
+        if (conn.lfoGain) {
+          conn.depthGain.gain.value = 0;
+          conn.lfoGain.gain.value = depth;
+        } else {
+          conn.depthGain.gain.value = depth;
+        }
+
+        if (conn.feedbackGain) {
+          conn.feedbackGain.gain.value = overlap * params.feedback * modFreq * 0.5;
+        }
       }
     }
+
+    // Tear down connections for pairs that no longer overlap
+    for (const [key, conn] of this._fmConnections) {
+      if (!activeKeys.has(key)) {
+        this._disposeFMConnection(conn);
+        this._fmConnections.delete(key);
+      }
+    }
+  }
+
+  /** Create a single FM connection: modulator oscillator → depth → carrier frequency. */
+  private _createFMConnection(
+    ctx: AudioContext,
+    modulatorData: Voice,
+    modulatorAudio: AudioVoice,
+    carrierAudio: AudioVoice,
+  ): FMConnection {
+    const params = FM_PARAMS[modulatorData.blend];
+    const depthGain = new GainNode(ctx, { gain: 0 });
+    const modulatorNode = getModulatorNode(modulatorAudio);
+    const carrierParams = getCarrierFrequencyParams(carrierAudio);
+
+    modulatorNode.connect(depthGain);
+    for (const freqParam of carrierParams) {
+      depthGain.connect(freqParam);
+    }
+
+    // Self-modulation feedback for overlay mode
+    let feedbackGain: GainNode | undefined;
+    if (params.feedback > 0) {
+      feedbackGain = new GainNode(ctx, { gain: 0 });
+      modulatorNode.connect(feedbackGain);
+      feedbackGain.connect(modulatorNode.frequency);
+    }
+
+    // LFO on depth for exclusion mode
+    let lfo: OscillatorNode | undefined;
+    let lfoGain: GainNode | undefined;
+    if (params.lfoRate > 0) {
+      lfo = new OscillatorNode(ctx, { type: 'sine', frequency: params.lfoRate });
+      lfoGain = new GainNode(ctx, { gain: 0 });
+      lfo.connect(lfoGain);
+      lfoGain.connect(depthGain.gain);
+      lfo.start();
+    }
+
+    return { depthGain, feedbackGain, lfo, lfoGain };
   }
 
   private _buildReverb(): void {
@@ -663,6 +791,8 @@ export class AudioEngine {
   _cleanup(): void {
     this._sessionId++;
 
+    this._disposeFMConnections();
+
     for (const audioVoice of this.activeVoices) {
       this._stopVoice(audioVoice);
     }
@@ -731,7 +861,6 @@ export class AudioEngine {
     }
     safeDisconnect(audioVoice.outputNode);
     audioVoice.effectDispose?.();
-    audioVoice.blendEffect?.dispose();
   }
 
   _buildVoice(ctx: AudioContext, voice: Voice): AudioVoice {

@@ -482,7 +482,7 @@ export function initTutorial(deps: TutorialDeps): {
       showCanvas: true,
       setup() {
         if (demoSqId) store.updateVoice(demoSqId, { blend: 'screen' });
-        if (demoCircId) store.updateVoice(demoCircId, { blend: 'color-burn' });
+        if (demoCircId) store.updateVoice(demoCircId, { blend: 'multiply' });
         requestRender();
         playLatched();
       },
@@ -492,17 +492,16 @@ export function initTutorial(deps: TutorialDeps): {
       text: 'Blend modes modulate where shapes overlap.',
       showCanvas: true,
       setup() {
-        if (demoSqId) store.updateVoice(demoSqId, { blend: 'overlay' });
-        if (demoCircId) store.updateVoice(demoCircId, { blend: 'exclusion' });
+        if (demoSqId) store.updateVoice(demoSqId, { blend: 'multiply' });
+        if (demoCircId) store.updateVoice(demoCircId, { blend: 'difference' });
         requestRender();
         playLatched();
       },
       teardown() {
         // Restore positions and blends
         if (demoTriId) store.updateVoice(demoTriId, { x: normalizedCoord(0.3) });
-        if (demoSqId) store.updateVoice(demoSqId, { x: normalizedCoord(0.5), blend: 'soft-light' });
-        if (demoCircId)
-          store.updateVoice(demoCircId, { x: normalizedCoord(0.5), blend: 'soft-light' });
+        if (demoSqId) store.updateVoice(demoSqId, { x: normalizedCoord(0.5), blend: 'screen' });
+        if (demoCircId) store.updateVoice(demoCircId, { x: normalizedCoord(0.5), blend: 'screen' });
         requestRender();
       },
     },

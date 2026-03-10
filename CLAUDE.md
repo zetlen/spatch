@@ -103,9 +103,8 @@ js/
   colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
   patterns.ts        SVG pattern definitions (stripes, checker, noise, gradient)
   effects.ts         Audio effect builders: pattern effects (chorus, tremolo,
-                     flanger, phaser) and blend effects (saturation,
-                     compression, exciter, gating, comb filter, flanger) +
-                     overlap computation
+                     flanger, phaser), FM synthesis parameters per blend mode
+                     (FM_PARAMS table), and overlap computation
   serialize.ts       Bespoke Base64 URL serialization (bitfield-packed, no keys)
   share.ts           Share overlay: link + embed snippet generation
   credits.ts         Credits overlay toggle + audio muffling + dynamic photo credit
@@ -236,12 +235,19 @@ design rationale and enumeration of past violations.
     ramp, periodic per vertex count (90° for square, 120° for triangle). Every
     angle within the period maps to a unique timbre. Circles have no timbre and
     no rotation.
-  - `blend` → CSS `mix-blend-mode` + overlap-driven audio effect.
-    Default is `soft-light`. Seven modes, each mapping to an audio chain:
-    soft-light (tape saturation), multiply (heavy saturation), screen (compression),
-    overlay (harmonic exciter), color-burn (gating), difference (comb filter),
-    exclusion (swept flanger). Intensity is derived geometrically from shape
-    overlap — no stored wet/dry parameter.
+  - `blend` → CSS `mix-blend-mode` + cross-voice FM synthesis.
+    Default is `screen`. All 3 modes are commutative (symmetric), so voice
+    ordering is not data — DOM order has no effect on visuals or audio.
+    Only modes that are visually distinct for ALL color combinations are
+    included, to preserve bijection (no two states may look identical).
+    When shapes overlap, both voices cross-modulate each other's oscillator
+    frequency — bidirectional FM synthesis. The blend mode determines the
+    FM character: screen (default, no FM), multiply (exponential depth,
+    index 1.5), difference (linear depth, index 1.5). Modulation depth is
+    derived geometrically from pairwise shape overlap. The 9 waveform-pair
+    combinations (sine/pulse/blend × sine/pulse/blend) produce naturally
+    distinct FM timbres because different modulator waveforms create
+    different harmonic spectra.
   - `border` → inset stroke(s) on the shape + octave-doubled sine oscillator.
     White border = octave up, black = octave down. Single = 1 octave shift,
     double = 2 octaves. `thickness` scales both the visual stroke width and
@@ -325,16 +331,22 @@ extract it into a shared function or helper. No exceptions. DRY it up.
   discriminated on the `waveform` field. Sine has no `timbre`; pulse and blend do.
 - **InteractionState** is a discriminated union for the canvas interaction state
   machine (idle, dragging, resizing, rotating, etc.), replacing scattered variables.
-- **BlendMode** is a string union of the 7 supported blend modes.
-  Each voice has a `blend` field (default `soft-light`). SVG renders each voice
-  group with CSS `mix-blend-mode` inside an isolation container. Audio routes each
-  voice through a blend effect whose wet/dry is computed from geometric overlap.
+- **BlendMode** is a string union of 3 commutative (order-independent)
+  blend modes: screen, multiply, difference. Each voice has a `blend` field
+  (default `screen`). SVG renders each voice group with CSS `mix-blend-mode`
+  inside an isolation container. Audio uses bidirectional cross-voice FM
+  synthesis with depth driven by pairwise geometric overlap. Screen (default)
+  has no FM; multiply and difference each have distinct FM character. Only
+  modes that are visually distinct for ALL color combinations are allowed,
+  to preserve bijection.
 - **Border** is `{ color: BorderColor, double: boolean, thickness: NormalizedCoord } | undefined`.
   Visual: inset stroke(s) drawn inside the clipped shape. Audio: adds a sine
   oscillator at an octave-shifted frequency. Border changes trigger full voice
   rebuild in audio engine. The border panel UI (bottom toolbar) controls all fields.
-- Audio pattern effects return `{ input, output, dispose }` objects. Blend effects
-  return `{ input, output, wetGain, dispose }` (wetGain is externally controlled).
+- Audio pattern effects return `{ input, output, dispose }` objects. FM synthesis
+  for blend modes is managed at the engine level via `FMConnection` objects
+  (modulator→depthGain→carrier.frequency). `FM_PARAMS` in `effects.ts` defines
+  per-mode parameters (maxIndex, depthCurve, feedback, lfoRate).
 - **Every new field must satisfy the bijection principle.** If you add a field
   to a voice, you must add both a visual rendering path and an audio mapping.
   If you cannot identify both, the field should not exist.
@@ -429,10 +441,12 @@ Before opening or updating a pull request, verify:
   and audio interpretation.
 - To add a new pattern/effect: update `patterns.ts` (visual), `effects.ts`
   (audio), and add a button in `index.html`. Both sides are required.
-- To add a new blend mode: add to the `BlendMode` union in `types.ts`,
-  add a case in `createBlendEffect` in `effects.ts`, add pack/unpack entries
-  in `serialize.ts`, and add an `<option>` in `index.html`. The mode must
-  produce a visible difference when shapes overlap and map to an audio effect.
+- To add a new blend mode: add to the `BLEND_MODES` array in `types.ts`,
+  add an entry in `FM_PARAMS` in `effects.ts` (maxIndex, depthCurve,
+  feedback, lfoRate), add a button in `toolbar/blend-panel.ts`, and update
+  serialization tests. The mode MUST be commutative (order-independent) —
+  asymmetric modes like overlay or color-burn are not allowed because voice
+  ordering is not data. Set maxIndex to 0 for modes with no FM.
 - To modify border behavior: update `Border` type in `types.ts`, update
   `canvas/render.ts` voice reconciliation (visual rendering),
   `audio/voice-builder.ts` (octave oscillator), `serialize.ts` (pack/unpack),

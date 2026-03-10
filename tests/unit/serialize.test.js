@@ -12,7 +12,7 @@ function makeState(overrides = {}) {
 
 function makeVoice(overrides = {}) {
   return {
-    blend: 'soft-light',
+    blend: 'screen',
     border: undefined,
     effect: undefined,
     fill: { h: 200, l: 50, mode: 'solid', s: 80 },
@@ -113,15 +113,7 @@ describe('serializeState / deserializeState round-trip', () => {
   });
 
   test('all blend modes survive round-trip', () => {
-    const blends = [
-      'soft-light',
-      'multiply',
-      'screen',
-      'overlay',
-      'color-burn',
-      'difference',
-      'exclusion',
-    ];
+    const blends = ['screen', 'multiply', 'difference'];
     const state = makeState({
       voices: blends.map((b) => makeVoice({ blend: b })),
     });

@@ -3,8 +3,6 @@
 // Contains the AudioVoice type hierarchy, Web Audio utility functions,
 // and the buildVoice factory that constructs the full graph for a single voice.
 
-import type { BlendEffect } from '../effects.ts';
-import { createBlendEffect } from '../effects.ts';
 import type { AudioEffect, BlendMode, Fill, PatternType, Voice, WaveformType } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
@@ -21,7 +19,6 @@ export interface AudioVoiceBase {
   currentBorder: string | undefined; // Serialized border for change detection
   currentFillKey: string | undefined;
   hasSweep: boolean;
-  blendEffect: BlendEffect | undefined;
   octaveOsc: OscillatorNode | undefined;
   octaveGainNode: GainNode | undefined;
   shapeId: string;
@@ -137,11 +134,9 @@ export function buildVoice(
 
   const panner = new StereoPannerNode(ctx, { pan: vibe.xToPan(voice.x) });
 
-  // Blend effect: overlap-driven audio processing
-  const blendFx = createBlendEffect(ctx, voice.blend);
-
-  // Wire: gain -> F1 -> mixer -> brightness -> [effect] -> blendFx -> panner -> master
-  //       Gain -> F2 -> mixer
+  // Wire: gain -> F1 -> mixer -> brightness -> [effect] -> panner -> master
+  //       gain -> F2 -> mixer
+  // FM synthesis for blend modes is handled at the engine level (cross-voice routing).
   gain.connect(formantF1);
   gain.connect(formantF2);
   formantF1.connect(formantMixer);
@@ -160,8 +155,7 @@ export function buildVoice(
     }
   }
 
-  lastNode.connect(blendFx.input);
-  blendFx.output.connect(panner);
+  lastNode.connect(panner);
   panner.connect(masterGain);
 
   // Octave doubling: border adds a sine oscillator at shifted frequency.
@@ -204,7 +198,6 @@ export function buildVoice(
     : undefined;
 
   const shared = {
-    blendEffect: blendFx,
     brightness,
     currentBlend: voice.blend,
     currentBorder: borderKey,
@@ -341,4 +334,38 @@ export function buildVoice(
     },
     waveform: 'sine',
   };
+}
+
+// ---- FM synthesis helpers ----
+
+/** Get the primary oscillator node to use as an FM modulator source. */
+export function getModulatorNode(voice: AudioVoice): OscillatorNode {
+  switch (voice.waveform) {
+    case 'sine':
+      return voice.oscillator;
+    case 'square':
+      return voice.oscRaw;
+    case 'triangle':
+      return voice.oscSaw;
+  }
+}
+
+/** Get all carrier frequency AudioParams that FM should modulate. */
+export function getCarrierFrequencyParams(voice: AudioVoice): AudioParam[] {
+  const params: AudioParam[] = [];
+  switch (voice.waveform) {
+    case 'sine':
+      params.push(voice.oscillator.frequency);
+      break;
+    case 'square':
+      params.push(voice.oscRaw.frequency);
+      break;
+    case 'triangle':
+      params.push(voice.oscSaw.frequency, voice.oscTri.frequency);
+      break;
+  }
+  if (voice.octaveOsc) {
+    params.push(voice.octaveOsc.frequency);
+  }
+  return params;
 }

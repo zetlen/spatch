@@ -133,7 +133,7 @@ test.describe('Audio waveform snapshots', () => {
   });
 
   test('two overlapping voices', async ({ page }) => {
-    // Two shapes at same position triggers blend effect audio
+    // Two shapes at same position triggers FM synthesis from overlap
     await placeShape(page, 'circle', 0.5, 0.5);
     await page.keyboard.press('Escape'); // deselect so tool buttons reappear
     await placeShape(page, 'triangle', 0.5, 0.5);
@@ -228,6 +228,47 @@ test.describe('Audio waveform snapshots', () => {
     // Finish and capture the waveform
     const png = await page.evaluate(() => globalThis.__audioCapture.finishCapture({ duration: 3 }));
     expect(Buffer.from(png, 'base64')).toMatchSnapshot('triangle-rotation.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('FM synthesis: multiply blend overlapping voices', async ({ page }) => {
+    await placeShape(page, 'circle', 0.5, 0.5);
+    await page.keyboard.press('Escape');
+    await placeShape(page, 'triangle', 0.5, 0.5);
+    // Set multiply blend on the second voice for FM modulation
+    await page.evaluate(() => {
+      const voices = globalThis.__testStore.data.voices;
+      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
+    });
+    const png = await captureAudio(page);
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-multiply-overlap.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('FM synthesis: difference blend overlapping voices', async ({ page }) => {
+    await placeShape(page, 'circle', 0.5, 0.5);
+    await page.keyboard.press('Escape');
+    await placeShape(page, 'triangle', 0.5, 0.5);
+    await page.evaluate(() => {
+      const voices = globalThis.__testStore.data.voices;
+      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'difference' });
+    });
+    const png = await captureAudio(page);
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-difference-overlap.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('screen blend: no FM even when overlapping', async ({ page }) => {
+    // Screen is default — overlapping shapes should sound like non-overlapping
+    await placeShape(page, 'circle', 0.5, 0.5);
+    await page.keyboard.press('Escape');
+    await placeShape(page, 'triangle', 0.5, 0.5);
+    // Both voices have screen (default), so no FM
+    const png = await captureAudio(page);
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('screen-no-fm-overlap.png', {
       maxDiffPixelRatio: 0.01,
     });
   });

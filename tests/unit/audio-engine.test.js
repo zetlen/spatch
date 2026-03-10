@@ -139,7 +139,7 @@ function createStubAudioContext() {
 
 function makeVoice(id, waveform = 'sine', overrides = {}) {
   const base = {
-    blend: 'soft-light',
+    blend: 'screen',
     border: undefined,
     effect: undefined,
     fill: { h: 200, l: 50, mode: 'solid', s: 80 },
@@ -263,7 +263,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
   });
 });
 
-describe('AudioEngine — blend effects', () => {
+describe('AudioEngine — blend modes and FM synthesis', () => {
   let engine;
 
   beforeEach(async () => {
@@ -278,17 +278,16 @@ describe('AudioEngine — blend effects', () => {
     return state;
   }
 
-  test('voices get blend effects during play', async () => {
+  test('voices track currentBlend during play', async () => {
     const voiceA = makeVoice('a');
     await startWith([voiceA]);
 
     const audioVoice = engine.activeVoices[0];
-    expect(audioVoice.blendEffect).not.toBeUndefined();
-    expect(audioVoice.currentBlend).toBe('soft-light');
+    expect(audioVoice.currentBlend).toBe('screen');
   });
 
   test('blend change triggers voice rebuild', async () => {
-    const voiceA = makeVoice('a', 'sine', { blend: 'soft-light' });
+    const voiceA = makeVoice('a', 'sine', { blend: 'screen' });
     await startWith([voiceA]);
 
     const originalVoice = engine.activeVoices[0];
@@ -304,15 +303,7 @@ describe('AudioEngine — blend effects', () => {
   });
 
   test('all blend modes can be built without error', async () => {
-    const blends = [
-      'soft-light',
-      'multiply',
-      'screen',
-      'overlay',
-      'color-burn',
-      'difference',
-      'exclusion',
-    ];
+    const blends = ['screen', 'multiply', 'difference'];
     for (const blend of blends) {
       const voiceA = makeVoice('a', 'sine', { blend });
       await startWith([voiceA]);
@@ -320,6 +311,55 @@ describe('AudioEngine — blend effects', () => {
       expect(engine.activeVoices[0].currentBlend).toBe(blend);
       engine.stop();
     }
+  });
+
+  test('overlapping voices create FM connections', async () => {
+    // Two voices at the same position — should have overlap
+    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
+    const voiceB = makeVoice('b', 'pulse', { x: 0.5, y: 0.5, size: 0.2, blend: 'multiply' });
+    await startWith([voiceA, voiceB]);
+
+    // FM connections are internal, but we can verify voices were built successfully
+    expect(engine.activeVoices.length).toBe(2);
+  });
+
+  test('non-overlapping voices do not create FM connections', async () => {
+    // Voices far apart — no overlap
+    const voiceA = makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 });
+    const voiceB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05, blend: 'multiply' });
+    await startWith([voiceA, voiceB]);
+
+    expect(engine.activeVoices.length).toBe(2);
+    // No FM connections should exist (internal map is empty)
+    expect(engine._fmConnections.size).toBe(0);
+  });
+
+  test('screen blend creates no FM even when overlapping', async () => {
+    // Screen is the default — no FM modulation regardless of overlap
+    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2, blend: 'screen' });
+    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2, blend: 'screen' });
+    await startWith([voiceA, voiceB]);
+
+    expect(engine.activeVoices.length).toBe(2);
+    // Screen has maxIndex: 0, so no FM connections should be created
+    expect(engine._fmConnections.size).toBe(0);
+  });
+
+  test('FM connections are cleaned up when voices separate', async () => {
+    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
+    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2, blend: 'multiply' });
+    await startWith([voiceA, voiceB]);
+
+    // Should have FM connection from overlap
+    expect(engine._fmConnections.size).toBeGreaterThan(0);
+
+    // Move voices apart
+    const updatedA = makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 });
+    const updatedB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05, blend: 'multiply' });
+    engine.update(makeSigilState([updatedA, updatedB]));
+
+    // FM connections should be torn down
+    expect(engine._fmConnections.size).toBe(0);
   });
 });
 

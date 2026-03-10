@@ -1,8 +1,47 @@
-// Effects.ts — Audio effect builders mapped to visual patterns and blend modes
+// Effects.ts — Audio effect builders for patterns and FM synthesis for blend modes
 
 import type { AudioEffect, BlendMode, PatternType } from './types.ts';
 
-export const DEFAULT_BLEND: BlendMode = 'soft-light';
+export const DEFAULT_BLEND: BlendMode = 'screen';
+
+// ---- FM synthesis parameters per blend mode ----
+//
+// When shapes overlap, the top voice's oscillator modulates the bottom voice's
+// frequency. The blend mode of the top voice determines the FM character.
+
+/** FM behavior parameters for a blend mode. */
+export interface FMParams {
+  /** Maximum modulation index at full overlap. */
+  maxIndex: number;
+  /** Depth scaling: 'linear' = overlap × maxIndex, 'exponential' = overlap² × maxIndex. */
+  depthCurve: 'linear' | 'exponential';
+  /** Self-modulation feedback amount (0–1). Modulator feeds back into its own frequency. */
+  feedback: number;
+  /** LFO rate for depth modulation (Hz). 0 = no LFO. */
+  lfoRate: number;
+}
+
+/** FM parameters indexed by blend mode. */
+export const FM_PARAMS: Record<BlendMode, FMParams> = {
+  screen: { maxIndex: 0, depthCurve: 'linear', feedback: 0, lfoRate: 0 },
+  multiply: { maxIndex: 1.5, depthCurve: 'exponential', feedback: 0, lfoRate: 0 },
+  difference: { maxIndex: 1.5, depthCurve: 'linear', feedback: 0, lfoRate: 0 },
+};
+
+/** Max frequency deviation in Hz to prevent extreme high-ratio FM from sounding harsh. */
+const MAX_FM_DEVIATION = 2000;
+
+/**
+ * Compute the FM depth gain value for a modulator→carrier connection.
+ * depth = min(scaledIndex × modulatorFreq, MAX_DEVIATION)
+ */
+export function computeFMDepth(overlap: number, params: FMParams, modulatorFreq: number): number {
+  const scaled =
+    params.depthCurve === 'exponential'
+      ? overlap * overlap * params.maxIndex
+      : overlap * params.maxIndex;
+  return Math.min(scaled * modulatorFreq, MAX_FM_DEVIATION);
+}
 
 export function createEffect(
   audioCtx: AudioContext,
@@ -128,159 +167,6 @@ function createPhaser(ctx: AudioContext): AudioEffect {
   filters.at(-1)!.connect(wet);
 
   return { dispose: () => lfo.stop(), input, output };
-}
-
-// ---- Blend mode audio effects ----
-//
-// Each blend effect is a dry/wet chain. The wet amount is controlled externally
-// By setting the wetGain.gain value based on geometric overlap.
-
-export interface BlendEffect {
-  input: GainNode;
-  output: GainNode;
-  wetGain: GainNode;
-  dispose: () => void;
-}
-
-const noop = () => {};
-
-export function createBlendEffect(ctx: AudioContext, mode: BlendMode): BlendEffect {
-  const input = new GainNode(ctx);
-  const output = new GainNode(ctx);
-  const dry = new GainNode(ctx);
-  const wet = new GainNode(ctx, { gain: 0 }); // Overlap drives this
-
-  input.connect(dry);
-  dry.connect(output);
-
-  let dispose = noop;
-
-  switch (mode) {
-    case 'soft-light': {
-      dispose = wireSaturation(ctx, input, wet, 2);
-      break;
-    }
-    case 'multiply': {
-      dispose = wireSaturation(ctx, input, wet, 6);
-      break;
-    }
-    case 'screen': {
-      wireCompression(ctx, input, wet);
-      break;
-    }
-    case 'overlay': {
-      dispose = wireExciter(ctx, input, wet);
-      break;
-    }
-    case 'color-burn': {
-      wireGate(ctx, input, wet, dry);
-      break;
-    }
-    case 'difference': {
-      dispose = wireCombFilter(ctx, input, wet);
-      break;
-    }
-    case 'exclusion': {
-      dispose = wireFlanger(ctx, input, wet);
-      break;
-    }
-  }
-
-  wet.connect(output);
-
-  return { dispose, input, output, wetGain: wet };
-}
-
-// Tape saturation — gentle even-order harmonics via waveshaper
-function wireSaturation(
-  ctx: AudioContext,
-  input: GainNode,
-  wet: GainNode,
-  drive: number,
-): () => void {
-  const samples = 1024;
-  const curve = new Float32Array(samples);
-  for (let i = 0; i < samples; i++) {
-    const x = (i * 2) / samples - 1;
-    curve[i] = Math.tanh(x * drive);
-  }
-  const ws = new WaveShaperNode(ctx, { curve, oversample: '2x' });
-  input.connect(ws);
-  ws.connect(wet);
-  return () => {};
-}
-
-// Additive with soft compression — DynamicsCompressor
-function wireCompression(ctx: AudioContext, input: GainNode, wet: GainNode): void {
-  const comp = new DynamicsCompressorNode(ctx, {
-    threshold: -20,
-    knee: 30,
-    ratio: 8,
-    attack: 0.003,
-    release: 0.1,
-  });
-  input.connect(comp);
-  comp.connect(wet);
-}
-
-// Harmonic exciter — asymmetric waveshaper that adds even harmonics
-function wireExciter(ctx: AudioContext, input: GainNode, wet: GainNode): () => void {
-  const samples = 1024;
-  const curve = new Float32Array(samples);
-  for (let i = 0; i < samples; i++) {
-    const x = (i * 2) / samples - 1;
-    // Asymmetric: positive half gets more drive than negative
-    curve[i] = x >= 0 ? Math.tanh(x * 4) : Math.tanh(x * 2) * 0.8;
-  }
-  const ws = new WaveShaperNode(ctx, { curve, oversample: '2x' });
-
-  // High-pass to keep only the added harmonics
-  const hp = new BiquadFilterNode(ctx, { type: 'highpass', frequency: 2000, Q: 0.5 });
-
-  input.connect(ws);
-  ws.connect(hp);
-  hp.connect(wet);
-  return () => {};
-}
-
-// Aggressive gating — overlap reduces dry gain toward silence
-function wireGate(ctx: AudioContext, input: GainNode, wet: GainNode, dry: GainNode): void {
-  // For color-burn, overlap reduces the dry signal instead of adding wet.
-  // We invert: wet is silent, dry gets reduced by overlap.
-  // The caller sets wet.gain = overlap, but we want dry.gain = 1 - overlap.
-  // We'll handle this in the overlap update by also adjusting dry.
-  // Wire wet to pass silence (just connect input to wet for the node graph,
-  // But the actual gating happens via dry.gain adjustment in _updateBlendOverlaps).
-  input.connect(wet);
-  // Store reference to dry on wet for the update function to find
-  (wet as GainNode & { _dryGain?: GainNode })._dryGain = dry;
-}
-
-// Comb filter — creates hollow, phasey tones from spectral notches
-function wireCombFilter(ctx: AudioContext, input: GainNode, wet: GainNode): () => void {
-  const delay = new DelayNode(ctx, { maxDelayTime: 0.05, delayTime: 0.008 }); // ~125 Hz comb frequency
-  const feedback = new GainNode(ctx, { gain: -0.7 }); // Negative = destructive interference
-
-  input.connect(delay);
-  delay.connect(feedback);
-  feedback.connect(delay);
-  delay.connect(wet);
-
-  return () => {};
-}
-
-// Flanging — swept comb filter
-function wireFlanger(ctx: AudioContext, input: GainNode, wet: GainNode): () => void {
-  const delay = new DelayNode(ctx, { maxDelayTime: 0.02, delayTime: 0.003 });
-  const feedback = new GainNode(ctx, { gain: 0.5 });
-  const lfo = createLFO(ctx, 0.3, 0.002, delay.delayTime);
-
-  input.connect(delay);
-  delay.connect(feedback);
-  feedback.connect(delay);
-  delay.connect(wet);
-
-  return () => lfo.stop();
 }
 
 // ---- Overlap computation ----

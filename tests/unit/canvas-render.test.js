@@ -45,7 +45,7 @@ function makeSineVoice(overrides = {}) {
     size: normalizedCoord(0.2),
     fill: { mode: 'solid', h: 200, s: 80, l: 50 },
     effect: undefined,
-    blend: 'soft-light',
+    blend: 'screen',
     border: undefined,
     ...overrides,
   };
@@ -60,7 +60,7 @@ function makePulseVoice(overrides = {}) {
     size: normalizedCoord(0.15),
     fill: { mode: 'solid', h: 120, s: 70, l: 45 },
     effect: undefined,
-    blend: 'soft-light',
+    blend: 'screen',
     border: undefined,
     timbre: normalizedCoord(0),
     ...overrides,
@@ -76,7 +76,7 @@ function makeBlendVoice(overrides = {}) {
     size: normalizedCoord(0.18),
     fill: { mode: 'solid', h: 30, s: 90, l: 55 },
     effect: undefined,
-    blend: 'soft-light',
+    blend: 'screen',
     border: undefined,
     timbre: normalizedCoord(0),
     ...overrides,
@@ -430,12 +430,12 @@ describe('canvas render — blend mode', () => {
 
   test('blend mode updates on re-render', () => {
     const svg = createSVG();
-    const voice = makeSineVoice({ blend: 'soft-light' });
+    const voice = makeSineVoice({ blend: 'screen' });
     const state = makeState({ voices: [voice] });
     render(svg, state, undefined);
 
     const group = svg.querySelector('g[data-voice-id="v-sine-1"]');
-    expect(group.style.mixBlendMode).toBe('soft-light');
+    expect(group.style.mixBlendMode).toBe('screen');
 
     const updatedVoice = { ...voice, blend: 'difference' };
     const state2 = makeState({ voices: [updatedVoice] });

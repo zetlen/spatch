@@ -42,16 +42,12 @@ export type WaveformType = 'sine' | 'pulse' | 'blend';
 export const PATTERN_TYPES = ['stripes', 'checker', 'noise', 'plaid'] as const;
 export type PatternType = (typeof PATTERN_TYPES)[number];
 
-/** CSS mix-blend-mode value that maps to an overlap-driven audio effect. */
-export const BLEND_MODES = [
-  'soft-light',
-  'multiply',
-  'screen',
-  'overlay',
-  'color-burn',
-  'difference',
-  'exclusion',
-] as const;
+/** CSS mix-blend-mode value that maps to an overlap-driven audio effect.
+ *  All modes are commutative (order-independent) so voice ordering is not data.
+ *  Only modes that are visually distinct for ALL color combinations are included,
+ *  to preserve the bijection principle (no two states may look identical).
+ *  Screen is the default — visual blending with no FM modulation. */
+export const BLEND_MODES = ['screen', 'multiply', 'difference'] as const;
 export type BlendMode = (typeof BLEND_MODES)[number];
 
 /** Fill mode discriminant for the Fill union. */

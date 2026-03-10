@@ -57,9 +57,9 @@ describe('createIconButton', () => {
     const btn = createIconButton({
       className: 'action-btn',
       symbol: 'tabler-ghost',
-      dataset: { blend: 'soft-light', foo: 'bar' },
+      dataset: { blend: 'screen', foo: 'bar' },
     });
-    expect(btn.dataset.blend).toBe('soft-light');
+    expect(btn.dataset.blend).toBe('screen');
     expect(btn.dataset.foo).toBe('bar');
   });
 

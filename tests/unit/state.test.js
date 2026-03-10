@@ -173,10 +173,10 @@ describe('UndoManager undo / redo', () => {
 });
 
 describe('SigilStore blend mode', () => {
-  test('voices default to soft-light blend', () => {
+  test('voices default to screen blend', () => {
     const store = new SigilStore();
     const voice = store.addVoice('sine', 0.5, 0.5);
-    expect(voice.blend).toBe('soft-light');
+    expect(voice.blend).toBe('screen');
   });
 
   test('updateVoice can change blend mode', () => {
@@ -197,7 +197,7 @@ describe('SigilStore blend mode', () => {
 
     expect(store.getVoice(voice.id).blend).toBe('difference');
     undo.undo();
-    expect(store.data.voices[0].blend).toBe('soft-light');
+    expect(store.data.voices[0].blend).toBe('screen');
     undo.redo();
     expect(store.data.voices[0].blend).toBe('difference');
   });
