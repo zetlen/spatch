@@ -4,6 +4,7 @@ import ir from './TyndallBruceMonument.m4a';
 
 const scene: Scene = {
   name: 's-c-b-d',
+  icon: 'tabler-building-skyscraper',
   stageBackground,
   imageCredit: 'Mohammed Alim',
   creditUrl: 'https://www.pexels.com/@apyfz/',

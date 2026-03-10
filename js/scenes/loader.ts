@@ -83,6 +83,13 @@ export function preloadNextScene(currentIndex: number): void {
   });
 }
 
+/** Fire-and-forget prefetch for all scenes. */
+export function prefetchAllScenes(): void {
+  for (const scene of SCENES) {
+    prefetchScene(scene).catch(() => {});
+  }
+}
+
 /** Clear image cache state (testing only). */
 export function _reset(): void {
   imageLoaded.clear();

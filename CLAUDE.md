@@ -74,10 +74,11 @@ js/
     vibe.ts          Vibe class: perceptual gain tuning, reverb, mastering, synthesis params
     formants.ts      Formant filter bank for fill-driven vowel synthesis
   scenes/
-    scene-types.ts   Scene interface (name, stageBackground, imageCredit, creditUrl?, vibe)
+    scene-types.ts   Scene interface (name, icon, stageBackground, imageCredit, creditUrl?, vibe)
     index.ts         SCENES registry, getScene(), applyScene() crossfade,
                      initStageLayers() for two-layer background transition
-    loader.ts        prefetchScene(), loadSceneIR(), preloadNextScene()
+    loader.ts        prefetchScene(), loadSceneIR(), preloadNextScene(),
+                     prefetchAllScenes()
     <name>/          One directory per scene (see "Scene convention" below)
       index.ts       Default export of Scene object
       *.jpg          Stage background image
@@ -89,6 +90,7 @@ js/
     fill-panel.ts    Fill color/gradient expansion panel
     pattern-panel.ts Pattern effect dropdown panel
     harmonize-panel.ts Long-press scale picker for harmonize button
+    stage-panel.ts   Long-press scene picker for stage button
     dom-helpers.ts   Shared DOM construction helpers for toolbar panels
   debug/
     vibe-tuner.ts    Vibe tuner side drawer (shipped in prod, dynamically imported
@@ -256,9 +258,11 @@ design rationale and enumeration of past violations.
 - **Scene** is a global index on `SigilData` (not per-voice). Each scene is
   a self-contained module in `js/scenes/<name>/` containing a background image
   (`.jpg`), an optional impulse response (`.m4a`), and an `index.ts` that
-  exports a `Scene` object (`{ name, stageBackground, imageCredit, vibe }`).
+  exports a `Scene` object (`{ name, icon, stageBackground, imageCredit, vibe }`).
   The scene index is serialized as 1 B64 char (0–63) in the URL. Clicking the
-  stage button advances to the next scene. The `SCENES` array in
+  stage button advances to the next scene; long-pressing opens a scene picker
+  panel (like the harmonize panel) showing all scenes with their icons.
+  The `SCENES` array in
   `js/scenes/index.ts` is the registry. Scene satisfies the bijection
   principle: scene index → background image (visual) + vibe preset (audio).
   Scene transitions use a two-layer CSS crossfade (two `.stage-bg` divs swap
@@ -464,8 +468,9 @@ Before opening or updating a pull request, verify:
   `audio/vibe.ts` (audio params), `audio/engine.ts` (master chain wiring),
   `audio/voice-builder.ts` (per-voice params read from vibe), and
   `debug/vibe-tuner.ts` (debug UI). Scene index is serialized in
-  `serialize.ts` as 1 B64 char. Stage button cycles scenes via
-  `store.updateScene()` in `app.ts`. App.ts reactively calls `setVibe()`
+  `serialize.ts` as 1 B64 char. Stage button short-click cycles scenes,
+  long-press opens scene picker (`toolbar/stage-panel.ts`) via
+  `store.updateScene()`. App.ts reactively calls `setVibe()`
   and `applyScene()` when scene changes.
 - To add a new scene: create a directory under `js/scenes/<name>/` with a
   background `.jpg`, an optional IR `.m4a`, and an `index.ts` that default-
@@ -497,6 +502,7 @@ import ir from './SomeImpulseResponse.m4a';
 
 const scene: Scene = {
   name: 'scene-name',
+  icon: 'tabler-icon-name',
   stageBackground,
   imageCredit: 'photographer or source',
   creditUrl: 'https://link-to-credit',  // optional; omit if no URL available

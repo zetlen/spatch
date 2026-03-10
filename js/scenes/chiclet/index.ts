@@ -4,6 +4,7 @@ import ir from './DomesticLivingRoom.m4a';
 
 const scene: Scene = {
   name: 'chiclet',
+  icon: 'tabler-armchair',
   stageBackground,
   imageCredit: 'me',
   creditUrl: 'https://jbz.fyi',

@@ -4,6 +4,7 @@ import ir from './UndergroundCarPark.m4a';
 
 const scene: Scene = {
   name: 'structure-b',
+  icon: 'tabler-traffic-cone',
   stageBackground,
   imageCredit: 'liminalsorting.tumblr.com',
   creditUrl: 'https://liminalsorting.tumblr.com',

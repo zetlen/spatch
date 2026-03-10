@@ -4,6 +4,7 @@ import ir from './FalklandPalaceRoyalTennisCourt.m4a';
 
 const scene: Scene = {
   name: 'finger-lakes',
+  icon: 'tabler-fountain-off',
   stageBackground,
   imageCredit: 'Ed the Punk Rock Guy',
   creditUrl: 'https://reddit.com/u/Chicky_P00t',

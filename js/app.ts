@@ -7,7 +7,7 @@ import { Toolbar } from './toolbar/toolbar.ts';
 import { AudioEngine } from './audio/engine.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, saveToURL } from './serialize.ts';
-import { SCENES, applyScene, getScene, initStageLayers, randomSceneIndex } from './scenes';
+import { applyScene, getScene, initStageLayers, randomSceneIndex } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
 import { Vibe, setVibe, vibeSignal } from './audio/vibe.ts';
 import { qel } from './dom.ts';
@@ -20,6 +20,7 @@ import { initCredits } from './credits.ts';
 import { initShare } from './share.ts';
 import { randomize } from './harmony.ts';
 import { createHarmonizePanel } from './toolbar/harmonize-panel.ts';
+import { createStagePanel } from './toolbar/stage-panel.ts';
 
 // ---- Init ----
 
@@ -85,10 +86,15 @@ initStageLayers(appEl);
 // are fetched. Reassigned on every scene change.
 let sceneReady: Promise<void> = Promise.resolve();
 
-// Stage button: advance scene through the store
-qel('#btn-stage').addEventListener('click', () => {
-  store.updateScene((store.data.scene + 1) % SCENES.length);
-});
+// Stage button: short click advances scene, long press opens scene picker
+createStagePanel({
+  area: qel('#stage-panel'),
+  store,
+  undo,
+  requestRender: () => {
+    needsRender = true;
+  },
+}).bindLongPress(qel('#btn-stage'));
 
 // React to scene changes (and apply the initial scene on first run):
 // update background crossfade + vibe + prefetch.

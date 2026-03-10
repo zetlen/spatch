@@ -4,6 +4,7 @@ import ir from './EmptyApartmentBedroom.m4a';
 
 const scene: Scene = {
   name: 'grout',
+  icon: 'tabler-wall',
   stageBackground,
   imageCredit: 'Alf van Beem',
   creditUrl: 'https://commons.wikimedia.org/wiki/User:Alfvanbeem',

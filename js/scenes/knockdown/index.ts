@@ -4,6 +4,7 @@ import ir from './Basement.m4a';
 
 const scene: Scene = {
   name: 'knockdown',
+  icon: 'tabler-paint',
   stageBackground,
   imageCredit: 'me',
   creditUrl: 'https://jbz.fyi',
