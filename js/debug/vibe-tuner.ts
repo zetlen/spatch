@@ -105,6 +105,16 @@ const SECTIONS: SliderSection[] = [
     ],
   },
   {
+    title: 'Master Effects',
+    tab: 'voices',
+    sliders: [
+      { key: 'saturation', label: 'saturation', min: 0, max: 10, step: 0.1 },
+      { key: 'excite', label: 'excite', min: 0.0, max: 1.0, step: 0.01 },
+      { key: 'combMix', label: 'combMix', min: 0.0, max: 1.0, step: 0.01 },
+      { key: 'combFreq', label: 'combFreq', min: 0.001, max: 0.05, step: 0.001 },
+    ],
+  },
+  {
     title: 'Octave Gain',
     tab: 'voices',
     sliders: [
@@ -162,6 +172,10 @@ function stateToVibeOptions(state: Record<string, number>, ir: string | undefine
     formantQ: state['formantQ'],
     brightnessQ: state['brightnessQ'],
     stereoWidth: state['stereoWidth'],
+    saturation: state['saturation'],
+    excite: state['excite'],
+    combMix: state['combMix'],
+    combFreq: state['combFreq'],
     octaveGainCoeffs: {
       'up-1': state['oct:up-1'],
       'up-2': state['oct:up-2'],

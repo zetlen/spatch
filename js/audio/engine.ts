@@ -55,6 +55,17 @@ export class AudioEngine {
   private _eqLow: BiquadFilterNode | undefined;
   private _eqMid: BiquadFilterNode | undefined;
   private _eqHigh: BiquadFilterNode | undefined;
+  private _saturationShaper: WaveShaperNode | undefined;
+  private _saturationDry: GainNode | undefined;
+  private _saturationWet: GainNode | undefined;
+  private _exciterShaper: WaveShaperNode | undefined;
+  private _exciterHP: BiquadFilterNode | undefined;
+  private _exciterDry: GainNode | undefined;
+  private _exciterWet: GainNode | undefined;
+  private _combDelay: DelayNode | undefined;
+  private _combFeedback: GainNode | undefined;
+  private _combDry: GainNode | undefined;
+  private _combWet: GainNode | undefined;
   private _muffleFilter: BiquadFilterNode | undefined;
   private _muffled: boolean = false;
   private _reverbPreDelayNode: DelayNode | undefined;
@@ -165,9 +176,16 @@ export class AudioEngine {
       gain: vibe.eqHighGain,
     });
 
-    // Wire: masterGain -> envelopeGain -> compressor -> eqLow -> eqMid -> eqHigh -> analyser -> dest
+    // Master effects chain (between envelope and compressor)
+    this._buildMasterEffects(ctx);
+
+    // Wire: masterGain -> envelopeGain -> [saturation -> exciter -> comb] -> compressor -> EQ -> analyser -> dest
     this.masterGain.connect(this.envelopeGain);
-    this.envelopeGain.connect(this.compressor);
+    let lastNode: AudioNode = this.envelopeGain;
+    lastNode = this._wireMasterEffect(lastNode, this._saturationDry!, this._saturationWet!);
+    lastNode = this._wireMasterEffect(lastNode, this._exciterDry!, this._exciterWet!);
+    lastNode = this._wireMasterEffect(lastNode, this._combDry!, this._combWet!);
+    lastNode.connect(this.compressor);
     this.compressor.connect(this._eqLow);
     this._eqLow.connect(this._eqMid);
     this._eqMid.connect(this._eqHigh);
@@ -346,6 +364,128 @@ export class AudioEngine {
     if (this._reverbWet) {
       this._reverbWet.gain.setValueAtTime(vibe.reverbMix, now);
     }
+    this._updateMasterEffects(now);
+  }
+
+  /** Build the 3 master effect chains: saturation, exciter, comb filter. */
+  private _buildMasterEffects(ctx: AudioContext): void {
+    // Tape saturation — tanh waveshaper with variable drive
+    const satCurve = this._makeSaturationCurve(vibe.saturation);
+    this._saturationShaper = new WaveShaperNode(ctx, { curve: satCurve, oversample: '2x' });
+    this._saturationDry = new GainNode(ctx, { gain: vibe.saturation > 0 ? 0 : 1 });
+    this._saturationWet = new GainNode(ctx, { gain: vibe.saturation > 0 ? 1 : 0 });
+    this._saturationShaper.connect(this._saturationWet);
+
+    // Harmonic exciter — asymmetric waveshaper + high-pass to isolate added harmonics
+    const exciteCurve = this._makeExciterCurve();
+    this._exciterShaper = new WaveShaperNode(ctx, { curve: exciteCurve, oversample: '2x' });
+    this._exciterHP = new BiquadFilterNode(ctx, { type: 'highpass', frequency: 2000, Q: 0.5 });
+    this._exciterDry = new GainNode(ctx, { gain: 1 - vibe.excite });
+    this._exciterWet = new GainNode(ctx, { gain: vibe.excite });
+    this._exciterShaper.connect(this._exciterHP);
+    this._exciterHP.connect(this._exciterWet);
+
+    // Comb filter — delay with negative feedback for spectral notches
+    this._combDelay = new DelayNode(ctx, { maxDelayTime: 0.05, delayTime: vibe.combFreq });
+    this._combFeedback = new GainNode(ctx, { gain: -0.7 });
+    this._combDry = new GainNode(ctx, { gain: 1 - vibe.combMix });
+    this._combWet = new GainNode(ctx, { gain: vibe.combMix });
+    this._combDelay.connect(this._combFeedback);
+    this._combFeedback.connect(this._combDelay);
+    this._combDelay.connect(this._combWet);
+  }
+
+  /** Wire a dry/wet master effect into a chain. Returns the output merge node. */
+  private _wireMasterEffect(source: AudioNode, dry: GainNode, wet: GainNode): GainNode {
+    const ctx = this.audioCtx!;
+    const merge = new GainNode(ctx);
+    source.connect(dry);
+    dry.connect(merge);
+    // For saturation and comb, the input also feeds the effect chain
+    // (the effect nodes are already connected to wet in _buildMasterEffects)
+    if (wet === this._saturationWet) {
+      source.connect(this._saturationShaper!);
+    } else if (wet === this._exciterWet) {
+      source.connect(this._exciterShaper!);
+    } else if (wet === this._combWet) {
+      source.connect(this._combDelay!);
+    }
+    wet.connect(merge);
+    return merge;
+  }
+
+  private _makeSaturationCurve(drive: number): Float32Array<ArrayBuffer> {
+    const samples = 1024;
+    const curve = new Float32Array(samples);
+    const d = Math.max(0.1, drive);
+    for (let i = 0; i < samples; i++) {
+      const x = (i * 2) / samples - 1;
+      curve[i] = Math.tanh(x * d);
+    }
+    return curve;
+  }
+
+  private _makeExciterCurve(): Float32Array<ArrayBuffer> {
+    const samples = 1024;
+    const curve = new Float32Array(samples);
+    for (let i = 0; i < samples; i++) {
+      const x = (i * 2) / samples - 1;
+      curve[i] = x >= 0 ? Math.tanh(x * 4) : Math.tanh(x * 2) * 0.8;
+    }
+    return curve;
+  }
+
+  /** Update master effect gains and parameters from the current vibe. */
+  private _updateMasterEffects(now: number): void {
+    // Saturation: when drive > 0, route through shaper; when 0, bypass
+    if (this._saturationDry && this._saturationWet && this._saturationShaper) {
+      const active = vibe.saturation > 0;
+      this._saturationDry.gain.setValueAtTime(active ? 0 : 1, now);
+      this._saturationWet.gain.setValueAtTime(active ? 1 : 0, now);
+      if (active) {
+        this._saturationShaper.curve = this._makeSaturationCurve(vibe.saturation);
+      }
+    }
+    // Exciter: crossfade dry/wet to prevent clipping
+    if (this._exciterDry && this._exciterWet) {
+      this._exciterDry.gain.setValueAtTime(1 - vibe.excite, now);
+      this._exciterWet.gain.setValueAtTime(vibe.excite, now);
+    }
+    // Comb filter: crossfade dry/wet to prevent clipping
+    if (this._combDry && this._combWet && this._combDelay) {
+      this._combDry.gain.setValueAtTime(1 - vibe.combMix, now);
+      this._combWet.gain.setValueAtTime(vibe.combMix, now);
+      this._combDelay.delayTime.setValueAtTime(vibe.combFreq, now);
+    }
+  }
+
+  private _cleanupMasterEffects(): void {
+    for (const node of [
+      this._saturationShaper,
+      this._saturationDry,
+      this._saturationWet,
+      this._exciterShaper,
+      this._exciterHP,
+      this._exciterDry,
+      this._exciterWet,
+      this._combDelay,
+      this._combFeedback,
+      this._combDry,
+      this._combWet,
+    ]) {
+      if (node) safeDisconnect(node);
+    }
+    this._saturationShaper = undefined;
+    this._saturationDry = undefined;
+    this._saturationWet = undefined;
+    this._exciterShaper = undefined;
+    this._exciterHP = undefined;
+    this._exciterDry = undefined;
+    this._exciterWet = undefined;
+    this._combDelay = undefined;
+    this._combFeedback = undefined;
+    this._combDry = undefined;
+    this._combWet = undefined;
   }
 
   private _updateVoices(sigilState: SigilData): void {
@@ -842,6 +982,7 @@ export class AudioEngine {
       safeDisconnect(this._muffleFilter);
       this._muffleFilter = undefined;
     }
+    this._cleanupMasterEffects();
 
     // Pause the keep-alive <audio> element so iOS drops the audio session
     // Indicator (speaker icon in status bar / Control Center). It will be

@@ -20,6 +20,8 @@ const scene: Scene = {
     formantMix: 0.8,
     brightnessQ: 0.6,
     compRatio: 2.5,
+    combMix: 0.4,
+    combFreq: 0.012,
   },
 };
 

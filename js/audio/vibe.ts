@@ -40,6 +40,12 @@ export interface VibeOptions {
   brightnessQ?: number;
   octaveGainCoeffs?: Partial<Record<string, number>>;
   stereoWidth?: number;
+
+  // Master effects (inserted between envelope and compressor)
+  saturation?: number;
+  excite?: number;
+  combMix?: number;
+  combFreq?: number;
 }
 
 export const VIBE_DEFAULTS = {
@@ -74,6 +80,11 @@ export const VIBE_DEFAULTS = {
     number
   >,
   stereoWidth: 1.0,
+
+  saturation: 0,
+  excite: 0,
+  combMix: 0,
+  combFreq: 0.008,
 };
 
 export class Vibe {
@@ -115,6 +126,12 @@ export class Vibe {
   readonly formantQ: number;
   readonly brightnessQ: number;
   readonly stereoWidth: number;
+
+  // Master effects
+  readonly saturation: number;
+  readonly excite: number;
+  readonly combMix: number;
+  readonly combFreq: number;
 
   constructor(opts?: VibeOptions) {
     this.norm = opts?.norm ?? VIBE_DEFAULTS.norm;
@@ -158,6 +175,12 @@ export class Vibe {
     this.formantQ = opts?.formantQ ?? VIBE_DEFAULTS.formantQ;
     this.brightnessQ = opts?.brightnessQ ?? VIBE_DEFAULTS.brightnessQ;
     this.stereoWidth = opts?.stereoWidth ?? VIBE_DEFAULTS.stereoWidth;
+
+    // Master effects
+    this.saturation = opts?.saturation ?? VIBE_DEFAULTS.saturation;
+    this.excite = opts?.excite ?? VIBE_DEFAULTS.excite;
+    this.combMix = opts?.combMix ?? VIBE_DEFAULTS.combMix;
+    this.combFreq = opts?.combFreq ?? VIBE_DEFAULTS.combFreq;
 
     const refVoiceGain = this.refMult * this.areaToGain('sine', 0.5);
     this.WAVEFORM_GAIN = {

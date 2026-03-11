@@ -171,6 +171,10 @@ describe('Vibe — new parameters', () => {
     expect(v.warmth).toBe(VIBE_DEFAULTS.warmth);
     expect(v.stereoWidth).toBe(VIBE_DEFAULTS.stereoWidth);
     expect(v.formantMix).toBe(VIBE_DEFAULTS.formantMix);
+    expect(v.saturation).toBe(VIBE_DEFAULTS.saturation);
+    expect(v.excite).toBe(VIBE_DEFAULTS.excite);
+    expect(v.combMix).toBe(VIBE_DEFAULTS.combMix);
+    expect(v.combFreq).toBe(VIBE_DEFAULTS.combFreq);
   });
 
   test('partial overrides merge with defaults', () => {
@@ -179,6 +183,21 @@ describe('Vibe — new parameters', () => {
     expect(v.warmth).toBe(2.0);
     expect(v.ir).toBe(VIBE_DEFAULTS.ir);
     expect(v.compThreshold).toBe(VIBE_DEFAULTS.compThreshold);
+  });
+
+  test('master effect params can be overridden', () => {
+    const v = new Vibe({ saturation: 3, excite: 0.5, combMix: 0.4, combFreq: 0.012 });
+    expect(v.saturation).toBe(3);
+    expect(v.excite).toBe(0.5);
+    expect(v.combMix).toBe(0.4);
+    expect(v.combFreq).toBe(0.012);
+  });
+
+  test('master effect defaults are zero (off)', () => {
+    const v = new Vibe();
+    expect(v.saturation).toBe(0);
+    expect(v.excite).toBe(0);
+    expect(v.combMix).toBe(0);
   });
 
   test('stereoWidth scales pan', () => {
