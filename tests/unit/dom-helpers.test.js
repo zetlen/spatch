@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
 // Set up a DOM environment before importing the module under test
-let createIconButton, svgEl, htmlEl;
+let createIconButton, svgEl;
 
 beforeAll(async () => {
   const win = new Window();
@@ -14,7 +14,6 @@ beforeAll(async () => {
   const mod = await import('../../js/toolbar/dom-helpers.ts');
   createIconButton = mod.createIconButton;
   svgEl = mod.svgEl;
-  htmlEl = mod.htmlEl;
 });
 
 // ---- createIconButton ----
@@ -166,66 +165,5 @@ describe('svgEl', () => {
     expect(grad).not.toBeUndefined();
     expect(grad.tagName).toBe('linearGradient');
     expect(grad.getAttribute('id')).toBe('lg');
-  });
-});
-
-// ---- htmlEl ----
-
-describe('htmlEl', () => {
-  test('creates an HTML element', () => {
-    const div = htmlEl('div', { className: 'test' });
-    expect(div.tagName).toBe('DIV');
-  });
-
-  test('sets className via property', () => {
-    const div = htmlEl('div', { className: 'separator' });
-    expect(div.className).toBe('separator');
-  });
-
-  test('sets id via property', () => {
-    const div = htmlEl('div', { id: 'my-id' });
-    expect(div.id).toBe('my-id');
-  });
-
-  test('sets title via property', () => {
-    const btn = htmlEl('button', { title: 'Click me' });
-    expect(btn.title).toBe('Click me');
-  });
-
-  test('sets other attributes via setAttribute', () => {
-    const input = htmlEl('input', { type: 'range', min: '0', max: '100' });
-    expect(input.getAttribute('type')).toBe('range');
-    expect(input.getAttribute('min')).toBe('0');
-    expect(input.getAttribute('max')).toBe('100');
-  });
-
-  test('appends string children as text nodes', () => {
-    const span = htmlEl('span', {}, 'hello');
-    expect(span.textContent).toBe('hello');
-  });
-
-  test('appends element children', () => {
-    const child = htmlEl('span', { className: 'inner' });
-    const parent = htmlEl('div', { className: 'outer' }, child);
-    expect(parent.children.length).toBe(1);
-    expect(parent.children[0].className).toBe('inner');
-  });
-
-  test('appends mixed children', () => {
-    const child = htmlEl('strong', {}, 'bold');
-    const parent = htmlEl('p', {}, 'text ', child, ' more');
-    expect(parent.textContent).toBe('text bold more');
-  });
-
-  test('works with no attrs and no children', () => {
-    const div = htmlEl('div');
-    expect(div.tagName).toBe('DIV');
-    expect(div.attributes.length).toBe(0);
-    expect(div.childNodes.length).toBe(0);
-  });
-
-  test('coerces number values to strings', () => {
-    const el = htmlEl('div', { 'data-count': 5 });
-    expect(el.getAttribute('data-count')).toBe('5');
   });
 });

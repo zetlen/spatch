@@ -84,14 +84,18 @@ js/
       *.jpg          Stage background image
       *.m4a          Impulse response audio (optional)
   toolbar/
-    toolbar.ts       Toolbar class: tool/pattern/color picker UI binding
-    blend-panel.ts   Blend mode expansion panel
-    border-panel.ts  Border settings expansion panel
-    fill-panel.ts    Fill color/gradient expansion panel
-    pattern-panel.ts Pattern effect dropdown panel
-    harmonize-panel.ts Long-press scale picker for harmonize button
-    stage-panel.ts   Long-press scene picker for stage button
-    dom-helpers.ts   Shared DOM construction helpers for toolbar panels
+    expansion-panel.ts Shared panel lifecycle factory (createExpansionPanel),
+                       PanelManager (mutual exclusivity + click-away),
+                       PanelDeps/PanelEntry types, bindLongPress utility
+    toolbar.ts       Toolbar class: tool buttons, panel registration,
+                     auto-sync via store effect
+    blend-panel.ts   Blend mode expansion panel (declarative entries)
+    border-panel.ts  Border settings expansion panel (entries + onUpdate)
+    fill-panel.ts    Fill color/gradient expansion panel (entries + draft state)
+    pattern-panel.ts Pattern effect expansion panel (declarative entries)
+    harmonize-panel.ts Scale picker expansion panel (declarative entries)
+    stage-panel.ts   Scene picker expansion panel (declarative entries)
+    dom-helpers.ts   createIconButton and svgEl helpers for toolbar panels
   debug/
     vibe-tuner.ts    Vibe tuner side drawer (shipped in prod, dynamically imported
                      behind a hidden URL param)

@@ -1,94 +1,29 @@
-// blend-panel.ts — Blend mode expansion panel for the bottom toolbar
-//
-// Extracts the blend mode selection UI from Toolbar into a standalone
-// panel conforming to the ExpansionPanel interface.
+// blend-panel.ts — Blend mode expansion panel
+// Icon references for sprite scanner: #tabler-diamond #tabler-skull #tabler-spiral
 
-import type { SigilStore, UndoManager } from '../state.ts';
 import type { BlendMode } from '../types.ts';
 import { DEFAULT_BLEND } from '../effects.ts';
-import { createIconButton } from './dom-helpers.ts';
+import {
+  createExpansionPanel,
+  getSelectedVoice,
+  type ExpansionPanel,
+  type PanelDeps,
+} from './expansion-panel.ts';
 
-/** Generic interface for bottom-bar expansion panels. */
-export interface ExpansionPanel {
-  open(): void;
-  close(): void;
-  update(): void;
-}
-
-/**
- * Create a blend-mode expansion panel.
- *
- * The returned panel populates `area` with one icon button per blend mode
- * when opened, highlights the active mode, and updates highlight state
- * when `update()` is called.
- */
-export function createBlendPanel(deps: {
-  area: HTMLElement;
-  store: SigilStore;
-  undo: UndoManager;
-  getSelectedId: () => string | undefined;
-  syncMenuActive: () => void;
-}): ExpansionPanel {
-  const { area, store, undo, getSelectedId, syncMenuActive } = deps;
-
-  function getSelected() {
-    const id = getSelectedId();
-    return id ? (store.getVoice(id) ?? undefined) : undefined;
-  }
-
-  // Icon references for sprite scanner:
-  // #tabler-diamond #tabler-skull #tabler-spiral
-  const modes: { value: BlendMode; symbol: string; title: string }[] = [
-    { symbol: 'tabler-diamond', title: 'Screen', value: 'screen' },
-    { symbol: 'tabler-skull', title: 'Multiply', value: 'multiply' },
-    { symbol: 'tabler-spiral', title: 'Difference', value: 'difference' },
-  ];
-
-  function open(): void {
-    area.replaceChildren();
-
-    const sel = getSelected();
-    const current = sel ? sel.blend : DEFAULT_BLEND;
-
-    for (const m of modes) {
-      const btn = createIconButton({
-        className: 'action-btn',
-        dataset: { blend: m.value },
-        symbol: m.symbol,
-        title: m.title,
-      });
-      if (m.value === current) {
-        btn.classList.add('active');
-      }
-      area.append(btn);
-
-      btn.addEventListener('click', () => {
-        const voice = getSelected();
-        if (!voice) {
-          return;
-        }
-        undo.snapshot();
-        store.updateVoice(voice.id, { blend: m.value });
-        update();
-      });
-    }
-
-    area.classList.remove('hidden');
-    syncMenuActive();
-  }
-
-  function close(): void {
-    area.classList.add('hidden');
-    area.replaceChildren();
-  }
-
-  function update(): void {
-    const sel = getSelected();
-    const current = sel ? sel.blend : DEFAULT_BLEND;
-    area.querySelectorAll<HTMLElement>('.action-btn[data-blend]').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.blend === current);
-    });
-  }
-
-  return { close, open, update };
+export function createBlendPanel(deps: PanelDeps): ExpansionPanel {
+  return createExpansionPanel({
+    area: deps.area,
+    entries: () => [
+      { type: 'icon', symbol: 'tabler-diamond', title: 'Screen', key: 'screen' },
+      { type: 'icon', symbol: 'tabler-skull', title: 'Multiply', key: 'multiply' },
+      { type: 'icon', symbol: 'tabler-spiral', title: 'Difference', key: 'difference' },
+    ],
+    isActive: (key) => (getSelectedVoice(deps)?.blend ?? DEFAULT_BLEND) === key,
+    onClick(key) {
+      const voice = getSelectedVoice(deps);
+      if (!voice) return;
+      deps.undo.snapshot();
+      deps.store.updateVoice(voice.id, { blend: key as BlendMode });
+    },
+  });
 }

@@ -1,32 +1,20 @@
-// border-panel.ts — Border expansion panel for the bottom toolbar
-//
-// Extracts the border color, style (single/double), and thickness
-// controls from Toolbar into a standalone panel conforming to the
-// ExpansionPanel interface, plus an updateButton() method.
+// border-panel.ts — Border expansion panel
 
-import type { SigilStore, UndoManager } from '../state.ts';
-import type { BorderColor, Voice } from '../types.ts';
+import type { BorderColor } from '../types.ts';
 import { normalizedCoord } from '../types.ts';
-import type { ExpansionPanel } from './blend-panel.ts';
-import { htmlEl, svgEl } from './dom-helpers.ts';
+import {
+  createExpansionPanel,
+  getSelectedVoice,
+  type ExpansionPanel,
+  type PanelDeps,
+} from './expansion-panel.ts';
+import { svgEl } from './dom-helpers.ts';
 
-// ---- Shared panel context ----
-
-interface BorderPanelCtx {
-  area: HTMLElement;
-  store: SigilStore;
-  undo: UndoManager;
-  getSelected(): Voice | undefined;
-  update(): void;
-  updateButton(): void;
-}
-
-// ---- UI construction ----
+// ---- SVG builders ----
 
 function buildColorButton(color: BorderColor, title: string): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.className = 'border-color-btn';
-  btn.dataset.borderColor = color;
   btn.title = title;
 
   if (color === 'white') {
@@ -78,7 +66,6 @@ function buildColorButton(color: BorderColor, title: string): HTMLButtonElement 
 function buildStyleButton(isDouble: boolean, title: string): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.className = 'border-style-btn';
-  btn.dataset.borderDouble = isDouble ? '1' : '0';
   btn.title = title;
 
   if (isDouble) {
@@ -127,169 +114,103 @@ function buildStyleButton(isDouble: boolean, title: string): HTMLButtonElement {
   return btn;
 }
 
-// ---- Event binding ----
+// ---- Factory ----
 
-function bindColorToggles(ctx: BorderPanelCtx): void {
-  ctx.area.querySelectorAll<HTMLElement>('.border-color-btn').forEach((colorBtn) => {
-    colorBtn.addEventListener('click', () => {
-      const sel = ctx.getSelected();
-      if (!sel) {
-        return;
-      }
-      const clickedColor = colorBtn.dataset.borderColor as BorderColor;
-      ctx.undo.snapshot();
-      if (sel.border && sel.border.color === clickedColor) {
-        ctx.store.updateVoice(sel.id, { border: undefined });
-      } else if (sel.border) {
-        ctx.store.updateVoice(sel.id, { border: { ...sel.border, color: clickedColor } });
-      } else {
-        ctx.store.updateVoice(sel.id, {
-          border: { color: clickedColor, double: false, thickness: normalizedCoord(0.01) },
-        });
-      }
-      ctx.update();
-      ctx.updateButton();
-    });
-  });
-}
-
-function bindStyleToggles(ctx: BorderPanelCtx): void {
-  ctx.area.querySelectorAll<HTMLElement>('.border-style-btn').forEach((styleBtn) => {
-    styleBtn.addEventListener('click', () => {
-      const sel = ctx.getSelected();
-      if (!sel?.border) {
-        return;
-      }
-      ctx.undo.snapshot();
-      ctx.store.updateVoice(sel.id, {
-        border: { ...sel.border, double: styleBtn.dataset.borderDouble === '1' },
-      });
-      ctx.update();
-      ctx.updateButton();
-    });
-  });
-}
-
-function bindThicknessSlider(ctx: BorderPanelCtx): void {
-  const slider = document.querySelector<HTMLInputElement>('#border-thickness');
-  if (!slider) {
-    return;
-  }
-  slider.addEventListener('input', () => {
-    const sel = ctx.getSelected();
-    if (!sel?.border) {
-      return;
-    }
-    ctx.store.updateVoice(sel.id, {
-      border: { ...sel.border, thickness: normalizedCoord(parseInt(slider.value) / 100) },
-    });
-  });
-  slider.addEventListener('pointerdown', () => {
-    ctx.undo.snapshot();
-  });
-}
-
-function openPanel(ctx: BorderPanelCtx, syncMenuActive: () => void): void {
-  ctx.area.replaceChildren();
-
-  ctx.area.append(buildColorButton('white', 'Octave up'));
-  ctx.area.append(buildColorButton('black', 'Octave down'));
-
-  const styleSep = htmlEl('div', { className: 'separator border-extra' });
-  ctx.area.append(styleSep);
-  const singleBtn = buildStyleButton(false, 'Single');
-  singleBtn.classList.add('border-extra');
-  ctx.area.append(singleBtn);
-  const doubleBtn = buildStyleButton(true, 'Double');
-  doubleBtn.classList.add('border-extra');
-  ctx.area.append(doubleBtn);
-  const sliderSep = htmlEl('div', { className: 'separator border-extra' });
-  ctx.area.append(sliderSep);
-
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.id = 'border-thickness';
-  slider.className = 'expansion-slider border-extra';
-  slider.min = '1';
-  slider.max = '100';
-  slider.value = '1';
-  slider.title = 'Thickness';
-  ctx.area.append(slider);
-
-  ctx.area.classList.remove('hidden');
-  syncMenuActive();
-
-  bindColorToggles(ctx);
-  bindStyleToggles(ctx);
-  bindThicknessSlider(ctx);
-
-  ctx.update();
-}
-
-/**
- * Create a border expansion panel.
- *
- * The returned panel populates `area` with color buttons (white/black),
- * style buttons (single/double), and a thickness slider when opened.
- */
-export function createBorderPanel(deps: {
-  area: HTMLElement;
-  store: SigilStore;
-  undo: UndoManager;
-  getSelectedId: () => string | undefined;
-  syncMenuActive: () => void;
-}): ExpansionPanel & {
-  updateButton(): void;
-} {
-  const { area, store, undo, getSelectedId, syncMenuActive } = deps;
-
-  const ctx: BorderPanelCtx = {
-    area,
-    getSelected() {
-      const id = getSelectedId();
-      return id ? (store.getVoice(id) ?? undefined) : undefined;
-    },
-    store,
-    undo,
-    update,
-    updateButton,
-  };
-
-  function update(): void {
-    const sel = ctx.getSelected();
-    const border = sel?.border ?? undefined;
-
-    area.querySelectorAll<HTMLElement>('.border-color-btn').forEach((b) => {
-      b.classList.toggle('active', border != undefined && b.dataset.borderColor === border.color);
-    });
-    area.querySelectorAll<HTMLElement>('.border-style-btn').forEach((b) => {
-      b.classList.toggle(
-        'active',
-        border != undefined && (b.dataset.borderDouble === '1') === border.double,
-      );
-    });
-
-    // Hide style buttons and thickness slider when no border is active
-    area.querySelectorAll<HTMLElement>('.border-extra').forEach((el) => {
-      el.classList.toggle('hidden', border == undefined);
-    });
-
-    const slider = document.querySelector<HTMLInputElement>('#border-thickness');
-    if (slider) {
-      slider.value = border ? String(Math.round(border.thickness * 100)) : '1';
-    }
-  }
+export function createBorderPanel(
+  deps: PanelDeps,
+  triggerBtn: HTMLElement,
+): ExpansionPanel & { updateButton(): void } {
+  const { store, undo } = deps;
 
   function updateButton(): void {
-    const btn = document.querySelector<HTMLElement>('#btn-border');
-    const sel = ctx.getSelected();
-    btn?.classList.toggle('has-border', sel?.border != undefined);
+    triggerBtn.classList.toggle('has-border', getSelectedVoice(deps)?.border != undefined);
   }
 
-  function close(): void {
-    area.classList.add('hidden');
-    area.replaceChildren();
-  }
+  const panel = createExpansionPanel({
+    area: deps.area,
+    entries: () => [
+      { type: 'item', key: 'color:white', create: () => buildColorButton('white', 'Octave up') },
+      { type: 'item', key: 'color:black', create: () => buildColorButton('black', 'Octave down') },
+      { type: 'separator', className: 'border-extra' },
+      {
+        type: 'item',
+        key: 'style:single',
+        className: 'border-extra',
+        create: () => buildStyleButton(false, 'Single'),
+      },
+      {
+        type: 'item',
+        key: 'style:double',
+        className: 'border-extra',
+        create: () => buildStyleButton(true, 'Double'),
+      },
+      { type: 'separator', className: 'border-extra' },
+      {
+        type: 'item',
+        className: 'border-extra',
+        create() {
+          const slider = document.createElement('input');
+          slider.type = 'range';
+          slider.id = 'border-thickness';
+          slider.className = 'expansion-slider';
+          slider.min = '1';
+          slider.max = '100';
+          slider.value = '1';
+          slider.title = 'Thickness';
+          slider.addEventListener('input', () => {
+            const sel = getSelectedVoice(deps);
+            if (!sel?.border) return;
+            store.updateVoice(sel.id, {
+              border: { ...sel.border, thickness: normalizedCoord(parseInt(slider.value) / 100) },
+            });
+          });
+          slider.addEventListener('pointerdown', () => undo.snapshot());
+          return slider;
+        },
+      },
+    ],
+    isActive(key) {
+      const border = getSelectedVoice(deps)?.border;
+      if (!border) return false;
+      if (key === 'color:white' || key === 'color:black') return border.color === key.slice(6);
+      if (key === 'style:single') return !border.double;
+      if (key === 'style:double') return border.double;
+      return false;
+    },
+    onClick(key) {
+      const sel = getSelectedVoice(deps);
+      if (!sel) return;
+      undo.snapshot();
+      if (key === 'color:white' || key === 'color:black') {
+        const color = key.slice(6) as BorderColor;
+        if (sel.border?.color === color) {
+          store.updateVoice(sel.id, { border: undefined });
+        } else if (sel.border) {
+          store.updateVoice(sel.id, { border: { ...sel.border, color } });
+        } else {
+          store.updateVoice(sel.id, {
+            border: { color, double: false, thickness: normalizedCoord(0.01) },
+          });
+        }
+      } else if (key === 'style:single' || key === 'style:double') {
+        if (!sel.border) return;
+        store.updateVoice(sel.id, {
+          border: { ...sel.border, double: key === 'style:double' },
+        });
+      }
+    },
+    onUpdate(area) {
+      const border = getSelectedVoice(deps)?.border;
+      area.querySelectorAll<HTMLElement>('.border-extra').forEach((el) => {
+        el.classList.toggle('hidden', border == undefined);
+      });
+      const slider = area.querySelector<HTMLInputElement>('#border-thickness');
+      if (slider) {
+        slider.value = border ? String(Math.round(border.thickness * 100)) : '1';
+      }
+      triggerBtn.classList.toggle('has-border', border != undefined);
+    },
+  });
 
-  return { close, open: () => openPanel(ctx, syncMenuActive), update, updateButton };
+  return { ...panel, updateButton };
 }

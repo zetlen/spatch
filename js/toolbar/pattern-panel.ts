@@ -1,128 +1,44 @@
-// pattern-panel.ts — Pattern dropdown panel for the bottom toolbar
-//
-// Extracts pattern dropdown population, binding, and update logic from
-// Toolbar into a standalone factory function.
+// pattern-panel.ts — Pattern dropdown panel
 
-import { qel } from '../dom.ts';
-import type { SigilStore, UndoManager } from '../state.ts';
-import type { Voice } from '../types.ts';
 import { PATTERN_TYPES, type PatternType } from '../types.ts';
+import {
+  createExpansionPanel,
+  getSelectedVoice,
+  type ExpansionPanel,
+  type PanelDeps,
+} from './expansion-panel.ts';
 
-// ---- Shared context ----
-
-interface PatternPanelCtx {
-  store: SigilStore;
-  undo: UndoManager;
-  closeExpansion: () => void;
-  closeAllDropdowns: () => void;
-  syncMenuActive: () => void;
-  getSelected(): Voice | undefined;
-  update(): void;
-}
-
-// ---- DOM population ----
-
-function populateDropdown(): void {
-  const dropdown = qel('#pattern-dropdown');
-  const patterns = PATTERN_TYPES.map((p) => ({
-    title: p.charAt(0).toUpperCase() + p.slice(1),
-    value: p,
-  }));
-  for (const p of patterns) {
-    const btn = document.createElement('button');
-    btn.className = 'dropdown-item';
-    btn.dataset.pattern = p.value;
-    btn.title = p.title;
-    const band = document.createElement('div');
-    band.className = `pattern-band pattern-preview-${p.value}`;
-    btn.append(band);
-    dropdown.append(btn);
-  }
-}
-
-// ---- Event binding ----
-
-function bindDropdown(ctx: PatternPanelCtx): void {
-  const toggle = qel('#btn-pattern');
-  const dropdown = qel('#pattern-dropdown');
-
-  toggle.addEventListener('click', (e) => {
-    e.stopPropagation();
-    ctx.closeExpansion();
-    const wasHidden = dropdown.classList.contains('hidden');
-    ctx.closeAllDropdowns();
-    if (wasHidden) {
-      dropdown.classList.remove('hidden');
-    }
-    ctx.syncMenuActive();
+export function createPatternPanel(deps: PanelDeps, triggerBtn: HTMLElement): ExpansionPanel {
+  return createExpansionPanel({
+    area: deps.area,
+    entries: () =>
+      PATTERN_TYPES.map((p) => ({
+        type: 'item' as const,
+        key: p,
+        create() {
+          const btn = document.createElement('button');
+          btn.className = 'dropdown-item';
+          btn.title = p.charAt(0).toUpperCase() + p.slice(1);
+          const band = document.createElement('div');
+          band.className = `pattern-band pattern-preview-${p}`;
+          btn.append(band);
+          return btn;
+        },
+      })),
+    isActive(key) {
+      const current = getSelectedVoice(deps)?.effect;
+      return (key === 'none' && !current) || key === current;
+    },
+    onClick(key) {
+      const sel = getSelectedVoice(deps);
+      if (!sel) return;
+      deps.undo.snapshot();
+      deps.store.updateVoice(sel.id, {
+        effect: sel.effect === key ? undefined : (key as PatternType),
+      });
+    },
+    onUpdate() {
+      triggerBtn.classList.toggle('has-pattern', getSelectedVoice(deps)?.effect != undefined);
+    },
   });
-
-  dropdown.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const item = (e.target as HTMLElement).closest('[data-pattern]') as HTMLElement | undefined;
-    if (!item) {
-      return;
-    }
-    const sel = ctx.getSelected();
-    if (!sel) {
-      return;
-    }
-    const newPattern = item.dataset.pattern as PatternType;
-    const finalPattern = sel.effect === newPattern ? undefined : newPattern;
-    ctx.undo.snapshot();
-    ctx.store.updateVoice(sel.id, { effect: finalPattern });
-    ctx.update();
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!dropdown.contains(e.target as Node) && e.target !== toggle) {
-      dropdown.classList.add('hidden');
-      ctx.syncMenuActive();
-    }
-  });
-}
-
-/** Create a pattern dropdown panel. */
-export function createPatternPanel(deps: {
-  store: SigilStore;
-  undo: UndoManager;
-  getSelectedId: () => string | undefined;
-  closeExpansion: () => void;
-  closeAllDropdowns: () => void;
-  syncMenuActive: () => void;
-}): {
-  populate(): void;
-  bind(): void;
-  update(): void;
-} {
-  const { store, undo, getSelectedId, closeExpansion, closeAllDropdowns, syncMenuActive } = deps;
-
-  function getSelected(): Voice | undefined {
-    const id = getSelectedId();
-    return id ? (store.getVoice(id) ?? undefined) : undefined;
-  }
-
-  function update(): void {
-    const sel = getSelected();
-    const current = sel ? sel.effect : undefined;
-    document.querySelectorAll<HTMLElement>('#pattern-dropdown .dropdown-item').forEach((btn) => {
-      const p = btn.dataset.pattern;
-      btn.classList.toggle('active', (p === 'none' && !current) || p === current);
-    });
-    document
-      .querySelector<HTMLElement>('#btn-pattern')
-      ?.classList.toggle('has-pattern', current != undefined);
-  }
-
-  const ctx: PatternPanelCtx = {
-    closeAllDropdowns,
-    closeExpansion,
-    getSelected,
-    store,
-    syncMenuActive,
-    undo,
-    update,
-  };
-
-  return { bind: () => bindDropdown(ctx), populate: populateDropdown, update };
 }

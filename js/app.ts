@@ -7,7 +7,7 @@ import { Toolbar } from './toolbar/toolbar.ts';
 import { AudioEngine } from './audio/engine.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, saveToURL } from './serialize.ts';
-import { applyScene, getScene, initStageLayers, randomSceneIndex } from './scenes';
+import { applyScene, getScene, initStageLayers, randomSceneIndex, SCENES } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
 import { Vibe, setVibe, vibeSignal } from './audio/vibe.ts';
 import { qel } from './dom.ts';
@@ -18,9 +18,10 @@ import { bindKeyboardShortcuts } from './keyboard.ts';
 import { SplashController } from './splash.ts';
 import { initCredits } from './credits.ts';
 import { initShare } from './share.ts';
-import { randomize } from './harmony.ts';
+import { randomize, harmonize } from './harmony.ts';
 import { createHarmonizePanel } from './toolbar/harmonize-panel.ts';
 import { createStagePanel } from './toolbar/stage-panel.ts';
+import { bindLongPress } from './toolbar/expansion-panel.ts';
 
 // ---- Init ----
 
@@ -87,14 +88,29 @@ initStageLayers(appEl);
 let sceneReady: Promise<void> = Promise.resolve();
 
 // Stage button: short click advances scene, long press opens scene picker
-createStagePanel({
-  area: qel('#stage-panel'),
-  store,
-  undo,
-  requestRender: () => {
-    needsRender = true;
-  },
-}).bindLongPress(qel('#btn-stage'));
+{
+  const btnStage = qel('#btn-stage');
+  const stageArea = qel('#stage-panel');
+  const stagePanel = createStagePanel({
+    area: stageArea,
+    store,
+    undo,
+    requestRender: () => {
+      needsRender = true;
+    },
+    onDismiss: () => toolbar.panels.close(),
+  });
+  toolbar.panels.register('stage', stagePanel, btnStage, stageArea);
+  bindLongPress(
+    btnStage,
+    () => {
+      undo.snapshot();
+      store.updateScene((store.data.scene + 1) % SCENES.length);
+      needsRender = true;
+    },
+    () => toolbar.panels.toggle('stage'),
+  );
+}
 
 // React to scene changes (and apply the initial scene on first run):
 // update background crossfade + vibe + prefetch.
@@ -353,14 +369,28 @@ qel('#btn-randomize').addEventListener('click', () => {
   needsRender = true;
 });
 
-createHarmonizePanel({
-  area: qel('#harmonize-panel'),
-  store,
-  undo,
-  requestRender: () => {
-    needsRender = true;
-  },
-}).bindLongPress(qel('#btn-harmonize'));
+{
+  const btnHarmonize = qel('#btn-harmonize');
+  const harmonizeArea = qel('#harmonize-panel');
+  const harmonizePanel = createHarmonizePanel({
+    area: harmonizeArea,
+    store,
+    undo,
+    requestRender: () => {
+      needsRender = true;
+    },
+    onDismiss: () => toolbar.panels.close(),
+  });
+  toolbar.panels.register('harmonize', harmonizePanel, btnHarmonize, harmonizeArea);
+  bindLongPress(
+    btnHarmonize,
+    () => {
+      harmonize(store, undo);
+      needsRender = true;
+    },
+    () => toolbar.panels.toggle('harmonize'),
+  );
+}
 
 // ---- Splash preview button ----
 

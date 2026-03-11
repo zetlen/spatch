@@ -1,16 +1,12 @@
-// harmonize-panel.ts — Long-press scale picker for the harmonize button
-//
-// Quick click: random harmonize. Long press: opens a panel with one button
-// per scale. Clicking a scale button applies it and dismisses the panel.
-
-import type { SigilStore, UndoManager } from '../state.ts';
-import { harmonize, harmonizeWithScale, SCALE_COUNT } from '../harmony.ts';
-import { createIconButton } from './dom-helpers.ts';
-
+// harmonize-panel.ts — Long-press scale picker
 // Icon references for sprite scanner:
 // #tabler-award #tabler-bell-school #tabler-chart-histogram #tabler-mailbox-off
 // #tabler-fish #tabler-currency-dram #tabler-circuit-cell-plus #tabler-joker
 // #tabler-torii
+
+import type { SigilStore, UndoManager } from '../state.ts';
+import { harmonizeWithScale } from '../harmony.ts';
+import { createExpansionPanel, type ExpansionPanel } from './expansion-panel.ts';
 
 const SCALE_ICONS: { symbol: string; title: string }[] = [
   { symbol: 'tabler-award', title: 'Major Pentatonic' },
@@ -24,96 +20,28 @@ const SCALE_ICONS: { symbol: string; title: string }[] = [
   { symbol: 'tabler-torii', title: 'Mu' },
 ];
 
-const LONG_PRESS_MS = 400;
-
 export function createHarmonizePanel(deps: {
   area: HTMLElement;
   store: SigilStore;
   undo: UndoManager;
   requestRender: () => void;
-}): { bindLongPress(btn: HTMLElement): void } {
-  const { area, store, undo, requestRender } = deps;
+  onDismiss: () => void;
+}): ExpansionPanel {
+  const { area, store, undo, requestRender, onDismiss } = deps;
 
-  function open(): void {
-    area.replaceChildren();
-
-    for (let i = 0; i < SCALE_COUNT; i++) {
-      const icon = SCALE_ICONS[i]!;
-      const btn = createIconButton({
-        className: 'action-btn',
-        dataset: { scale: String(i) },
+  return createExpansionPanel({
+    area,
+    entries: () =>
+      SCALE_ICONS.map((icon, i) => ({
+        type: 'icon' as const,
         symbol: icon.symbol,
         title: icon.title,
-      });
-      area.append(btn);
-
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        harmonizeWithScale(store, undo, i);
-        requestRender();
-        close();
-      });
-    }
-
-    area.classList.remove('hidden');
-  }
-
-  function close(): void {
-    area.classList.add('hidden');
-    area.replaceChildren();
-  }
-
-  function isOpen(): boolean {
-    return !area.classList.contains('hidden');
-  }
-
-  function bindLongPress(btn: HTMLElement): void {
-    // Click-away dismissal (needs btn reference, so registered inside bindLongPress)
-    document.addEventListener('click', (e: MouseEvent) => {
-      if (!isOpen()) return;
-      const target = e.target as Node;
-      if (!area.contains(target) && !btn.contains(target)) {
-        close();
-      }
-    });
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let didLongPress = false;
-
-    btn.addEventListener('pointerdown', (e: PointerEvent) => {
-      if (e.button !== 0) return;
-      didLongPress = false;
-      btn.setPointerCapture(e.pointerId);
-      timer = setTimeout(() => {
-        didLongPress = true;
-        timer = undefined;
-        if (isOpen()) {
-          close();
-        } else {
-          open();
-        }
-      }, LONG_PRESS_MS);
-    });
-
-    btn.addEventListener('pointerup', () => {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-        timer = undefined;
-        // Short click — random harmonize (only if panel isn't open)
-        if (!didLongPress && !isOpen()) {
-          harmonize(store, undo);
-          requestRender();
-        }
-      }
-    });
-
-    btn.addEventListener('pointercancel', () => {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
-    });
-  }
-
-  return { bindLongPress };
+        key: String(i),
+      })),
+    onClick(key) {
+      harmonizeWithScale(store, undo, parseInt(key));
+      requestRender();
+    },
+    onDismiss,
+  });
 }

@@ -1,14 +1,14 @@
-// Toolbar.ts — Toolbar UI: context bar, dropdowns, inline expansion
+// Toolbar.ts — Toolbar UI: context bar, panel management, inline expansion
 
 import { effect } from '@preact/signals-core';
 import { qel } from '../dom.ts';
 import type { SigilStore, UndoManager } from '../state.ts';
-import type { ExpansionPanel } from './blend-panel.ts';
+import type { Voice } from '../types.ts';
+import { PanelManager } from './expansion-panel.ts';
 import { createBlendPanel } from './blend-panel.ts';
 import { createBorderPanel } from './border-panel.ts';
 import { createFillPanel } from './fill-panel.ts';
 import { createPatternPanel } from './pattern-panel.ts';
-import type { Voice } from '../types.ts';
 
 export class Toolbar {
   store: SigilStore;
@@ -18,13 +18,11 @@ export class Toolbar {
   onDuplicate: (() => void) | undefined;
   selectedId: string | undefined;
 
-  /** Track which expansion is open so only one shows at a time. */
-  private _openExpansion: 'fill' | 'blend' | 'border' | undefined = undefined;
-
-  private _blendPanel: ExpansionPanel;
+  panels: PanelManager;
   private _borderPanel: ReturnType<typeof createBorderPanel>;
   private _fillPanel: ReturnType<typeof createFillPanel>;
   private _patternPanel: ReturnType<typeof createPatternPanel>;
+
   constructor(store: SigilStore, undo: UndoManager) {
     this.store = store;
     this.undo = undo;
@@ -33,56 +31,56 @@ export class Toolbar {
     this.onDuplicate = undefined;
     this.selectedId = undefined;
 
-    this._blendPanel = createBlendPanel({
-      area: qel('#bottom-expansion'),
-      store: this.store,
-      undo: this.undo,
-      getSelectedId: () => this.selectedId,
-      syncMenuActive: () => this._syncMenuActive(),
-    });
+    this.panels = new PanelManager();
 
-    this._fillPanel = createFillPanel({
-      area: qel('#bottom-expansion'),
-      store: this.store,
-      undo: this.undo,
-      getSelectedId: () => this.selectedId,
-      syncMenuActive: () => this._syncMenuActive(),
-    });
+    const expansionArea = qel('#bottom-expansion');
+    const patternArea = qel('#pattern-dropdown');
+    const btnBlend = qel('#btn-blend');
+    const btnFill = qel('#fill-swatch');
+    const btnBorder = qel('#btn-border');
+    const btnPattern = qel('#btn-pattern');
 
-    this._borderPanel = createBorderPanel({
-      area: qel('#bottom-expansion'),
+    const sharedDeps = {
       store: this.store,
       undo: this.undo,
       getSelectedId: () => this.selectedId,
-      syncMenuActive: () => this._syncMenuActive(),
-    });
+    };
 
-    this._patternPanel = createPatternPanel({
-      store: this.store,
-      undo: this.undo,
-      getSelectedId: () => this.selectedId,
-      closeExpansion: () => this._closeExpansion(),
-      closeAllDropdowns: () => this._closeAllDropdowns(),
-      syncMenuActive: () => this._syncMenuActive(),
-    });
+    const blendPanel = createBlendPanel({ ...sharedDeps, area: expansionArea });
+    this._fillPanel = createFillPanel({ ...sharedDeps, area: expansionArea });
+    this._borderPanel = createBorderPanel({ ...sharedDeps, area: expansionArea }, btnBorder);
+    this._patternPanel = createPatternPanel({ ...sharedDeps, area: patternArea }, btnPattern);
+
+    // Register all panels with the manager for unified mutex
+    this.panels.register('blend', blendPanel, btnBlend, expansionArea);
+    this.panels.register('fill', this._fillPanel, btnFill, expansionArea);
+    this.panels.register('border', this._borderPanel, btnBorder, expansionArea);
+    this.panels.register('pattern', this._patternPanel, btnPattern, patternArea);
 
     this._bindToolButtons();
-    this._patternPanel.populate();
-    this._patternPanel.bind();
-    this._bindExpansionToggle('#btn-blend', 'blend', this._blendPanel);
-    this._bindExpansionToggle('#fill-swatch', 'fill', this._fillPanel);
-    this._bindExpansionToggle(
-      '#btn-border',
-      'border',
-      this._borderPanel,
-      () => !!this.getSelected(),
-    );
+
+    // Bind panel toggle buttons
+    btnBlend.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.panels.toggle('blend');
+    });
+    btnFill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.panels.toggle('fill');
+    });
+    btnBorder.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.panels.toggle('border', () => !!this.getSelected());
+    });
+    btnPattern.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.panels.toggle('pattern');
+    });
+
     this._bindActionButtons();
     this._updateToolActive();
 
     // Auto-sync toolbar panels when store data changes and a voice is selected.
-    // Replaces explicit syncToSelectedShape() calls scattered across app.ts,
-    // keyboard.ts, and interaction.ts — any store mutation now triggers the sync.
     {
       let first = true;
       effect(() => {
@@ -113,8 +111,7 @@ export class Toolbar {
     } else {
       tools.classList.remove('hidden');
       props.classList.add('hidden');
-      this._closeAllDropdowns();
-      this._closeExpansion();
+      this.panels.close();
     }
   }
 
@@ -146,64 +143,6 @@ export class Toolbar {
     });
   }
 
-  // ---- Expansion panel toggle binding ----
-
-  private _bindExpansionToggle(
-    selector: string,
-    name: 'blend' | 'fill' | 'border',
-    panel: { open(): void },
-    guard?: () => boolean,
-  ): void {
-    qel(selector).addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._closeAllDropdowns();
-      if (guard && !guard()) {
-        return;
-      }
-      if (this._openExpansion === name) {
-        this._closeExpansion();
-      } else {
-        this._closeExpansion();
-        this._openExpansion = name;
-        panel.open();
-      }
-    });
-  }
-
-  // ---- Expansion helpers ----
-
-  _closeExpansion(): void {
-    this._openExpansion = undefined;
-    const area = document.querySelector<HTMLElement>('#bottom-expansion');
-    if (area) {
-      area.classList.add('hidden');
-      area.replaceChildren();
-    }
-    this._syncMenuActive();
-  }
-
-  _closeAllDropdowns(): void {
-    document.querySelector<HTMLElement>('#pattern-dropdown')?.classList.add('hidden');
-    this._syncMenuActive();
-  }
-
-  /** Sync .active on menu-trigger buttons to reflect open/closed state */
-  _syncMenuActive(): void {
-    const patternOpen = !document
-      .querySelector<HTMLElement>('#pattern-dropdown')
-      ?.classList.contains('hidden');
-    document.querySelector<HTMLElement>('#btn-pattern')?.classList.toggle('active', patternOpen);
-    document
-      .querySelector('#fill-swatch')
-      ?.classList.toggle('active', this._openExpansion === 'fill');
-    document
-      .querySelector('#btn-blend')
-      ?.classList.toggle('active', this._openExpansion === 'blend');
-    document
-      .querySelector('#btn-border')
-      ?.classList.toggle('active', this._openExpansion === 'border');
-  }
-
   // ---- Action buttons ----
 
   _bindActionButtons(): void {
@@ -231,19 +170,10 @@ export class Toolbar {
 
   syncToSelectedShape(): void {
     const sel = this.getSelected();
-    if (!sel) {
-      return;
-    }
+    if (!sel) return;
     this._fillPanel.syncToSelected();
-    this._patternPanel.update();
     this._borderPanel.updateButton();
-    // Refresh open expansion if any
-    if (this._openExpansion === 'fill') {
-      this._fillPanel.update();
-    } else if (this._openExpansion === 'blend') {
-      this._blendPanel.update();
-    } else if (this._openExpansion === 'border') {
-      this._borderPanel.update();
-    }
+    this._patternPanel.update(); // has-pattern indicator needs sync even when closed
+    this.panels.updateOpen();
   }
 }
