@@ -165,6 +165,17 @@ body {
   touch-action: manipulation;
 }
 
+.tool-btn:disabled,
+.action-btn:disabled {
+  pointer-events: none;
+  color: var(--text-muted);
+}
+.tool-btn:active,
+.action-btn:active {
+  border-color: var(--bevel-lo) var(--bevel-hi) var(--bevel-hi) var(--bevel-lo);
+  background: var(--active-bg);
+}
+
 /* LED dot — property-active indicator */
 .has-border::before,
 .has-pattern::before {
@@ -282,14 +293,11 @@ g.muted {
 
 /* ---- Stage buttons ---- */
 
-.credits-btn {
+.stage-btn {
   position: absolute;
-  top: auto;
-  right: 8px;
-  bottom: 8px;
   z-index: 2;
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -304,13 +312,29 @@ g.muted {
   transition: opacity 0.2s;
 }
 
-body.is-editing .credits-btn {
+body.is-editing .stage-btn {
   opacity: 0.3;
   pointer-events: auto;
 }
 
-body.is-editing .credits-btn:hover {
+body.is-editing .stage-btn:hover {
   opacity: 0.7;
+}
+
+.credits-btn {
+  top: auto;
+  right: 8px;
+  bottom: 8px;
+}
+
+.splash-btn {
+  top: 8px;
+  right: 8px;
+}
+
+.share-btn {
+  top: 8px;
+  left: 8px;
 }
 
 .toolbar-spacer {
@@ -375,36 +399,6 @@ body.is-editing .credits-btn:hover {
 }
 
 /* ---- Share button ---- */
-
-.share-btn {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 2;
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 6px;
-  background: none;
-  color: #fff;
-  cursor: pointer;
-  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-
-body.is-editing .share-btn {
-  opacity: 0.5;
-  pointer-events: auto;
-}
-
-body.is-editing .share-btn:hover {
-  opacity: 0.8;
-}
 
 /* ---- Share overlay ---- */
 

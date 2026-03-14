@@ -7,6 +7,7 @@
 import type { AudioEngine } from './audio/engine.ts';
 import { qel } from './dom.ts';
 import type { PlaybackController } from './playback.ts';
+import type { SigilStore } from './state.ts';
 
 // Minimum time the audio plays before releasing after splash dismiss
 const MIN_SUSTAIN_MS = 2000;
@@ -18,6 +19,7 @@ const MIN_SUSTAIN_MS = 2000;
 export class SplashController {
   private readonly stage: HTMLElement;
   private readonly audio: AudioEngine;
+  private readonly store: SigilStore;
   private readonly playback: PlaybackController;
   private readonly splashKey: string;
   private _isActive: boolean;
@@ -31,13 +33,19 @@ export class SplashController {
   private readonly handleDown: (e: PointerEvent) => void;
   private readonly handleUp: () => void;
 
-  constructor(deps: { stage: HTMLElement; audio: AudioEngine; playback: PlaybackController }) {
+  constructor(deps: {
+    store: SigilStore;
+    stage: HTMLElement;
+    audio: AudioEngine;
+    playback: PlaybackController;
+  }) {
+    this.store = deps.store;
     this.stage = deps.stage;
     this.audio = deps.audio;
     this.playback = deps.playback;
 
     this.splashKey = `spatch-seen:${location.pathname}${location.hash}`;
-    this._isActive = !localStorage.getItem(this.splashKey);
+    this._isActive = this.store.data.voices.length === 0 || !localStorage.getItem(this.splashKey);
 
     if (!this._isActive) {
       document.body.classList.add('is-editing');

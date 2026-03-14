@@ -53,7 +53,8 @@ js/
                      (discriminated union), Fill (discriminated union),
                      Envelope, branding functions
   state.ts           SigilStore (data CRUD + @preact/signals change notification),
-                     UndoManager (undo/redo wrapping a store), and
+                     UndoManager (undo/redo wrapping a store, exposes
+                     hasUndos/hasRedos signals for reactive UI), and
                      SelectionManager (app-level voice selection backed by signals)
   app.ts             Entry point: init, event wiring, render loop, selection
   embed-entry.ts     Entry point for embed.html viewer
@@ -61,7 +62,7 @@ js/
                      undo/redo, escape, tool switch, space play toggle,
                      S solo toggle)
   playback.ts        PlaybackController: play/stop/latch/loop state machine
-  splash.ts          SplashController: first-visit splash screen
+  splash.ts          SplashController: splash screen (first visit or empty spatch)
   canvas/
     render.ts        SVG DOM reconciler (voices, selection UI)
     interaction.ts   CanvasInteractionController: pointer/touch input on canvas,

@@ -188,7 +188,7 @@ const playback: PlaybackController = new PlaybackController({
 
 // ---- Splash screen ----
 
-const splash = new SplashController({ stage, audio, playback });
+const splash = new SplashController({ store, stage, audio, playback });
 
 // ---- Render loop ----
 

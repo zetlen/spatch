@@ -3,7 +3,7 @@
 // Uses @preact/signals-core for reactive state. All mutations are immutable:
 // each method creates a new state reference so the signal detects changes.
 
-import { effect, signal } from '@preact/signals-core';
+import { type Signal, effect, signal } from '@preact/signals-core';
 
 import {
   type Envelope,
@@ -255,14 +255,16 @@ const MAX_UNDO = 50;
  * immutable state references before mutations so undo restores previous values.
  */
 export class UndoManager {
-  store: SigilStore;
-  undoStack: SigilData[];
-  redoStack: SigilData[];
+  undoStack: SigilData[] = [];
+  redoStack: SigilData[] = [];
+  hasUndos: Signal<boolean> = signal(false);
+  hasRedos: Signal<boolean> = signal(false);
 
-  constructor(store: SigilStore) {
-    this.store = store;
-    this.undoStack = [];
-    this.redoStack = [];
+  constructor(public store: SigilStore) {}
+
+  private _broadcastAvailableUndos() {
+    this.hasUndos.value = !!this.undoStack.length;
+    this.hasRedos.value = !!this.redoStack.length;
   }
 
   /** Save the current state to the undo stack. Call before a mutation to make it undoable. */
@@ -272,6 +274,7 @@ export class UndoManager {
       this.undoStack.shift();
     }
     this.redoStack.length = 0;
+    this._broadcastAvailableUndos();
   }
 
   /** Restore the most recent snapshot from the undo stack. No-op if stack is empty. */
@@ -281,6 +284,7 @@ export class UndoManager {
     }
     this.redoStack.push(this.store.data);
     this.store.loadState(this.undoStack.pop()!);
+    this._broadcastAvailableUndos();
   }
 
   /** Re-apply the most recently undone state. No-op if redo stack is empty. */
@@ -290,11 +294,13 @@ export class UndoManager {
     }
     this.undoStack.push(this.store.data);
     this.store.loadState(this.redoStack.pop()!);
+    this._broadcastAvailableUndos();
   }
 
   /** Clear both undo and redo stacks. */
   reset(): void {
     this.undoStack = [];
     this.redoStack = [];
+    this._broadcastAvailableUndos();
   }
 }

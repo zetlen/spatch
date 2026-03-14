@@ -146,8 +146,19 @@ export class Toolbar {
   // ---- Action buttons ----
 
   _bindActionButtons(): void {
-    qel('#btn-undo').addEventListener('click', () => this.undo.undo());
-    qel('#btn-redo').addEventListener('click', () => this.undo.redo());
+    const btnUndo = qel<HTMLButtonElement>('#btn-undo');
+    const btnRedo = qel<HTMLButtonElement>('#btn-redo');
+    const { hasUndos, hasRedos } = this.undo;
+    effect(() => {
+      btnUndo.disabled = !hasUndos.value;
+      btnRedo.disabled = !hasRedos.value;
+    });
+    btnUndo.addEventListener('click', () => {
+      if (hasUndos.value) this.undo.undo();
+    });
+    btnRedo.addEventListener('click', () => {
+      if (hasRedos.value) this.undo.redo();
+    });
     qel('#btn-deselect').addEventListener('click', () => {
       if (this.onToolChange) {
         this.onToolChange('deselect');

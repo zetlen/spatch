@@ -868,12 +868,16 @@ export function init(deps: TunerDeps): void {
   // Icon reference for sprite scanner: #tabler-adjustments-cog
 
   const tunerBtn = createIconButton({
-    className: 'action-btn',
+    className: 'stage-btn',
     symbol: 'tabler-adjustments-cog',
     title: 'Vibe tuner',
   });
+  tunerBtn.style.top = '60px';
+  tunerBtn.style.right = '8px';
+  tunerBtn.style.opacity = '0.7';
+  tunerBtn.style.pointerEvents = 'auto';
   const splashBtn = document.getElementById('btn-splash')!;
-  splashBtn.parentElement!.insertBefore(tunerBtn, splashBtn);
+  splashBtn.parentElement!.insertBefore(tunerBtn, splashBtn.nextSibling);
 
   document.body.append(panel);
   panel.style.display = 'none';
