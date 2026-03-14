@@ -38,9 +38,10 @@ and hear them as synthesized chords. Every visual property maps to an audio para
 package.json         Package manifest (Bun)
 bun.lock             Lockfile
 vite.config.ts       Vite build/dev config (plugins, MPA input)
+nginx.conf           SPA fallback config for nginx (deployed alongside dist/)
 tsconfig.json        TypeScript configuration
 index.html           Main app (source HTML entry point)
-embed.html           Standalone embed viewer (reads state from URL hash)
+embed.html           Standalone embed viewer (reads state from URL pathname)
 css/style.css        All styles (CSS custom properties, flat hybrid-bevel theme)
 scripts/
   vite-plugin-svg-sprite.ts  Reusable Vite plugin: scans sources for icon refs,
@@ -111,7 +112,9 @@ js/
   effects.ts         Audio effect builders: pattern effects (chorus, tremolo,
                      flanger, phaser), FM synthesis parameters per blend mode
                      (FM_PARAMS table), and overlap computation
-  serialize.ts       Bespoke Base64 URL serialization (bitfield-packed, no keys)
+  serialize.ts       URL routing + bespoke Base64 serialization: path-based
+                     read/write (/s/<data>), hash migration, dirty flag for
+                     push/replace history
   share.ts           Share overlay: link + embed snippet generation
   credits.ts         Credits overlay toggle + audio muffling + dynamic photo credit
   tutorial.ts        Interactive tutorial overlay with punch-out highlights
@@ -162,7 +165,10 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 - **Deploy trigger**: Push to `main` (PR merge) or `workflow_dispatch`.
   Workflow is `.gitea/workflows/deploy.yml`.
 - **Deploy mechanism**: `docker cp dist/. spatch:/usr/share/nginx/html/`
-  into an nginx container. Site is at `https://spatch.music`.
+  into an nginx container, then copies `nginx.conf` to
+  `/etc/nginx/conf.d/default.conf` and reloads nginx. The nginx config
+  provides SPA fallback routing (`try_files`) for path-based URLs.
+  Site is at `https://spatch.music`.
 - **Bot user**: `tiene` (matches action runner name). Admin collaborator,
   sole user whitelisted for direct push to protected `main`. Its token is
   stored as repo secret `PUSH_TOKEN`.
@@ -188,7 +194,7 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
      │   SVG   │  │  Serializer │  │ Audio │
      │ (bijec) │  │   (bijec)   │  │ (one  │
      │ data ↔  │  │  data ↔     │  │  way) │
-     │ geometry│  │  string     │  │ data →│
+     │ geometry│  │  URL path   │  │ data →│
      │         │  │             │  │ graph │
      └─────────┘  └─────────────┘  └───────┘
 ```
@@ -317,6 +323,13 @@ design rationale and enumeration of past violations.
   are quantized to integers during packing. **No backwards compatibility
   until v1.** Old URLs will break. Do not write migration code, version checks,
   or legacy deserializers. Just change the format and move on.
+  URLs are path-based: `/s/<base64data>` for the editor,
+  `/embed/<base64data>` for the embed viewer. Old hash-based URLs
+  (`/#data`, `/embed.html#data`) are migrated to path form on first visit
+  via `replaceState`. The first edit after navigating to a shared URL
+  pushes history (preserving the original in the back stack); subsequent
+  edits replace in-place. A `popstate` listener in `app.ts` handles
+  back/forward navigation.
 
 ## The Triple Sec Rule
 
@@ -483,8 +496,11 @@ Before opening or updating a pull request, verify:
   convention" below for the full format.
 - The `embed.html` page imports the same modules as the main app but only uses
   `canvas/render.ts`, `audio/engine.ts`, `serialize.ts`, `scenes/`,
-  `audio/ir-loader.ts`, and `shapes.ts`. It blocks reveal and playback
-  until scene assets are loaded.
+  `audio/ir-loader.ts`, and `shapes.ts`. It reads state from the URL
+  pathname (`/embed/<data>`) with hash migration for old URLs. It blocks
+  reveal and playback until scene assets are loaded. The script `src`
+  must use an absolute path (`/js/embed-entry.ts`) because the page is
+  served at `/embed/<data>` via SPA fallback.
 
 ## Scene Convention
 

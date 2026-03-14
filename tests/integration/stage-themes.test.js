@@ -93,7 +93,7 @@ test.describe('Stage themes', () => {
 
     await btn.click();
     // Wait for debounced URL save (1s debounce in app.ts)
-    await page.waitForFunction(() => location.hash.length > 1);
+    await page.waitForFunction(() => location.pathname.startsWith('/s/'));
 
     // Wait for crossfade to settle
     await page.waitForFunction(() => {

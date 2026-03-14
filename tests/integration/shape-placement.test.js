@@ -22,7 +22,7 @@ test.describe('Shape placement', () => {
 
     // Canvas should render the shape — take a screenshot to verify non-empty
     // We verify via the URL hash which updates after 1s debounce
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
   });
@@ -35,7 +35,7 @@ test.describe('Shape placement', () => {
     await canvas.click({ position: { x: box.width * 0.3, y: box.height * 0.3 } });
 
     await expect(page.locator('[data-tool="select"]')).toHaveClass(/active/);
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
   });
@@ -48,7 +48,7 @@ test.describe('Shape placement', () => {
     await canvas.click({ position: { x: box.width * 0.7, y: box.height * 0.7 } });
 
     await expect(page.locator('[data-tool="select"]')).toHaveClass(/active/);
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
   });
@@ -68,11 +68,11 @@ test.describe('Shape placement', () => {
     await page.click('[data-tool="circle"]');
     await canvas.click({ position: { x: box.width * 0.7, y: box.height * 0.7 } });
 
-    // Verify hash contains serialized state with both shapes
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    // Verify pathname contains serialized state with both shapes
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
-    const hash = await page.evaluate(() => globalThis.location.hash);
-    expect(hash.length).toBeGreaterThan(5);
+    const pathname = await page.evaluate(() => globalThis.location.pathname);
+    expect(pathname.length).toBeGreaterThan(5);
   });
 });

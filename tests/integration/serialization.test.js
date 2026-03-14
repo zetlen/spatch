@@ -6,13 +6,13 @@ test.describe('Serialization round-trip', () => {
     await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
   });
 
-  test('placing shapes updates URL hash', async ({ page }) => {
+  test('placing shapes updates URL path', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');
 
-    // Initially no hash
-    const initialHash = await page.evaluate(() => globalThis.location.hash);
-    expect(initialHash).toBe('');
+    // Initially at root
+    const initialPath = await page.evaluate(() => globalThis.location.pathname);
+    expect(initialPath).toBe('/');
 
     // Place a shape
     await page.click('[data-tool="circle"]');
@@ -21,15 +21,15 @@ test.describe('Serialization round-trip', () => {
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
     // Wait for debounced save (1s + buffer)
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
-    const hash = await page.evaluate(() => globalThis.location.hash);
-    expect(hash.length).toBeGreaterThan(1);
+    const pathname = await page.evaluate(() => globalThis.location.pathname);
+    expect(pathname).toMatch(/^\/s\/.+/);
   });
 
-  test('navigating to a URL with hash restores shapes', async ({ page }) => {
-    // Step 1: Place shapes and capture the hash
+  test('navigating to a URL with path restores shapes', async ({ page }) => {
+    // Step 1: Place shapes and capture the path
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');
 
@@ -45,21 +45,21 @@ test.describe('Serialization round-trip', () => {
     await canvas.click({ position: { x: box.width * 0.7, y: box.height * 0.7 } });
 
     // Wait for URL to update
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
-    const hash = await page.evaluate(() => globalThis.location.hash);
+    const pathname = await page.evaluate(() => globalThis.location.pathname);
 
-    // Step 2: Navigate to a new page with the same hash
-    await page.goto('/' + hash);
+    // Step 2: Navigate to a new page with the same path
+    await page.goto(pathname);
     await page.waitForSelector('#sigil-canvas');
 
     // Wait for render cycle
     await page.waitForTimeout(500);
 
-    // Verify the state was loaded by checking the hash persists
-    const restoredHash = await page.evaluate(() => globalThis.location.hash);
-    expect(restoredHash).toBe(hash);
+    // Verify the state was loaded by checking the path persists
+    const restoredPath = await page.evaluate(() => globalThis.location.pathname);
+    expect(restoredPath).toBe(pathname);
   });
 
   test('canvas renders consistently before and after round-trip', async ({ page }) => {
@@ -78,25 +78,51 @@ test.describe('Serialization round-trip', () => {
 
     const screenshot1 = await canvas.screenshot();
 
-    // Step 2: Get hash and reload
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    // Step 2: Get path and reload
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
-    const hash = await page.evaluate(() => globalThis.location.hash);
+    const pathname = await page.evaluate(() => globalThis.location.pathname);
 
-    await page.goto('/' + hash);
+    await page.goto(pathname);
     await page.waitForSelector('#sigil-canvas');
     await page.waitForTimeout(500);
 
     const screenshot2 = await canvas.screenshot();
 
-    // Screenshots should be similar (not pixel-perfect due to rendering timing)
-    // Just verify both are non-empty buffers of similar size
+    // Screenshots should be similar
     expect(screenshot1.length).toBeGreaterThan(100);
     expect(screenshot2.length).toBeGreaterThan(100);
-    // Allow 20% size variance for compression differences
     const ratio = screenshot1.length / screenshot2.length;
     expect(ratio).toBeGreaterThan(0.5);
     expect(ratio).toBeLessThan(2);
+  });
+
+  test('old hash URLs are migrated to path URLs', async ({ page }) => {
+    // Create a sigil, capture path data, then navigate via old hash URL
+    await page.goto('/');
+    await page.waitForSelector('#sigil-canvas');
+
+    await page.click('[data-tool="circle"]');
+    const canvas = page.locator('#sigil-canvas');
+    const box = await canvas.boundingBox();
+    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
+      timeout: 3000,
+    });
+    const pathname = await page.evaluate(() => globalThis.location.pathname);
+    const data = pathname.slice(3); // strip /s/
+
+    // Navigate using old hash-based URL format
+    await page.goto('/#' + data);
+    await page.waitForSelector('#sigil-canvas');
+    await page.waitForTimeout(500);
+
+    // Should have been migrated to path form
+    const migratedPath = await page.evaluate(() => globalThis.location.pathname);
+    expect(migratedPath).toBe(pathname);
+    const migratedHash = await page.evaluate(() => globalThis.location.hash);
+    expect(migratedHash).toBe('');
   });
 });

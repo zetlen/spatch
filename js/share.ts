@@ -8,11 +8,11 @@ import { serializeState } from './serialize.ts';
 import type { SigilStore } from './state.ts';
 
 function appBaseUrl(): string {
-  return `${globalThis.location.origin}/`;
+  return `${globalThis.location.origin}/s/`;
 }
 
 function embedBaseUrl(): string {
-  return `${globalThis.location.origin}/embed.html`;
+  return `${globalThis.location.origin}/embed/`;
 }
 
 interface OverlayHandle {
@@ -38,10 +38,10 @@ export function initShare(audio: AudioEngine, store: SigilStore): OverlayHandle 
     const size = sizeSlider.value;
     sizeValue.textContent = size;
 
-    const linkUrl = `${appBaseUrl()}#${currentHash}`;
+    const linkUrl = `${appBaseUrl()}${currentHash}`;
     linkCode.textContent = linkUrl;
 
-    const embedUrl = `${embedBaseUrl()}#${currentHash}`;
+    const embedUrl = `${embedBaseUrl()}${currentHash}`;
     embedCode.textContent = `<iframe src="${embedUrl}" width="${size}" height="${size}" style="border:none"></iframe>`;
   }
 

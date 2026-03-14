@@ -6,7 +6,7 @@ import { render } from './canvas/render.ts';
 import { Toolbar } from './toolbar/toolbar.ts';
 import { AudioEngine } from './audio/engine.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
-import { loadFromURL, saveToURL } from './serialize.ts';
+import { loadFromURL, pathToState, resetDirty, saveToURL } from './serialize.ts';
 import { applyScene, getScene, initStageLayers, randomSceneIndex, SCENES } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
 import { Vibe, setVibe, vibeSignal } from './audio/vibe.ts';
@@ -269,19 +269,44 @@ splash.bindLandscapeLock();
 
 // ---- Auto-save to URL (debounced) ----
 
+let navigating = false;
 let saveTimeout: ReturnType<typeof setTimeout> | undefined;
 function debouncedSave(): void {
+  if (navigating) return;
   if (saveTimeout) {
     clearTimeout(saveTimeout);
   }
   saveTimeout = setTimeout(() => {
     if (store.data.voices.length > 0) {
       saveToURL(store.data);
-    } else if (location.hash) {
-      history.replaceState(null, '', location.pathname + location.search);
+    } else if (location.pathname !== '/') {
+      history.replaceState(null, '', '/');
     }
   }, 1000);
 }
+
+// ---- History navigation (back/forward) ----
+
+window.addEventListener('popstate', () => {
+  // Cancel any pending debounced save
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = undefined;
+  }
+
+  const state = pathToState(location.pathname);
+  navigating = true;
+  if (state) {
+    store.loadState(state);
+  } else {
+    // Navigated back to empty canvas — load current state with voices cleared
+    store.loadState({ ...store.data, voices: [] });
+  }
+  navigating = false;
+  resetDirty();
+  selection.clear();
+  needsRender = true;
+});
 
 // ---- Credits overlay ----
 

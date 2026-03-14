@@ -16,8 +16,8 @@ test.describe('Share overlay', () => {
     const box = await canvas.boundingBox();
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
-    // Wait for URL hash to be set
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    // Wait for URL path to be set
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
 
@@ -28,16 +28,16 @@ test.describe('Share overlay', () => {
     const overlay = page.locator('#share-overlay');
     await expect(overlay).toBeVisible();
 
-    // Link code should contain origin URL with hash
+    // Link code should contain origin URL with path
     const linkCode = page.locator('#share-link');
     const linkText = await linkCode.textContent();
-    expect(linkText).toContain('/#');
+    expect(linkText).toContain('/s/');
 
     // Embed code should contain iframe
     const embedCode = page.locator('#share-embed-code');
     const embedText = await embedCode.textContent();
     expect(embedText).toContain('<iframe');
-    expect(embedText).toContain('embed.html');
+    expect(embedText).toContain('/embed/');
   });
 
   test('size slider updates embed snippet', async ({ page }) => {
@@ -49,7 +49,7 @@ test.describe('Share overlay', () => {
     const box = await canvas.boundingBox();
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
 
@@ -73,7 +73,7 @@ test.describe('Share overlay', () => {
     const box = await canvas.boundingBox();
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
-    await page.waitForFunction(() => globalThis.location.hash.length > 1, undefined, {
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
       timeout: 3000,
     });
 

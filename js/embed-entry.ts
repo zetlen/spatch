@@ -2,7 +2,7 @@
 
 import { render } from './canvas/render.ts';
 import { AudioEngine } from './audio/engine.ts';
-import { deserializeState } from './serialize.ts';
+import { deserializeState, serializeState } from './serialize.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { qel } from './dom.ts';
 import { Vibe, setVibe } from './audio/vibe.ts';
@@ -12,16 +12,35 @@ import type { SigilData } from './types.ts';
 
 const MIN_PLAY_MS = 2000;
 
-const hash = globalThis.location.hash.slice(1);
-if (!hash) {
-  showError('No sigil data found.');
-} else {
-  const state = deserializeState(hash);
-  if (!state) {
-    showError('Invalid sigil data.');
-  } else {
-    boot(state);
+function loadEmbedState(): SigilData | undefined {
+  // Hash migration: old embed URLs stored state in the hash
+  const hash = globalThis.location.hash.slice(1);
+  if (hash) {
+    const state = deserializeState(hash);
+    if (state) {
+      const path = '/embed/' + serializeState(state);
+      history.replaceState(null, '', path);
+      return state;
+    }
+    // Hash present but invalid
+    return undefined;
   }
+  // Read from pathname: /embed/<data>
+  const pathname = globalThis.location.pathname;
+  if (pathname.startsWith('/embed/') && pathname.length > 7) {
+    return deserializeState(pathname.slice(7));
+  }
+  return undefined;
+}
+
+const state = loadEmbedState();
+if (!state) {
+  const hasData =
+    globalThis.location.hash.length > 1 ||
+    (globalThis.location.pathname.startsWith('/embed/') && globalThis.location.pathname.length > 7);
+  showError(hasData ? 'Invalid sigil data.' : 'No sigil data found.');
+} else {
+  boot(state);
 }
 
 function showError(msg: string): void {

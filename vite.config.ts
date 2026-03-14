@@ -60,6 +60,35 @@ function spatchPlugin(): Plugin {
 }
 
 // ---------------------------------------------------------------------------
+// SPA fallback plugin — redirect unmatched paths to entry points
+// ---------------------------------------------------------------------------
+
+function spaFallbackPlugin(): Plugin {
+  return {
+    name: 'spa-fallback',
+    configureServer(server) {
+      // Runs before Vite's built-in middleware (no return wrapper)
+      // so URL rewrites happen before Vite tries to serve the file.
+      server.middlewares.use((req, _res, next) => {
+        // Skip files with extensions (actual assets)
+        if (req.url && /\.\w+(\?|$)/.test(req.url)) {
+          return next();
+        }
+        // /embed/<anything> → /embed.html
+        if (req.url?.startsWith('/embed/')) {
+          req.url = '/embed.html';
+        }
+        // /s/<anything> or other paths → /index.html
+        else if (req.url !== '/' && req.url !== '/index.html' && req.url !== '/embed.html') {
+          req.url = '/index.html';
+        }
+        next();
+      });
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Vite config
 // ---------------------------------------------------------------------------
 
@@ -82,6 +111,8 @@ export default defineConfig((_env) => ({
   },
 
   plugins: [
+    spaFallbackPlugin(),
+
     svgSpritePlugin({
       iconsDir: 'node_modules/@tabler/icons/icons',
       placeholder: 'tabler-sprite.svg',

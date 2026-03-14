@@ -23,7 +23,7 @@ test.describe('First-load splash', () => {
     await page.addInitScript(() => {
       localStorage.setItem('spatch-seen:/', '1');
     });
-    await page.goto('/#somehash');
+    await page.goto('/s/somehash');
     await page.waitForSelector('#sigil-canvas');
     await expect(page.locator('body')).not.toHaveClass(/is-editing/);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { deserializeState, serializeState } from '../../js/serialize.ts';
+import { deserializeState, pathToState, serializeState, stateToPath } from '../../js/serialize.ts';
 
 function makeState(overrides = {}) {
   return {
@@ -255,5 +255,43 @@ describe('scene serialization', () => {
     const state = makeState({ scene: 63 });
     const decoded = deserializeState(serializeState(state));
     expect(decoded.scene).toBe(63);
+  });
+});
+
+describe('URL path helpers', () => {
+  test('stateToPath produces /s/ path', () => {
+    const state = makeState({
+      voices: [makeVoice()],
+    });
+    const encoded = serializeState(state);
+    const path = stateToPath(state);
+    expect(path).toBe(`/s/${encoded}`);
+  });
+
+  test('stateToPath produces / for empty voices', () => {
+    const state = makeState();
+    expect(stateToPath(state)).toBe('/');
+  });
+
+  test('pathToState parses /s/<data>', () => {
+    const state = makeState({ voices: [makeVoice()] });
+    const encoded = serializeState(state);
+    const parsed = pathToState(`/s/${encoded}`);
+    expect(parsed).not.toBeUndefined();
+    expect(parsed.voices).toHaveLength(1);
+    expect(parsed.voices[0].x).toBeCloseTo(0.5);
+  });
+
+  test('pathToState returns undefined for /', () => {
+    expect(pathToState('/')).toBeUndefined();
+  });
+
+  test('pathToState returns undefined for non-/s/ paths', () => {
+    expect(pathToState('/vibecheck')).toBeUndefined();
+    expect(pathToState('/embed/foo')).toBeUndefined();
+  });
+
+  test('pathToState returns undefined for invalid data', () => {
+    expect(pathToState('/s/!!invalid!!')).toBeUndefined();
   });
 });

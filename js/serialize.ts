@@ -54,19 +54,56 @@ export function deserializeState(hash: string): SigilData | undefined {
   }
 }
 
-/** Serialize state and write it to the current URL hash fragment (replaces history entry). */
-export function saveToURL(state: SigilData): void {
-  const encoded = serializeState(state);
-  history.replaceState(undefined, '', '#' + encoded);
+/** Convert sigil state to a URL path. Returns '/' if no voices. */
+export function stateToPath(state: SigilData): string {
+  if (state.voices.length === 0) return '/';
+  return '/s/' + serializeState(state);
 }
 
-/** Read and deserialize state from the current URL hash fragment, or undefined if empty/invalid. */
-export function loadFromURL(): SigilData | undefined {
-  const hash = globalThis.location.hash.slice(1);
-  if (!hash) {
-    return;
+const B64_VALID = /^[A-Za-z0-9\-_]+$/;
+
+/** Parse a URL pathname into sigil state. Returns undefined if path is not a /s/ route or data is invalid. */
+export function pathToState(pathname: string): SigilData | undefined {
+  if (!pathname.startsWith('/s/')) return undefined;
+  const data = pathname.slice(3);
+  if (!data || !B64_VALID.test(data)) return undefined;
+  return deserializeState(data);
+}
+
+/** Whether the URL has been modified since the last navigation event. */
+let dirty = false;
+
+/** Reset the dirty flag (called on popstate). */
+export function resetDirty(): void {
+  dirty = false;
+}
+
+/** Serialize state and write it to the URL path via pushState or replaceState. */
+export function saveToURL(state: SigilData): void {
+  const path = stateToPath(state);
+  if (path === globalThis.location.pathname) return;
+  if (dirty) {
+    history.replaceState(null, '', path);
+  } else {
+    history.pushState(null, '', path);
+    dirty = true;
   }
-  return deserializeState(hash);
+}
+
+/** Read and deserialize state from the current URL path, or undefined if empty/invalid.
+ *  Migrates old hash-based URLs to path form via replaceState. */
+export function loadFromURL(): SigilData | undefined {
+  // Hash migration: old URLs stored state in the hash fragment
+  const hash = globalThis.location.hash.slice(1);
+  if (hash) {
+    const state = deserializeState(hash);
+    if (state) {
+      const path = stateToPath(state);
+      history.replaceState(null, '', path);
+      return state;
+    }
+  }
+  return pathToState(globalThis.location.pathname);
 }
 
 // ---- Base64 Custom Packing ----
