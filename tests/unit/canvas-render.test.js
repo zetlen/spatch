@@ -678,6 +678,81 @@ describe('canvas render — pattern defs', () => {
   });
 });
 
+// ---- Solo muting ----
+
+describe('canvas render — solo muting', () => {
+  beforeEach(() => {
+    resetCache();
+    for (const svg of document.querySelectorAll('svg')) {
+      svg.remove();
+    }
+  });
+
+  test('render applies muted class to non-solo voices', () => {
+    const svg = createSVG();
+    const state = makeState({
+      voices: [makeSineVoice({ id: 'a' }), makePulseVoice({ id: 'b' })],
+    });
+
+    // Render with solo on voice 'a'
+    render(svg, state, undefined, 'a');
+
+    const groupA = svg.querySelector('g[data-voice-id="a"]');
+    const groupB = svg.querySelector('g[data-voice-id="b"]');
+    expect(groupA.classList.contains('muted')).toBe(false);
+    expect(groupB.classList.contains('muted')).toBe(true);
+  });
+
+  test('render removes muted class when solo cleared', () => {
+    const svg = createSVG();
+    const state = makeState({
+      voices: [makeSineVoice({ id: 'a' }), makePulseVoice({ id: 'b' })],
+    });
+
+    render(svg, state, undefined, 'a');
+    render(svg, state, undefined, undefined);
+
+    const groupA = svg.querySelector('g[data-voice-id="a"]');
+    const groupB = svg.querySelector('g[data-voice-id="b"]');
+    expect(groupA.classList.contains('muted')).toBe(false);
+    expect(groupB.classList.contains('muted')).toBe(false);
+  });
+});
+
+// ---- DOM order preservation ----
+
+describe('canvas render — DOM order preservation', () => {
+  beforeEach(() => {
+    resetCache();
+    for (const svg of document.querySelectorAll('svg')) {
+      svg.remove();
+    }
+  });
+
+  test('reconciler does not reorder existing voice groups', () => {
+    const svg = createSVG();
+    const state = makeState({
+      voices: [makeSineVoice({ id: 'a' }), makePulseVoice({ id: 'b' })],
+    });
+
+    // Initial render — groups in data order: a, b
+    render(svg, state, undefined);
+    const voiceLayer = svg.querySelector('g[data-layer="voices"]');
+    const groups = () =>
+      [...voiceLayer.querySelectorAll('g[data-voice-id]')].map((g) => g.dataset.voiceId);
+    expect(groups()).toEqual(['a', 'b']);
+
+    // Manually reorder: move 'b' before 'a' (simulates double-click send-to-back)
+    const groupB = voiceLayer.querySelector('g[data-voice-id="b"]');
+    voiceLayer.prepend(groupB);
+    expect(groups()).toEqual(['b', 'a']); // b is first in DOM now
+
+    // Re-render — reconciler should NOT move groups back to data order
+    render(svg, state, undefined);
+    expect(groups()).toEqual(['b', 'a']); // order preserved, not reset to data order
+  });
+});
+
 // ---- resetCache ----
 
 describe('canvas render — resetCache', () => {

@@ -779,3 +779,90 @@ describe('AudioEngine — diphthong sweep', () => {
     expect(sameVoice).toBe(originalVoice);
   });
 });
+
+describe('AudioEngine — solo mode', () => {
+  let engine;
+
+  beforeEach(async () => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    engine.masterGain = new GainNode(engine.audioCtx);
+  });
+
+  async function startWith(voices) {
+    const state = makeSigilState(voices);
+    await engine.play(state, state.envelope);
+    return state;
+  }
+
+  test('setSoloVoice mutes non-solo voices on next update', async () => {
+    const voiceA = makeVoice('a', 'sine', { size: 0.2 });
+    const voiceB = makeVoice('b', 'sine', { size: 0.2 });
+    const state = await startWith([voiceA, voiceB]);
+
+    engine.setSoloVoice('a');
+    engine.update(state);
+
+    const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
+    const avB = engine.activeVoices.find((v) => v.shapeId === 'b');
+    expect(avA.gain.gain.value).toBeGreaterThan(0);
+    expect(avB.gain.gain.value).toBe(0);
+  });
+
+  test('setSoloVoice(undefined) unmutes all voices', async () => {
+    const voiceA = makeVoice('a', 'sine', { size: 0.2 });
+    const voiceB = makeVoice('b', 'sine', { size: 0.2 });
+    const state = await startWith([voiceA, voiceB]);
+
+    engine.setSoloVoice('a');
+    engine.update(state);
+    engine.setSoloVoice(undefined);
+    engine.update(state);
+
+    const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
+    const avB = engine.activeVoices.find((v) => v.shapeId === 'b');
+    expect(avA.gain.gain.value).toBeGreaterThan(0);
+    expect(avB.gain.gain.value).toBeGreaterThan(0);
+  });
+
+  test('solo voice that does not exist unmutes all', async () => {
+    const voiceA = makeVoice('a', 'sine', { size: 0.2 });
+    const state = await startWith([voiceA]);
+
+    engine.setSoloVoice('nonexistent');
+    engine.update(state);
+
+    const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(avA.gain.gain.value).toBeGreaterThan(0);
+  });
+
+  test('FM connections stay active when voice is soloed', async () => {
+    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
+    const voiceB = makeVoice('b', 'sine', {
+      x: 0.5,
+      y: 0.5,
+      size: 0.2,
+      blend: 'multiply',
+    });
+    const state = await startWith([voiceA, voiceB]);
+
+    engine.setSoloVoice('a');
+    engine.update(state);
+
+    // FM connections should still exist despite voice B being muted
+    expect(engine._fmConnections.size).toBeGreaterThan(0);
+  });
+
+  test('solo respects initial play — muted voices start at gain 0', async () => {
+    const voiceA = makeVoice('a', 'sine', { size: 0.2 });
+    const voiceB = makeVoice('b', 'sine', { size: 0.2 });
+
+    engine.setSoloVoice('a');
+    await startWith([voiceA, voiceB]);
+
+    const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
+    const avB = engine.activeVoices.find((v) => v.shapeId === 'b');
+    expect(avA.gain.gain.value).toBeGreaterThan(0);
+    expect(avB.gain.gain.value).toBe(0);
+  });
+});

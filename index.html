@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
     <title>spatch</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
@@ -73,19 +76,26 @@
           <div id="tile"></div>
           <svg id="sigil-canvas" viewBox="0 0 1 1" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
-        <button id="btn-play" class="stage-play-btn" title="Play">
-          <svg class="play-icon" viewBox="0 0 24 24">
-            <path
-              d="M6 4.75a1.25 1.25 0 0 1 1.87-1.08l12.5 7.25a1.25 1.25 0 0 1 0 2.16l-12.5 7.25A1.25 1.25 0 0 1 6 19.25V4.75z"
-              fill="currentColor"
-            />
-          </svg>
-          <span class="play-mode-badge hidden"></span>
-          <svg class="play-ring" viewBox="0 0 68 68">
-            <circle class="play-ring-track" cx="34" cy="34" r="31" />
-            <circle class="play-ring-fill" cx="34" cy="34" r="31" />
-          </svg>
-        </button>
+        <div class="stage-controls">
+          <button id="btn-play" class="stage-play-btn" title="Play">
+            <svg class="play-icon" viewBox="0 0 24 24">
+              <path
+                d="M6 4.75a1.25 1.25 0 0 1 1.87-1.08l12.5 7.25a1.25 1.25 0 0 1 0 2.16l-12.5 7.25A1.25 1.25 0 0 1 6 19.25V4.75z"
+                fill="currentColor"
+              />
+            </svg>
+            <span class="play-mode-badge hidden"></span>
+            <svg class="play-ring" viewBox="0 0 68 68">
+              <circle class="play-ring-track" cx="34" cy="34" r="31" />
+              <circle class="play-ring-fill" cx="34" cy="34" r="31" />
+            </svg>
+          </button>
+          <button id="btn-solo" class="stage-solo-btn" title="Solo selected voice">
+            <svg width="40" height="40">
+              <use href="tabler-sprite.svg#tabler-circle-letter-s" />
+            </svg>
+          </button>
+        </div>
         <div id="radial-overlay" class="radial-overlay hidden" aria-hidden="true"></div>
         <button id="btn-credits" class="credits-btn" title="Credits">
           <svg width="30" height="30"><use href="tabler-sprite.svg#tabler-heart-search" /></svg>

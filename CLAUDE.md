@@ -58,17 +58,19 @@ js/
   app.ts             Entry point: init, event wiring, render loop, selection
   embed-entry.ts     Entry point for embed.html viewer
   keyboard.ts        Global keyboard shortcut handler (delete, copy/paste,
-                     undo/redo, escape, tool switch, space play toggle)
+                     undo/redo, escape, tool switch, space play toggle,
+                     S solo toggle)
   playback.ts        PlaybackController: play/stop/latch/loop state machine
   splash.ts          SplashController: first-visit splash screen
   canvas/
     render.ts        SVG DOM reconciler (voices, selection UI)
     interaction.ts   CanvasInteractionController: pointer/touch input on canvas,
                      InteractionState discriminated union (idle, dragging,
-                     resizing, rotating, adsr, pinch-rotate)
+                     resizing, rotating, adsr, pinch-rotate), double-click /
+                     force-press selection cycling for overlapping shapes
   audio/
     engine.ts        AudioEngine class: Web Audio lifecycle, voice management,
-                     vibe-driven reverb/EQ/compression, analyser
+                     vibe-driven reverb/EQ/compression, analyser, solo muting
     ir-loader.ts     Two-layer IR cache: fetchIR (bytes) + decodeIR (AudioBuffer)
     mapping.ts       Audio mapping functions (pitch, pan, gain, timbre, formants)
     voice-builder.ts Voice audio graph construction (oscillators, effects, borders)
@@ -304,13 +306,29 @@ design rationale and enumeration of past violations.
   background, border-radius (ADSR corners), bevel border, and audio-reactive
   elevation shadow (play indicator). The SVG is transparent and renders shapes
   and touch selection indicators only, ensuring they appear above the shadow.
+  **Selection cycling**: Double-click (or macOS Force Touch press via
+  `webkitmouseforcedown`) on an overlapping shape sends it to the back of the
+  SVG voice layer and selects the shape behind it. This solves the "covered
+  shape is unselectable" problem. The viewport meta tag includes
+  `user-scalable=no` to prevent mobile browsers from intercepting double-tap
+  as zoom.
 
 - **ADSR envelope** is encoded as the canvas frame corner radii. Drag
   corners to adjust. Bottom-left = attack, top-left = decay, top-right =
   sustain, bottom-right = release.
 
 - **Play modes**: normal (press-and-hold), latch (click to toggle), loop
-  (auto-repeating).
+  (auto-repeating), solo (mute all except selected).
+
+- **Solo mode** is an ephemeral UI toggle (not serialized, not undoable, not
+  part of `SigilData`). The `S` button beside the play button (inside the
+  stage, wrapped in `div.stage-controls`) toggles solo on/off; `S` key is the
+  keyboard shortcut. When active + voice selected: only the selected voice
+  plays at normal gain, others gain = 0. When active + no selection: all
+  voices play normally. Solo follows selection changes and persists across
+  play/stop cycles. FM connections stay active for muted voices so the soloed
+  voice retains its interactions. Non-soloed voices get a CSS `muted` class
+  (`opacity: 0.25; filter: saturate(0.3)`) with smooth transitions.
 
 - **State** lives in `SigilStore` (js/state.ts). It holds voices,
   envelope, and scene index. All mutations go through this class. `UndoManager`
@@ -359,7 +377,10 @@ extract it into a shared function or helper. No exceptions. DRY it up.
   synthesis with depth driven by pairwise geometric overlap. Screen (default)
   has no FM; multiply and difference each have distinct FM character. Only
   modes that are visually distinct for ALL color combinations are allowed,
-  to preserve bijection.
+  to preserve bijection. Voice DOM order is not enforced by the reconciler —
+  the `reconcileVoices` function does not reorder existing groups, only
+  inserts new ones near their data-order siblings. This allows double-click
+  selection cycling to persist DOM reorders across renders.
 - **Border** is `{ color: BorderColor, double: boolean, thickness: NormalizedCoord } | undefined`.
   Visual: inset stroke(s) drawn inside the clipped shape. Audio: adds a sine
   oscillator at an octave-shifted frequency. Border changes trigger full voice

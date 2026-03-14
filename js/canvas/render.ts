@@ -332,7 +332,12 @@ function reconcileVoice(group: SVGGElement, voice: Voice, defs: SVGDefsElement):
   applyBorders(group, voice);
 }
 
-function reconcileVoices(voiceLayer: SVGGElement, voices: Voice[], defs: SVGDefsElement): void {
+function reconcileVoices(
+  voiceLayer: SVGGElement,
+  voices: Voice[],
+  defs: SVGDefsElement,
+  soloVoiceId: string | undefined,
+): void {
   const voiceIds = new Set(voices.map((v) => v.id));
 
   // Remove groups for deleted voices
@@ -349,7 +354,8 @@ function reconcileVoices(voiceLayer: SVGGElement, voices: Voice[], defs: SVGDefs
     }
   }
 
-  // Add or update groups for each voice (in order, so z-order matches array order)
+  // Add or update groups for each voice (new groups inserted near siblings;
+  // existing groups keep their current DOM position — voice order is not data)
   let prevGroup;
   for (const voice of voices) {
     let group = voiceLayer.querySelector<SVGGElement>(`g[data-voice-id="${voice.id}"]`);
@@ -364,21 +370,10 @@ function reconcileVoices(voiceLayer: SVGGElement, voices: Voice[], defs: SVGDefs
       } else {
         voiceLayer.append(group);
       }
-    } else {
-      // Ensure correct order
-      const expectedNext: ChildNode | null = prevGroup
-        ? prevGroup.nextSibling
-        : voiceLayer.firstChild;
-      if (group !== expectedNext) {
-        if (prevGroup?.nextSibling) {
-          prevGroup.nextSibling.before(group);
-        } else {
-          voiceLayer.prepend(group);
-        }
-      }
     }
 
     reconcileVoice(group, voice, defs);
+    group.classList.toggle('muted', soloVoiceId !== undefined && voice.id !== soloVoiceId);
     prevGroup = group;
   }
 }
@@ -561,8 +556,14 @@ function renderSelection(
  * @param svg - The root SVG element (viewBox 0 0 1 1)
  * @param state - Current sigil state to render
  * @param selectedId - ID of the currently selected voice, or undefined
+ * @param soloVoiceId - ID of the soloed voice, or undefined; non-solo voices get a `muted` CSS class
  */
-export function render(svg: SVGSVGElement, state: SigilData, selectedId: string | undefined): void {
+export function render(
+  svg: SVGSVGElement,
+  state: SigilData,
+  selectedId: string | undefined,
+  soloVoiceId?: string | undefined,
+): void {
   const { defs, voiceLayer, selectionLayer } = ensureLayers(svg);
 
   // Ensure shared pattern defs exist
@@ -572,7 +573,7 @@ export function render(svg: SVGSVGElement, state: SigilData, selectedId: string 
   }
 
   // Reconcile voices
-  reconcileVoices(voiceLayer, state.voices, defs);
+  reconcileVoices(voiceLayer, state.voices, defs, soloVoiceId);
 
   // Render selection UI (rebuilt each frame — cheap for SVG)
   renderSelection(selectionLayer, state, selectedId);

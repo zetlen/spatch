@@ -190,6 +190,8 @@ export class CanvasInteractionController {
   private boundPointerMove: (e: PointerEvent) => void;
   private boundPointerEnd: (e: PointerEvent) => void;
   private boundAreaPointerDown: (e: PointerEvent) => void;
+  private boundCycleSelection: (e: MouseEvent) => void;
+  private boundForcePressCycle: (e: Event) => void;
 
   constructor(deps: InteractionDeps) {
     this.canvasWrap = deps.canvasWrap;
@@ -207,6 +209,8 @@ export class CanvasInteractionController {
     this.boundPointerMove = this.handlePointerMove.bind(this);
     this.boundPointerEnd = this.handlePointerEnd.bind(this);
     this.boundAreaPointerDown = this.handleAreaPointerDown.bind(this);
+    this.boundCycleSelection = this.handleCycleSelection.bind(this);
+    this.boundForcePressCycle = (e: Event) => this.handleCycleSelection(e as MouseEvent);
   }
 
   bindEvents(): void {
@@ -215,6 +219,8 @@ export class CanvasInteractionController {
     this.canvasWrap.addEventListener('pointerup', this.boundPointerEnd);
     this.canvasWrap.addEventListener('pointercancel', this.boundPointerEnd);
     this.stage.addEventListener('pointerdown', this.boundAreaPointerDown);
+    this.canvas.addEventListener('dblclick', this.boundCycleSelection);
+    this.canvas.addEventListener('webkitmouseforcedown', this.boundForcePressCycle);
   }
 
   dispose(): void {
@@ -223,6 +229,38 @@ export class CanvasInteractionController {
     this.canvasWrap.removeEventListener('pointerup', this.boundPointerEnd);
     this.canvasWrap.removeEventListener('pointercancel', this.boundPointerEnd);
     this.stage.removeEventListener('pointerdown', this.boundAreaPointerDown);
+    this.canvas.removeEventListener('dblclick', this.boundCycleSelection);
+    this.canvas.removeEventListener('webkitmouseforcedown', this.boundForcePressCycle);
+  }
+
+  // ---- Selection cycling (double-click / force-press) ----
+
+  private handleCycleSelection(e: MouseEvent): void {
+    const voiceEl = (e.target as Element).closest?.('[data-voice-id]');
+    if (!voiceEl) return;
+
+    const voiceLayer = this.canvas.querySelector('g[data-layer="voices"]');
+    if (!voiceLayer) return;
+
+    const group = voiceEl.closest('g[data-voice-id]') as SVGGElement | null;
+    if (!group) return;
+
+    // Send topmost shape to back
+    voiceLayer.prepend(group);
+
+    // Find what's now on top at this point
+    const newTop = document.elementFromPoint(e.clientX, e.clientY);
+    const newVoiceEl = newTop?.closest?.('[data-voice-id]');
+    const newId = newVoiceEl
+      ? ((newVoiceEl as HTMLElement).dataset.voiceId ?? undefined)
+      : undefined;
+
+    if (newId && newId !== group.dataset.voiceId) {
+      this.selection.select(newId);
+    }
+    // If same element or no element, the shape stays selected (no-op)
+
+    this.requestRender();
   }
 
   // ---- Background deselect ----

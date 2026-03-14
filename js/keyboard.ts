@@ -26,8 +26,10 @@ export function bindKeyboardShortcuts(deps: {
   playback: PlaybackController;
   requestRender: () => void;
   isSplashActive: () => boolean;
+  toggleSolo: () => void;
 }): void {
-  const { store, undo, selection, toolbar, playback, requestRender, isSplashActive } = deps;
+  const { store, undo, selection, toolbar, playback, requestRender, isSplashActive, toggleSolo } =
+    deps;
 
   let clipboard: Voice | undefined;
 
@@ -111,6 +113,9 @@ export function bindKeyboardShortcuts(deps: {
       } else if (store.data.voices.length > 0) {
         playback.start().then(() => playback.latch());
       }
+    }
+    if (e.key === 's' && !mod) {
+      toggleSolo();
     }
   });
 }

@@ -60,13 +60,48 @@ if ('__audioCapture' in globalThis) {
 
 const selection = new SelectionManager(store);
 
+// ---- Solo state ----
+
+let soloActive = false;
+const soloBtn = qel<HTMLButtonElement>('#btn-solo');
+
+function toggleSolo(): void {
+  soloActive = !soloActive;
+  soloBtn.classList.toggle('solo-active', soloActive);
+  if (soloActive) {
+    audio.setSoloVoice(selection.voiceId);
+  } else {
+    audio.setSoloVoice(undefined);
+  }
+  if (audio.isPlaying) {
+    audio.update(store.data);
+  }
+  needsRender = true;
+}
+
+soloBtn.addEventListener('click', toggleSolo);
+
 // Toolbar auto-syncs when selection changes (signals drive the effect).
 // Sets selectedId, toggles bottom bar visibility, and syncs panel state
 // to the newly selected voice (fill swatch, pattern, border, etc.).
+// Also pushes solo voice when solo mode is active.
 effect(() => {
   toolbar.selectedId = selection.voiceId;
   toolbar.updateBottomBar();
   toolbar.syncToSelectedShape();
+  const showSolo = selection.voiceId !== undefined && store.data.voices.length > 1;
+  soloBtn.classList.toggle('solo-visible', showSolo);
+  if (!showSolo && soloActive) {
+    soloActive = false;
+    soloBtn.classList.remove('solo-active');
+    audio.setSoloVoice(undefined);
+  }
+  if (soloActive) {
+    audio.setSoloVoice(selection.voiceId);
+    if (audio.isPlaying) {
+      audio.update(store.data);
+    }
+  }
 });
 
 // ---- Check for saved state in URL ----
@@ -181,7 +216,8 @@ const splash = new SplashController({ stage, audio, playback });
 
 function renderLoop(): void {
   if (needsRender || audio.isPlaying) {
-    render(svgCanvas, store.data, selection.voiceId);
+    const soloId = soloActive ? selection.voiceId : undefined;
+    render(svgCanvas, store.data, selection.voiceId, soloId);
 
     needsRender = false;
   }
@@ -260,6 +296,7 @@ bindKeyboardShortcuts({
   selection,
   store,
   toolbar,
+  toggleSolo,
   undo,
 });
 

@@ -269,6 +269,17 @@ body {
   overflow: hidden;
 }
 
+g[data-voice-id] {
+  transition:
+    opacity 0.15s,
+    filter 0.15s;
+}
+
+g.muted {
+  opacity: 0.25;
+  filter: saturate(0.3);
+}
+
 /* ---- Stage buttons ---- */
 
 .credits-btn {
@@ -556,8 +567,6 @@ body.landscape-locked #stage {
   width: var(--play-btn-size);
   height: var(--play-btn-size);
   flex-shrink: 0;
-  margin-top: auto;
-  margin-bottom: auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -637,7 +646,61 @@ body.landscape-locked #stage {
   filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
 }
 
-/* ---- Landscape: play button overlays canvas ---- */
+/* ---- Stage controls (play + solo) ---- */
+
+.stage-controls {
+  position: relative;
+  display: flex;
+  align-items: center;
+  z-index: 2;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+/* ---- Solo toggle button ---- */
+
+.stage-solo-btn {
+  --solo-icon: 40px;
+  position: absolute;
+  left: 100%;
+  top: 100%;
+  transform: translate(calc(var(--solo-icon) * -0.5), calc(var(--solo-icon) * -0.5));
+  width: var(--solo-icon);
+  height: var(--solo-icon);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    color 0.15s,
+    filter 0.15s;
+  touch-action: none;
+}
+
+.stage-solo-btn.solo-active {
+  color: #fff;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
+}
+
+.stage-solo-btn.solo-visible {
+  opacity: 0.6;
+  pointer-events: auto;
+}
+
+.stage-solo-btn.solo-active,
+.stage-solo-btn.solo-visible:hover {
+  opacity: 1;
+}
 
 @media (orientation: landscape) {
   #canvas-wrap {
@@ -648,7 +711,7 @@ body.landscape-locked #stage {
   body.landscape-locked #canvas-wrap {
     width: min(100%, calc(100dvh - 24px), 800px);
   }
-  .stage-play-btn {
+  .stage-controls {
     position: absolute;
     left: 12px;
     bottom: 68px;

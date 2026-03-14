@@ -74,6 +74,7 @@ export class AudioEngine {
   private _appliedIR: string | undefined;
   private _appliedReverbPreDelay: number = 0;
   private _pendingIRBuffer: AudioBuffer | undefined;
+  private _soloVoiceId: string | undefined;
 
   /** Synchronously create and unlock the AudioContext.
    *  Everything here MUST be synchronous — iOS Safari revokes user-gesture
@@ -227,8 +228,13 @@ export class AudioEngine {
     this.envelopeGain.gain.linearRampToValueAtTime(sustain, now + attack + decay);
 
     // Build voices
+    const soloActive =
+      this._soloVoiceId !== undefined && sigilState.voices.some((v) => v.id === this._soloVoiceId);
     for (const voice of sigilState.voices) {
       const audioVoice = this._buildVoice(ctx, voice);
+      if (soloActive && voice.id !== this._soloVoiceId) {
+        audioVoice.gain.gain.setValueAtTime(0, now);
+      }
       audioVoice.start(now);
       this.activeVoices.push(audioVoice);
     }
@@ -507,11 +513,16 @@ export class AudioEngine {
       }
     }
 
+    const soloActive = this._soloVoiceId !== undefined && voiceMap.has(this._soloVoiceId);
+
     // Add audio voices for new voices
     const activeIds = new Set(this.activeVoices.map((v) => v.shapeId));
     for (const voice of sigilState.voices) {
       if (!activeIds.has(voice.id)) {
         const audioVoice = this._buildVoice(ctx, voice);
+        if (soloActive && voice.id !== this._soloVoiceId) {
+          audioVoice.gain.gain.setValueAtTime(0, now);
+        }
         audioVoice.start(now);
         // Schedule diphthong sweep for new linear-fill voices added mid-playback
         if (voice.fill.mode === 'linear') {
@@ -561,6 +572,9 @@ export class AudioEngine {
         this._stopVoice(audioVoice);
         this.activeVoices.splice(i, 1);
         const rebuilt = this._buildVoice(ctx, voice);
+        if (soloActive && voice.id !== this._soloVoiceId) {
+          rebuilt.gain.gain.setValueAtTime(0, now);
+        }
         rebuilt.start(now);
         this.activeVoices.push(rebuilt);
         voicesChanged = true;
@@ -590,7 +604,11 @@ export class AudioEngine {
         }
       }
 
-      audioVoice.gain.gain.setValueAtTime(vibe.voiceGain(voice.waveform, voice.size), now);
+      const isMuted = soloActive && voice.id !== this._soloVoiceId;
+      audioVoice.gain.gain.setValueAtTime(
+        isMuted ? 0 : vibe.voiceGain(voice.waveform, voice.size),
+        now,
+      );
       audioVoice.panner.pan.setValueAtTime(vibe.xToPan(voice.x), now);
 
       // Retrig diphthong sweep when linear fill params change during playback
@@ -726,6 +744,10 @@ export class AudioEngine {
       this._muffleFilter.frequency.setValueAtTime(this._muffleFilter.frequency.value, now);
       this._muffleFilter.frequency.linearRampToValueAtTime(20000, now + 0.15);
     }
+  }
+
+  setSoloVoice(id: string | undefined): void {
+    this._soloVoiceId = id;
   }
 
   /** Tear down all FM connections. */

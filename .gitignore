@@ -6,3 +6,4 @@ test-results/
 *.tar.gz
 .env*
 .DS_Store
+.superpowers/
