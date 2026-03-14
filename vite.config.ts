@@ -70,16 +70,11 @@ function spaFallbackPlugin(): Plugin {
       // Runs before Vite's built-in middleware (no return wrapper)
       // so URL rewrites happen before Vite tries to serve the file.
       server.middlewares.use((req, _res, next) => {
-        // Skip files with extensions (actual assets)
-        if (req.url && /\.\w+(\?|$)/.test(req.url)) {
-          return next();
-        }
-        // /embed/<anything> → /embed.html
+        // Rewrite known app routes to their HTML entry points.
+        // Everything else (assets, Vite internals) passes through untouched.
         if (req.url?.startsWith('/embed/')) {
           req.url = '/embed.html';
-        }
-        // /s/<anything> or other paths → /index.html
-        else if (req.url !== '/' && req.url !== '/index.html' && req.url !== '/embed.html') {
+        } else if (req.url?.startsWith('/s/')) {
           req.url = '/index.html';
         }
         next();

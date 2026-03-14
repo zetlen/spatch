@@ -66,6 +66,8 @@ export class SplashController {
   bindEvents(): void {
     if (!this._isActive) return;
 
+    // Remove first to prevent double-binding across landscape toggles
+    this.removeSplashListeners();
     this.stage.addEventListener('pointerdown', this.handleDown);
     // iOS Safari: touchend is the qualifying gesture for audio unlock.
     // Desktop fallback: click fires after pointerup on non-touch devices.
@@ -101,15 +103,30 @@ export class SplashController {
 
   private splashUp(): void {
     if (!this.splashPointerDown) return;
-    // Don't dismiss splash in cramped landscape
-    if (this.landscapeMql.matches) return;
     this.splashPointerDown = false;
-    this.removeSplashListeners();
 
     // iOS Safari only unlocks audio from touchend/click — NOT pointerup.
     // Warm up + start playback here so AudioContext init happens in a
     // gesture that Safari accepts.
     this.audio.warmUp();
+
+    // Landscape: play audio but don't dismiss splash or reveal toolbars.
+    // Listeners stay bound so the user can tap again.
+    if (this.landscapeMql.matches) {
+      const ready = this.playback.start();
+      const elapsed = Date.now() - this.splashDownTime;
+      const remaining = Math.max(0, MIN_SUSTAIN_MS - elapsed);
+      setTimeout(async () => {
+        try {
+          await ready;
+        } catch {}
+        if (this.audio.isPlaying) {
+          this.playback.releaseAndIdle();
+        }
+      }, remaining);
+      return;
+    }
+
     const playReady = this.playback.start();
 
     const elapsed = Date.now() - this.splashDownTime;
@@ -121,10 +138,12 @@ export class SplashController {
 
   private onLandscapeChange(isCrampedLandscape: boolean): void {
     if (isCrampedLandscape) {
-      // Landscape lock: hide toolbars entirely (not just opacity) so tile fills viewport
+      // Landscape lock: hide toolbars entirely (not just opacity) so tile fills viewport.
+      // Re-bind splash listeners so tap-to-play works (even if splash was already dismissed).
       this._isActive = true;
       document.body.classList.add('landscape-locked');
       document.body.classList.remove('is-editing');
+      this.bindEvents();
       if (this.landscapeBlock) {
         this.landscapeBlock.classList.remove('hidden');
         this.landscapeBlock.setAttribute('aria-hidden', 'false');
@@ -138,6 +157,7 @@ export class SplashController {
       // If user already dismissed splash before rotating, restore editing
       if (localStorage.getItem(this.splashKey)) {
         this._isActive = false;
+        this.removeSplashListeners();
         document.body.classList.add('is-editing');
       }
       // Otherwise, keep splash active — normal dismiss flow applies

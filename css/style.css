@@ -14,6 +14,7 @@
   --hover-bg: #ccc7c1;
   --active-bg: #c5c0ba;
   --danger: #cc3344;
+  --play-btn-size: clamp(86px, 18vmin, 118px);
 }
 
 * {
@@ -206,23 +207,19 @@ body {
   pointer-events: none;
 }
 
-/* ---- Canvas Area ---- */
+/* ---- Stage ---- */
 
 #stage {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
   padding: 12px;
   overflow: hidden;
   background: transparent;
   position: relative;
   z-index: 1;
   isolation: isolate;
-  container-type: size;
-  --play-btn-size: clamp(86px, 18vmin, 118px);
 }
 
 #canvas-wrap {
@@ -230,8 +227,11 @@ body {
   overflow: hidden;
   touch-action: none;
   z-index: 1;
-  width: min(100cqh - var(--play-btn-size) - 60px, 100cqw - 48px, 800px);
+  width: 100%;
+  max-width: 800px;
   aspect-ratio: 1;
+  max-height: calc(100% - var(--play-btn-size) - 24px);
+  margin-top: auto;
   visibility: hidden;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.25),
@@ -269,7 +269,7 @@ body {
   overflow: hidden;
 }
 
-/* ---- Stage Themes ---- */
+/* ---- Stage buttons ---- */
 
 .credits-btn {
   position: absolute;
@@ -519,16 +519,22 @@ body.is-editing .share-btn:hover {
   inset: 0;
   z-index: 60;
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 16px;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
 }
 
 .landscape-message {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 22px;
-  letter-spacing: 0.04em;
+  display: flex;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.5));
+}
+
+.landscape-message svg {
+  width: 48px;
+  height: 48px;
 }
 
 /* Landscape lock: fully hide toolbars so tile fills viewport */
@@ -545,10 +551,13 @@ body.landscape-locked #stage {
 /* ---- Stage play button ---- */
 
 .stage-play-btn {
+  position: relative;
   z-index: 2;
   width: var(--play-btn-size);
   height: var(--play-btn-size);
   flex-shrink: 0;
+  margin-top: auto;
+  margin-bottom: auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -562,17 +571,6 @@ body.landscape-locked #stage {
   pointer-events: none;
   transition: opacity 0.2s;
   touch-action: none;
-}
-
-@media (orientation: landscape) {
-  #canvas-wrap {
-    width: min(100cqh - 48px, 100cqw - 48px, 800px);
-  }
-  .stage-play-btn {
-    position: absolute;
-    left: 12px;
-    bottom: 68px;
-  }
 }
 
 .stage-play-btn:hover {
@@ -637,6 +635,24 @@ body.landscape-locked #stage {
 /* Latch glow */
 .stage-play-btn.latched {
   filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
+}
+
+/* ---- Landscape: play button overlays canvas ---- */
+
+@media (orientation: landscape) {
+  #canvas-wrap {
+    width: min(100%, calc(100dvh - 160px), 800px);
+    max-height: none;
+    margin: auto 0;
+  }
+  body.landscape-locked #canvas-wrap {
+    width: min(100%, calc(100dvh - 24px), 800px);
+  }
+  .stage-play-btn {
+    position: absolute;
+    left: 12px;
+    bottom: 68px;
+  }
 }
 
 /* ---- Radial overlay ---- */
