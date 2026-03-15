@@ -138,6 +138,57 @@ function decodeInt(str: string, startIndex: number, chars: number): number {
 
 const EFFECT_KEYS: (PatternType | undefined)[] = [undefined, ...PATTERN_TYPES].sort();
 
+function packVoice(v: Voice): string {
+  let out = '';
+  let flags = 0;
+  const wf = v.waveform === 'blend' ? 2 : v.waveform === 'pulse' ? 1 : 0;
+  flags |= (wf & 0x3) << 10;
+
+  const eff = Math.max(0, EFFECT_KEYS.indexOf(v.effect));
+  flags |= (eff & 0x7) << 7;
+
+  const bl = Math.max(0, BLEND_MODES.indexOf(v.blend));
+  flags |= (bl & 0x7) << 4;
+
+  const fm = v.fill.mode === 'linear' ? 1 : 0;
+  flags |= (fm & 0x1) << 3;
+
+  let bm = 0;
+  if (v.border) {
+    if (v.border.color === 'white') bm = v.border.double ? 3 : 1;
+    else bm = v.border.double ? 4 : 2;
+  }
+  flags |= bm & 0x7;
+
+  out += encodeInt(flags, 2);
+  out += encodeInt(round3(v.x) * 1000, 2);
+  out += encodeInt(round3(v.y) * 1000, 2);
+  out += encodeInt(round3(v.size) * 1000, 2);
+
+  if (wf > 0 && 'timbre' in v) {
+    out += encodeInt(round3(v.timbre) * 1000, 2);
+  }
+
+  if (bm > 0 && v.border) {
+    out += encodeInt(round3(v.border.thickness) * 1000, 2);
+  }
+
+  if (fm === 0) {
+    const f = v.fill as SolidFill;
+    const fInt = (Math.round(f.h) << 14) | (Math.round(f.s) << 7) | Math.round(f.l);
+    out += encodeInt(fInt, 4);
+  } else {
+    const f = v.fill as LinearFill;
+    out += encodeInt(Math.round(f.gradAngle), 2);
+    const f1 = (Math.round(f.h) << 14) | (Math.round(f.s) << 7) | Math.round(f.l);
+    out += encodeInt(f1, 4);
+    const f2 = (Math.round(f.h2) << 14) | (Math.round(f.s2) << 7) | Math.round(f.l2);
+    out += encodeInt(f2, 4);
+  }
+
+  return out;
+}
+
 function packB64(state: SigilData): string {
   let out = '';
   // Env (8 chars)
@@ -149,56 +200,12 @@ function packB64(state: SigilData): string {
   // Scene (1 char)
   out += encodeInt(state.scene, 1);
 
-  // Voices
-  for (const v of state.voices) {
-    let flags = 0;
-    const wf = v.waveform === 'blend' ? 2 : v.waveform === 'pulse' ? 1 : 0;
-    flags |= (wf & 0x3) << 10;
-
-    const eff = Math.max(0, EFFECT_KEYS.indexOf(v.effect));
-    flags |= (eff & 0x7) << 7;
-
-    const bl = Math.max(0, BLEND_MODES.indexOf(v.blend));
-    flags |= (bl & 0x7) << 4;
-
-    const fm = v.fill.mode === 'linear' ? 1 : 0;
-    flags |= (fm & 0x1) << 3;
-
-    let bm = 0;
-    if (v.border) {
-      if (v.border.color === 'white') bm = v.border.double ? 3 : 1;
-      else bm = v.border.double ? 4 : 2;
-    }
-    flags |= bm & 0x7;
-
-    out += encodeInt(flags, 2);
-    out += encodeInt(round3(v.x) * 1000, 2);
-    out += encodeInt(round3(v.y) * 1000, 2);
-    out += encodeInt(round3(v.size) * 1000, 2);
-
-    if (wf > 0 && 'timbre' in v) {
-      out += encodeInt(round3(v.timbre) * 1000, 2);
-    }
-
-    if (bm > 0 && v.border) {
-      out += encodeInt(round3(v.border.thickness) * 1000, 2);
-    }
-
-    if (fm === 0) {
-      // solid
-      const f = v.fill as SolidFill;
-      const fInt = (Math.round(f.h) << 14) | (Math.round(f.s) << 7) | Math.round(f.l);
-      out += encodeInt(fInt, 4);
-    } else {
-      // linear
-      const f = v.fill as LinearFill;
-      out += encodeInt(Math.round(f.gradAngle), 2);
-      const f1 = (Math.round(f.h) << 14) | (Math.round(f.s) << 7) | Math.round(f.l);
-      out += encodeInt(f1, 4);
-      const f2 = (Math.round(f.h2) << 14) | (Math.round(f.s2) << 7) | Math.round(f.l2);
-      out += encodeInt(f2, 4);
-    }
-  }
+  // Voices — pack each independently, then sort for canonical ordering.
+  // Voice array order is not data; sorting ensures any permutation of the
+  // same voice set produces an identical URL.
+  const voiceStrings = state.voices.map((v) => packVoice(v));
+  voiceStrings.sort();
+  out += voiceStrings.join('');
 
   return out;
 }
