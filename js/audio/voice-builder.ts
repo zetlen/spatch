@@ -29,6 +29,9 @@ export interface AudioVoiceBase {
   brightness: BiquadFilterNode;
   warmthShaper: WaveShaperNode | undefined;
   panner: StereoPannerNode;
+  lastX: number;
+  lastY: number;
+  lastSize: number;
   start(time: number): void;
   stop(time: number): void;
 }
@@ -209,6 +212,9 @@ export function buildVoice(
     formantF2,
     formantMixer,
     gain,
+    lastX: voice.x as number,
+    lastY: voice.y as number,
+    lastSize: voice.size as number,
     octaveGainNode,
     octaveOsc,
     outputNode: panner,

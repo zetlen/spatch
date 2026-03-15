@@ -552,6 +552,9 @@ export class AudioEngine {
       }
     }
 
+    // Track which voices moved for incremental FM sync
+    const movedVoiceIds = new Set<string>();
+
     // Update existing audio voices
     for (let i = this.activeVoices.length - 1; i >= 0; i--) {
       const audioVoice = this.activeVoices[i]!;
@@ -610,6 +613,18 @@ export class AudioEngine {
         now,
       );
       audioVoice.panner.pan.setValueAtTime(vibe.xToPan(voice.x), now);
+
+      // Detect position/size changes for incremental FM sync
+      if (
+        voice.x !== audioVoice.lastX ||
+        voice.y !== audioVoice.lastY ||
+        voice.size !== audioVoice.lastSize
+      ) {
+        movedVoiceIds.add(voice.id);
+        audioVoice.lastX = voice.x;
+        audioVoice.lastY = voice.y;
+        audioVoice.lastSize = voice.size;
+      }
 
       // Retrig diphthong sweep when linear fill params change during playback
       const fillKey = fillToKey(voice.fill);
@@ -698,11 +713,14 @@ export class AudioEngine {
       this._appliedVibe = vibe;
     }
 
-    // Tear down stale FM connections when voices changed, then sync all
+    // Tear down stale FM connections when voices changed, then sync all.
+    // When only position/size changed, do an incremental sync (skip unchanged pairs).
     if (voicesChanged) {
       this._disposeFMConnections();
+      this._syncFMConnections(sigilState.voices);
+    } else if (movedVoiceIds.size > 0) {
+      this._syncFMConnections(sigilState.voices, movedVoiceIds);
     }
-    this._syncFMConnections(sigilState.voices);
   }
 
   stop(): void {
@@ -778,8 +796,12 @@ export class AudioEngine {
    * Lazily create, update, and tear down FM connections based on current overlap.
    * Connections are only created when overlap > 0 — non-overlapping voices have
    * NO nodes attached to their frequency AudioParams, keeping the audio graph clean.
+   *
+   * When `movedVoiceIds` is provided, only pairs involving a moved voice are
+   * recomputed — unchanged pairs retain their existing connection and depth.
+   * Pass undefined (or omit) for a full sweep (initial play, voice add/remove).
    */
-  private _syncFMConnections(voices: readonly Voice[]): void {
+  private _syncFMConnections(voices: readonly Voice[], movedVoiceIds?: Set<string>): void {
     const ctx = this.audioCtx;
     if (!ctx) return;
 
@@ -790,6 +812,26 @@ export class AudioEngine {
       for (let j = i + 1; j < voices.length; j++) {
         const carrierData = voices[i]!;
         const modulatorData = voices[j]!;
+
+        // Skip FM for blend modes with no modulation (e.g. screen) —
+        // check before computing overlap to avoid the sqrt
+        const params = FM_PARAMS[modulatorData.blend];
+        if (params.maxIndex <= 0) continue;
+
+        const key = `${modulatorData.id}:${carrierData.id}`;
+
+        // If we know which voices moved, skip pairs where neither voice
+        // changed position — their overlap and depth are unchanged.
+        if (
+          movedVoiceIds &&
+          !movedVoiceIds.has(carrierData.id) &&
+          !movedVoiceIds.has(modulatorData.id)
+        ) {
+          if (this._fmConnections.has(key)) {
+            activeKeys.add(key);
+          }
+          continue;
+        }
 
         const overlap = computeOverlap(
           modulatorData.x,
@@ -802,11 +844,6 @@ export class AudioEngine {
 
         if (overlap <= 0) continue;
 
-        // Skip FM for blend modes with no modulation (e.g. screen)
-        const params = FM_PARAMS[modulatorData.blend];
-        if (params.maxIndex <= 0) continue;
-
-        const key = `${modulatorData.id}:${carrierData.id}`;
         activeKeys.add(key);
 
         const carrierAudio = audioById.get(carrierData.id);

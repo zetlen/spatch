@@ -287,4 +287,167 @@ test.describe('Audio waveform snapshots', () => {
       maxDiffPixelRatio: 0.01,
     });
   });
+
+  // ---- FM interaction tests ----
+  // These exercise the FM connection lifecycle during mid-playback state
+  // changes: creation, teardown, and multi-voice pairwise interactions.
+  // The audio snapshot captures the full timeline so any regression in
+  // FM depth, timing, or connection management shows as a pixel diff.
+
+  test('3 voices with mixed blend modes and partial overlap', async ({ page }) => {
+    // Circle at center (screen), square at left (multiply), triangle at right (difference).
+    // Circle overlaps both neighbors; square and triangle don't overlap each other.
+    // Tests simultaneous FM connections with different FM characters on one carrier.
+    await placeShape(page, 'circle', 0.5, 0.5);
+    await page.keyboard.press('Escape');
+    await placeShape(page, 'square', 0.35, 0.5);
+    await page.keyboard.press('Escape');
+    await placeShape(page, 'triangle', 0.65, 0.5);
+    await page.evaluate(() => {
+      const voices = globalThis.__testStore.data.voices;
+      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
+      globalThis.__testStore.updateVoice(voices[2].id, { blend: 'difference' });
+    });
+    const png = await captureAudio(page);
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-3-voice-mixed-blend.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('non-overlapping voices with multiply blend produce no FM', async ({ page }) => {
+    // Two voices far apart, both multiply blend. Distance exceeds combined
+    // radius so overlap = 0 and no FM connections should be created.
+    await placeShape(page, 'circle', 0.2, 0.2);
+    await page.keyboard.press('Escape');
+    await placeShape(page, 'square', 0.8, 0.8);
+    await page.evaluate(() => {
+      const voices = globalThis.__testStore.data.voices;
+      globalThis.__testStore.updateVoice(voices[0].id, { blend: 'multiply' });
+      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
+    });
+    const png = await captureAudio(page);
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-multiply-no-overlap.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('voice moved into overlap mid-playback activates FM', async ({ page }) => {
+    // Two voices start far apart (no overlap). At t=1s the second voice moves
+    // to overlap the first. The waveform should transition from clean to
+    // FM-modulated at the move marker.
+    await placeShape(page, 'circle', 0.5, 0.5);
+    await page.keyboard.press('Escape');
+    await placeShape(page, 'square', 0.9, 0.5);
+    await page.evaluate(() => {
+      const voices = globalThis.__testStore.data.voices;
+      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
+    });
+    await annotateState(page);
+    await page.evaluate(() => {
+      globalThis.__audioCapture.annotate('move to overlap at t=1s');
+    });
+
+    await page.keyboard.press('Space');
+    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
+
+    await page.evaluate(() => {
+      globalThis.__audioCapture.suspendAt(1.0, 'move');
+      const { release } = globalThis.__testStore.data.envelope;
+      globalThis.__audioCapture.suspendAt(2.0, 'R');
+      globalThis.__audioCapture.markEvent('0', 2.0 + release);
+      globalThis.__audioCapture.startRendering();
+    });
+
+    // Wait for t=1s, move voice to overlap
+    await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
+    await page.evaluate(() => {
+      const voices = globalThis.__testStore.data.voices;
+      globalThis.__testStore.updateVoice(voices[1].id, { x: 0.5 });
+    });
+    await page.evaluate(() => globalThis.__audioCapture.resume());
+
+    // Wait for t=2s, release
+    await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
+    await page.keyboard.press('Space');
+    await page.evaluate(() => globalThis.__audioCapture.resume());
+
+    const png = await page.evaluate(() => globalThis.__audioCapture.finishCapture({ duration: 4 }));
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-move-into-overlap.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('voice moved out of overlap mid-playback deactivates FM', async ({ page }) => {
+    // Two voices start fully overlapping with multiply blend (active FM).
+    // At t=1s the second voice moves far away. The waveform should
+    // transition from FM-modulated to clean at the move marker.
+    await placeShape(page, 'circle', 0.5, 0.5);
+    await page.keyboard.press('Escape');
+    await placeShape(page, 'square', 0.5, 0.5);
+    await page.evaluate(() => {
+      const voices = globalThis.__testStore.data.voices;
+      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
+    });
+    await annotateState(page);
+    await page.evaluate(() => {
+      globalThis.__audioCapture.annotate('move away at t=1s');
+    });
+
+    await page.keyboard.press('Space');
+    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
+
+    await page.evaluate(() => {
+      globalThis.__audioCapture.suspendAt(1.0, 'move');
+      const { release } = globalThis.__testStore.data.envelope;
+      globalThis.__audioCapture.suspendAt(2.0, 'R');
+      globalThis.__audioCapture.markEvent('0', 2.0 + release);
+      globalThis.__audioCapture.startRendering();
+    });
+
+    // Wait for t=1s, move voice away
+    await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
+    await page.evaluate(() => {
+      const voices = globalThis.__testStore.data.voices;
+      globalThis.__testStore.updateVoice(voices[1].id, { x: 0.9 });
+    });
+    await page.evaluate(() => globalThis.__audioCapture.resume());
+
+    // Wait for t=2s, release
+    await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
+    await page.keyboard.press('Space');
+    await page.evaluate(() => globalThis.__audioCapture.resume());
+
+    const png = await page.evaluate(() => globalThis.__audioCapture.finishCapture({ duration: 4 }));
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-move-out-of-overlap.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('5 voices with multiply blend in a diagonal cluster', async ({ page }) => {
+    // 5 overlapping voices along a diagonal: each adjacent pair overlaps ~55%,
+    // next-nearest pairs overlap ~10%, far pairs don't overlap.
+    // This produces 7 active FM connections out of 10 total pairs — a stress
+    // test for the pairwise FM loop at larger voice counts.
+    await page.evaluate(() => {
+      const store = globalThis.__testStore;
+      const waveforms = ['sine', 'pulse', 'blend', 'sine', 'pulse'];
+      const positions = [
+        [0.3, 0.3],
+        [0.38, 0.38],
+        [0.46, 0.46],
+        [0.54, 0.54],
+        [0.62, 0.62],
+      ];
+      for (let i = 0; i < 5; i++) {
+        store.addVoice(waveforms[i], positions[i][0], positions[i][1]);
+      }
+      for (const v of store.data.voices) {
+        store.updateVoice(v.id, { blend: 'multiply' });
+      }
+    });
+    const png = await captureAudio(page);
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-5-voice-cluster.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
 });
