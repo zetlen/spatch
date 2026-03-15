@@ -363,28 +363,49 @@ describe('applyFormantFilter', () => {
     expect(bLight.frequency.value).toBeGreaterThan(bDark.frequency.value);
   });
 
-  test('linear fill crossfades between colors based on angle', () => {
+  test('linear fill sets formants to sweep start color (non-reversed)', () => {
     const f1 = createMockBiquad();
     const f2 = createMockBiquad();
     const b = createMockBiquad();
-    // At angle 180, blend = 0.5 → formants should be between color1 and color2
+    // gradAngle 0 is non-reversed → formants match color 1
+    const fill = { mode: 'linear', h: 0, s: 80, l: 30, h2: 120, s2: 80, l2: 70, gradAngle: 0 };
+    applyFormantFilter(f1, f2, b, fill, 'pulse');
+
+    const solidC1 = createMockBiquad();
+    const solidC1f2 = createMockBiquad();
+    const solidC1b = createMockBiquad();
+    applyFormantFilter(
+      solidC1,
+      solidC1f2,
+      solidC1b,
+      { mode: 'solid', h: 0, s: 80, l: 30 },
+      'pulse',
+    );
+
+    expect(f1.frequency.value).toBe(solidC1.frequency.value);
+    expect(b.frequency.value).toBe(solidC1b.frequency.value);
+  });
+
+  test('linear fill sets formants to sweep start color (reversed)', () => {
+    const f1 = createMockBiquad();
+    const f2 = createMockBiquad();
+    const b = createMockBiquad();
+    // gradAngle 180 is reversed → formants match color 2
     const fill = { mode: 'linear', h: 0, s: 80, l: 30, h2: 120, s2: 80, l2: 70, gradAngle: 180 };
     applyFormantFilter(f1, f2, b, fill, 'pulse');
 
-    const f1c1 = createMockBiquad();
-    const f2c1 = createMockBiquad();
-    const bc1 = createMockBiquad();
-    applyFormantFilter(f1c1, f2c1, bc1, { mode: 'solid', h: 0, s: 80, l: 30 }, 'pulse');
+    const solidC2 = createMockBiquad();
+    const solidC2f2 = createMockBiquad();
+    const solidC2b = createMockBiquad();
+    applyFormantFilter(
+      solidC2,
+      solidC2f2,
+      solidC2b,
+      { mode: 'solid', h: 120, s: 80, l: 70 },
+      'pulse',
+    );
 
-    const f1c2 = createMockBiquad();
-    const f2c2 = createMockBiquad();
-    const bc2 = createMockBiquad();
-    applyFormantFilter(f1c2, f2c2, bc2, { mode: 'solid', h: 120, s: 80, l: 70 }, 'pulse');
-
-    // F1 should be between color1 and color2 values
-    const lo = Math.min(f1c1.frequency.value, f1c2.frequency.value);
-    const hi = Math.max(f1c1.frequency.value, f1c2.frequency.value);
-    expect(f1.frequency.value).toBeGreaterThan(lo);
-    expect(f1.frequency.value).toBeLessThan(hi);
+    expect(f1.frequency.value).toBe(solidC2.frequency.value);
+    expect(b.frequency.value).toBe(solidC2b.frequency.value);
   });
 });

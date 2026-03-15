@@ -980,23 +980,16 @@ body.is-editing .stage-play-btn {
     left 0.3s ease;
 }
 
-.tutorial-nav-stack {
+.tutorial-close {
   position: absolute;
-  left: 8px;
-  top: 50%;
-  translate: 0 -50%;
+  top: 12px;
+  right: 12px;
   z-index: 201;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.tutorial-nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
@@ -1006,13 +999,41 @@ body.is-editing .stage-play-btn {
   transition: opacity 0.15s;
 }
 
-.tutorial-nav:hover {
+.tutorial-close:hover {
   opacity: 1;
 }
 
-.tutorial-nav:disabled {
-  opacity: 0.15;
-  cursor: default;
+.tutorial-dots {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tutorial-dot {
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.tutorial-dot.visited {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.tutorial-dot.active {
+  background: #fff;
+  border-color: #fff;
 }
 
 /* Intro sequence (pre-tutorial) */

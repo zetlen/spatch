@@ -100,8 +100,8 @@ export function computeFormantQ(saturation: number, waveform: WaveformType = 'pu
  *
  * Maps the fill's hue to formant frequencies (F1/F2 bandpass filters), saturation
  * to filter Q (resonance), and lightness to a brightness lowpass cutoff. For
- * linear gradient fills, the formant parameters are crossfaded between the two
- * colors based on the gradient angle.
+ * linear gradient fills, sets formants to the sweep's starting color (respecting
+ * reversal); the time-based sweep handles the transition.
  *
  * Sine waveforms cap Q lower than harmonics-rich waveforms because high Q on a
  * single partial kills the signal when the fundamental is far from formant centers.
@@ -124,12 +124,14 @@ export function applyFormantFilter(
   let { l } = fill;
 
   if (fill.mode === 'linear') {
-    // Crossfade formants between primary and secondary colors.
-    // Gradient angle sets the blend: 0 deg = primary, 90 deg = 50/50, 180 deg = secondary.
-    const blend = (((fill.gradAngle % 360) + 360) % 360) / 360;
-    h += (fill.h2 - h) * blend;
-    s += (fill.s2 - s) * blend;
-    l += (fill.l2 - l) * blend;
+    // Set formants to the sweep's starting color. The time-based sweep
+    // (scheduleFormantSweep) handles the transition to the end color.
+    // When reversed (bit 2 set, angles 180°–315°), start from color 2.
+    if (isSweepReversed(fill.gradAngle)) {
+      h = fill.h2;
+      s = fill.s2;
+      l = fill.l2;
+    }
   }
 
   const formants = hueToFormants(h);
