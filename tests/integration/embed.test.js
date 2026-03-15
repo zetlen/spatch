@@ -56,6 +56,31 @@ test.describe('Embed viewer', () => {
     await expect(embed).toHaveClass(/ready/, { timeout: 5000 });
   });
 
+  test('embed stays square in a non-square viewport', async ({ page }) => {
+    await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
+    await page.goto('/');
+    await page.waitForSelector('#sigil-canvas');
+
+    await page.click('[data-tool="circle"]');
+    const canvas = page.locator('#sigil-canvas');
+    const box = await canvas.boundingBox();
+    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
+      timeout: 3000,
+    });
+    const data = await page.evaluate(() => globalThis.location.pathname.slice(3));
+
+    // Set a non-square viewport
+    await page.setViewportSize({ width: 400, height: 200 });
+    await page.goto(`/embed/${data}`);
+    const embed = page.locator('#embed');
+    await expect(embed).toHaveClass(/ready/, { timeout: 5000 });
+
+    const embedBox = await embed.boundingBox();
+    expect(Math.abs(embedBox.width - embedBox.height)).toBeLessThan(2);
+  });
+
   test('old hash embed URLs are migrated to path URLs', async ({ page }) => {
     await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
     await page.goto('/');

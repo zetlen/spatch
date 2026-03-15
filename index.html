@@ -142,14 +142,17 @@
               <label class="share-label">Embed</label>
               <div class="share-control-row">
                 <span class="share-control-label">Size</span>
-                <input type="range" id="share-size" min="150" max="600" value="300" />
-                <span id="share-size-value" class="share-control-value">300</span>
+                <input type="range" id="share-size" min="64" max="300" value="128" />
+                <span id="share-size-value" class="share-control-value">128</span>
               </div>
               <div class="share-copy-row">
                 <code id="share-embed-code" class="share-code share-code-multi"></code>
                 <button id="btn-copy-embed" class="share-copy-btn" title="Copy embed code">
                   <svg width="16" height="16"><use href="tabler-sprite.svg#tabler-copy" /></svg>
                 </button>
+              </div>
+              <div class="share-preview-wrap">
+                <iframe id="share-preview" class="share-preview" title="Embed preview"></iframe>
               </div>
             </div>
           </div>

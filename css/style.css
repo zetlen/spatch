@@ -422,11 +422,13 @@ body.is-editing .stage-btn:hover {
 .share-content {
   min-width: 320px;
   max-width: 440px;
+  max-height: 100%;
   padding: 24px;
   color: #fff;
   font-family: 'Imbue', serif;
   pointer-events: auto;
   cursor: default;
+  overflow-y: auto;
 }
 
 .share-section {
@@ -515,6 +517,20 @@ body.is-editing .stage-btn:hover {
   text-align: right;
   font-family: monospace;
   font-size: 12px;
+}
+
+.share-preview-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 300px;
+  height: 300px;
+  margin: 12px auto 0;
+}
+
+.share-preview {
+  border: none;
+  border-radius: 6px;
 }
 
 /* ---- Landscape block overlay ---- */

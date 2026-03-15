@@ -1,4 +1,4 @@
-// share.ts — Share overlay: link + embed snippet generation
+// share.ts — Share overlay: link, embed snippet generation, and live embed preview
 //
 // Icon references for sprite scanner: #tabler-users-plus #tabler-copy
 
@@ -29,6 +29,7 @@ export function initShare(audio: AudioEngine, store: SigilStore): OverlayHandle 
   const sizeValue = qel('#share-size-value');
   const copyLinkBtn = qel('#btn-copy-link');
   const copyEmbedBtn = qel('#btn-copy-embed');
+  const preview = qel<HTMLIFrameElement>('#share-preview');
 
   const handle: OverlayHandle = { hide, onShow: null };
 
@@ -43,6 +44,11 @@ export function initShare(audio: AudioEngine, store: SigilStore): OverlayHandle 
 
     const embedUrl = `${embedBaseUrl()}${currentHash}`;
     embedCode.textContent = `<iframe src="${embedUrl}" width="${size}" height="${size}" style="border:none"></iframe>`;
+
+    preview.src = embedUrl;
+    const px = size + 'px';
+    preview.style.width = px;
+    preview.style.height = px;
   }
 
   function show(): void {

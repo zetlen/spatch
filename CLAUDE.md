@@ -118,7 +118,7 @@ js/
   serialize.ts       URL routing + bespoke Base64 serialization: path-based
                      read/write (/s/<data>), hash migration, dirty flag for
                      push/replace history
-  share.ts           Share overlay: link + embed snippet generation
+  share.ts           Share overlay: link, embed snippet, and live embed preview
   credits.ts         Credits overlay toggle + audio muffling + dynamic photo credit
   tutorial.ts        Interactive tutorial overlay with punch-out highlights
 dist/                Build output (gitignored)
