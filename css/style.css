@@ -231,6 +231,7 @@ body {
   position: relative;
   z-index: 1;
   isolation: isolate;
+  container-type: size;
 }
 
 #canvas-wrap {
@@ -238,10 +239,8 @@ body {
   overflow: hidden;
   touch-action: none;
   z-index: 1;
-  width: 100%;
-  max-width: 800px;
+  width: min(100cqi, calc(100cqb - var(--play-btn-size) - 24px), 800px);
   aspect-ratio: 1;
-  max-height: calc(100% - var(--play-btn-size) - 24px);
   margin-top: auto;
   visibility: hidden;
   box-shadow:
@@ -714,12 +713,8 @@ body.landscape-locked #stage {
 
 @media (orientation: landscape) {
   #canvas-wrap {
-    width: min(100%, calc(100dvh - 160px), 800px);
-    max-height: none;
+    width: min(100cqi, 100cqb, 800px);
     margin: auto 0;
-  }
-  body.landscape-locked #canvas-wrap {
-    width: min(100%, calc(100dvh - 24px), 800px);
   }
   .stage-controls {
     position: absolute;
