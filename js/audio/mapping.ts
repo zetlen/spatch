@@ -131,3 +131,15 @@ export function rotationToTimbre(rotation: number, waveform: string): number {
   const phase = ((rotation % period) + period) % period;
   return phase / period;
 }
+
+// ---- Pulse-width modulation ----
+
+// Maximum PWM offset magnitude. At 0.9 the pulse collapses to ~5% duty cycle
+// and becomes inaudible. 0.75 keeps the minimum at ~12.5% — still a bright,
+// reedy timbre but clearly audible at every rotation angle.
+const MAX_PWM_OFFSET = 0.75;
+
+/** Convert a timbre value [0, 1) to a PWM DC offset for pulse-width modulation. */
+export function timbreToPWMOffset(timbre: number): number {
+  return (timbre * 2 - 1) * MAX_PWM_OFFSET;
+}

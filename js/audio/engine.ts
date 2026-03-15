@@ -2,7 +2,7 @@
 
 import { computeOverlap, createEffect, FM_PARAMS, computeFMDepth } from '../effects.ts';
 import { type Envelope, type SigilData, type Voice } from '../types.ts';
-import { yToFrequency } from './mapping.ts';
+import { timbreToPWMOffset, yToFrequency } from './mapping.ts';
 import {
   applyFormantFilter,
   computeFormantQ,
@@ -587,7 +587,7 @@ export class AudioEngine {
       switch (audioVoice.waveform) {
         case 'square': {
           audioVoice.oscRaw.frequency.setValueAtTime(freq, now);
-          audioVoice.pwmOffset.offset.setValueAtTime((timbre * 2 - 1) * 0.9, now);
+          audioVoice.pwmOffset.offset.setValueAtTime(timbreToPWMOffset(timbre), now);
           break;
         }
         case 'triangle': {

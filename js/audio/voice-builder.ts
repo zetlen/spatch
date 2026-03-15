@@ -4,7 +4,7 @@
 // and the buildVoice factory that constructs the full graph for a single voice.
 
 import type { AudioEffect, BlendMode, Fill, PatternType, Voice, WaveformType } from '../types.ts';
-import { yToFrequency } from './mapping.ts';
+import { timbreToPWMOffset, yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
 import { vibe } from './vibe.ts';
 
@@ -220,7 +220,7 @@ export function buildVoice(
   if (voice.waveform === 'pulse') {
     const osc = new OscillatorNode(ctx, { type: 'sawtooth', frequency: freq });
 
-    const pwmOffset = new ConstantSourceNode(ctx, { offset: (timbre * 2 - 1) * 0.9 });
+    const pwmOffset = new ConstantSourceNode(ctx, { offset: timbreToPWMOffset(timbre) });
 
     const ws = createPWMWaveshaper(ctx);
 

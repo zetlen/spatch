@@ -114,6 +114,21 @@ test.describe('Audio waveform snapshots', () => {
     });
   });
 
+  test('square voice at axis-aligned rotation (timbre=0)', async ({ page }) => {
+    // At 0° rotation (and 90°, 180°, 270°) the pulse timbre maps to 0,
+    // which should still produce audible audio — not collapse to silence.
+    await placeShape(page, 'square');
+    await page.evaluate(() => {
+      const voices = globalThis.__testStore.data.voices;
+      // Explicitly set timbre=0 (equivalent to 0° rotation for pulse)
+      globalThis.__testStore.updateVoice(voices[0].id, { timbre: 0 });
+    });
+    const png = await captureAudio(page);
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('square-axis-rotation.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
   test('high pitch vs low pitch', async ({ page }) => {
     // Place circle near top (high pitch) — y maps to frequency
     await placeShape(page, 'circle', 0.5, 0.2);
