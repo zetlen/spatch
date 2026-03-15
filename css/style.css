@@ -418,6 +418,29 @@ body.is-editing .stage-btn:hover {
   display: none !important;
 }
 
+.share-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 51;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.share-close:hover {
+  opacity: 1;
+}
+
 .share-content {
   min-width: 320px;
   max-width: 440px;

@@ -95,6 +95,30 @@ test.describe('Share overlay', () => {
     expect(height).toBe('200px');
   });
 
+  test('close button dismisses overlay', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#sigil-canvas');
+
+    await page.click('[data-tool="circle"]');
+    const canvas = page.locator('#sigil-canvas');
+    const box = await canvas.boundingBox();
+    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
+      timeout: 3000,
+    });
+
+    await page.click('#btn-share');
+    const overlay = page.locator('#share-overlay');
+    await expect(overlay).toBeVisible();
+
+    // Close button should exist and dismiss the overlay
+    const closeBtn = page.locator('#share-overlay .share-close');
+    await expect(closeBtn).toBeVisible();
+    await closeBtn.click();
+    await expect(overlay).toBeHidden();
+  });
+
   test('clicking overlay background dismisses it', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');

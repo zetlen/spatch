@@ -1,6 +1,6 @@
 // share.ts — Share overlay: link, embed snippet generation, and live embed preview
 //
-// Icon references for sprite scanner: #tabler-users-plus #tabler-copy
+// Icon references for sprite scanner: #tabler-users-plus #tabler-copy #tabler-x
 
 import type { AudioEngine } from './audio/engine.ts';
 import { qel } from './dom.ts';
@@ -30,6 +30,7 @@ export function initShare(audio: AudioEngine, store: SigilStore): OverlayHandle 
   const copyLinkBtn = qel('#btn-copy-link');
   const copyEmbedBtn = qel('#btn-copy-embed');
   const preview = qel<HTMLIFrameElement>('#share-preview');
+  const closeBtn = qel('#share-overlay .share-close');
 
   const handle: OverlayHandle = { hide, onShow: null };
 
@@ -77,8 +78,10 @@ export function initShare(audio: AudioEngine, store: SigilStore): OverlayHandle 
     }
   });
 
+  closeBtn.addEventListener('click', hide);
+
   overlay.addEventListener('click', (e: MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.share-content')) return;
+    if ((e.target as HTMLElement).closest('.share-content, .share-close')) return;
     hide();
   });
 
