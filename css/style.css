@@ -311,12 +311,20 @@ g.muted {
   transition: opacity 0.2s;
 }
 
-body.is-editing .stage-btn {
+body.is-editing .credits-btn {
   opacity: 0.3;
   pointer-events: auto;
 }
 
-body.is-editing .stage-btn:hover {
+body.is-editing.has-voices .share-btn,
+body.is-editing.has-voices .splash-btn {
+  opacity: 0.3;
+  pointer-events: auto;
+}
+
+body.is-editing .credits-btn:hover,
+body.is-editing.has-voices .share-btn:hover,
+body.is-editing.has-voices .splash-btn:hover {
   opacity: 0.7;
 }
 
@@ -939,7 +947,7 @@ body.is-editing #toolbar-bottom {
   pointer-events: auto;
 }
 
-body.is-editing .stage-play-btn {
+body.is-editing.has-voices .stage-play-btn {
   opacity: 0.8;
   pointer-events: auto;
 }

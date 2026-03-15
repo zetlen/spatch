@@ -202,6 +202,7 @@ const splash = new SplashController({ store, stage, audio, playback });
     updateCanvasBorderRadius(canvasWrap, data.envelope);
     updateCanvasBorderRadius(tile, data.envelope);
     updateCanvasBorderRadius(svgCanvas, data.envelope, 10);
+    document.body.classList.toggle('has-voices', data.voices.length > 0);
     if (first) {
       first = false;
       return; // skip the initial run (matches old onChange behavior)
