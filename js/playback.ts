@@ -120,17 +120,24 @@ export class PlaybackController {
       this.releaseGlowTimeoutId = undefined;
     }
     const gen = this.playGeneration;
-    const state = this.getState();
-    const irBuffer = await this.getIRBuffer();
-    if (gen !== this.playGeneration) return;
-    await this.audio.play(state, state.envelope, { irBuffer: irBuffer ?? undefined });
-    if (gen !== this.playGeneration) {
-      this.audio.stop();
-      return;
+    try {
+      const state = this.getState();
+      const irBuffer = await this.getIRBuffer();
+      if (gen !== this.playGeneration) return;
+      await this.audio.play(state, state.envelope, { irBuffer: irBuffer ?? undefined });
+      if (gen !== this.playGeneration) {
+        this.audio.stop();
+        return;
+      }
+      this.playBtn.classList.add('playing');
+      this.setPlayIcon(true);
+      this.requestRender();
+    } catch {
+      if (gen === this.playGeneration) {
+        this.playBtn.classList.remove('playing');
+        this.setPlayIcon(false);
+      }
     }
-    this.playBtn.classList.add('playing');
-    this.setPlayIcon(true);
-    this.requestRender();
   }
 
   /** Stop playback with envelope release, cancel any active loop. */

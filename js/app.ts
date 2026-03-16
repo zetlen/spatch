@@ -180,10 +180,14 @@ const playback: PlaybackController = new PlaybackController({
   },
   isSplashActive: (): boolean => splash.isActive,
   getIRBuffer: async () => {
-    await sceneReady;
-    const ctx = audio.audioCtx;
-    if (!ctx) return undefined;
-    return loadSceneIR(ctx, getScene(store.data.scene));
+    try {
+      await sceneReady;
+      const ctx = audio.audioCtx;
+      if (!ctx) return undefined;
+      return await loadSceneIR(ctx, getScene(store.data.scene));
+    } catch {
+      return undefined;
+    }
   },
 });
 

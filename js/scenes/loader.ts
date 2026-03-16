@@ -1,8 +1,9 @@
 // loader.ts — Scene asset prefetch and loading.
 //
 // Preloads scene images (via Image) and IR bytes (via fetchIR) so they're
-// ready before a scene transition. Caches completed prefetches and deduplicates
-// in-flight requests.
+// ready before a scene transition. Individual asset failures are absorbed
+// (logged as warnings) so the scene always resolves. Caches successful
+// prefetches; clears failed entries so retries are possible.
 
 import type { Scene } from './scene-types';
 import { fetchIR, decodeIR } from '../audio/ir-loader';
@@ -40,7 +41,10 @@ const scenePending = new Map<string, Promise<void>>();
 
 /**
  * Preload all assets for a scene: background image + IR bytes.
- * Caches so repeat calls are instant. Deduplicates in-flight requests.
+ * Always resolves — individual asset failures are logged as warnings and
+ * the scene degrades gracefully (missing image = previous background stays,
+ * missing IR = dry audio). Caches successful prefetches; clears the cache
+ * entry when any asset fails so a later call can retry.
  */
 export function prefetchScene(scene: Scene): Promise<void> {
   const key = scene.name;
@@ -48,15 +52,30 @@ export function prefetchScene(scene: Scene): Promise<void> {
   const inflight = scenePending.get(key);
   if (inflight) return inflight;
 
-  const tasks: Promise<void>[] = [preloadImage(scene.stageBackground)];
+  let anyFailed = false;
+
+  const tasks: Promise<void>[] = [
+    preloadImage(scene.stageBackground).catch((err) => {
+      console.warn(`[spatch] Scene "${key}": image failed —`, err.message);
+      anyFailed = true;
+    }),
+  ];
 
   if (scene.vibe.ir) {
-    tasks.push(fetchIR(scene.vibe.ir).then(() => undefined));
+    tasks.push(
+      fetchIR(scene.vibe.ir)
+        .then(() => undefined)
+        .catch((err) => {
+          console.warn(`[spatch] Scene "${key}": IR failed —`, err.message);
+          anyFailed = true;
+        }),
+    );
   }
 
   const promise = Promise.all(tasks).then(() => {
-    // Keep the entry in scenePending as the "done" sentinel so repeat calls
-    // return the resolved promise instantly.
+    if (anyFailed) {
+      scenePending.delete(key);
+    }
   });
 
   scenePending.set(key, promise);
@@ -78,15 +97,13 @@ export function loadSceneIR(ctx: BaseAudioContext, scene: Scene): Promise<AudioB
  */
 export function preloadNextScene(currentIndex: number): void {
   const next = getScene((currentIndex + 1) % SCENES.length);
-  prefetchScene(next).catch(() => {
-    // Swallow errors — prefetch is best-effort.
-  });
+  prefetchScene(next);
 }
 
 /** Fire-and-forget prefetch for all scenes. */
 export function prefetchAllScenes(): void {
   for (const scene of SCENES) {
-    prefetchScene(scene).catch(() => {});
+    prefetchScene(scene);
   }
 }
 

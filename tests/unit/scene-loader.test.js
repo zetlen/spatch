@@ -118,6 +118,98 @@ describe('prefetchScene', () => {
     expect(imageInstances.length).toBe(countAfterFirst);
   });
 
+  test('resolves when image fails but IR succeeds', async () => {
+    // Override Image stub to fire onerror
+    globalThis.Image = class FakeImage {
+      constructor() {
+        imageInstances.push(this);
+        this._src = '';
+        this.onerror = null;
+      }
+      get src() {
+        return this._src;
+      }
+      set src(value) {
+        this._src = value;
+        queueMicrotask(() => {
+          if (this.onerror) this.onerror();
+        });
+      }
+    };
+
+    const scene = {
+      name: 'img-fail',
+      stageBackground: '/img/broken.jpg',
+      imageCredit: 'test',
+      vibe: { ir: '/audio/ok.m4a', reverbMix: 0.5 },
+    };
+
+    // Should resolve, not reject
+    await prefetchScene(scene);
+  });
+
+  test('resolves when IR fails but image succeeds', async () => {
+    // Make fetch fail for IR URLs
+    globalThis.fetch = (url) => {
+      const key = typeof url === 'string' ? url : url.toString();
+      if (key.endsWith('.m4a')) {
+        return Promise.resolve({ ok: false, status: 404 });
+      }
+      return Promise.resolve({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(16)),
+      });
+    };
+
+    const scene = {
+      name: 'ir-fail',
+      stageBackground: '/img/ok.jpg',
+      imageCredit: 'test',
+      vibe: { ir: '/audio/broken.m4a', reverbMix: 0.5 },
+    };
+
+    // Should resolve, not reject
+    await prefetchScene(scene);
+  });
+
+  test('clears scenePending on failure so retry is possible', async () => {
+    let failImage = true;
+    globalThis.Image = class FakeImage {
+      constructor() {
+        imageInstances.push(this);
+        this._src = '';
+        this.onload = null;
+        this.onerror = null;
+      }
+      get src() {
+        return this._src;
+      }
+      set src(value) {
+        this._src = value;
+        queueMicrotask(() => {
+          if (failImage && this.onerror) this.onerror();
+          else if (this.onload) this.onload();
+        });
+      }
+    };
+
+    const scene = {
+      name: 'retry-test',
+      stageBackground: '/img/flaky.jpg',
+      imageCredit: 'test',
+      vibe: {},
+    };
+
+    // First call: image fails, but prefetchScene still resolves
+    await prefetchScene(scene);
+    const countAfterFirst = imageInstances.length;
+
+    // Second call: image succeeds — should retry (not return cached failure)
+    failImage = false;
+    await prefetchScene(scene);
+    expect(imageInstances.length).toBeGreaterThan(countAfterFirst);
+  });
+
   test('deduplicates concurrent prefetch calls', async () => {
     const scene = {
       name: 'dedup',
