@@ -1,5 +1,12 @@
 import { defineConfig } from '@playwright/test';
 
+// TEST_PORT is set by the test:e2e script via pick-port. It finds a random
+// free TCP port once in the parent shell so all Playwright workers share it.
+const TEST_PORT = Number(process.env.TEST_PORT);
+if (!TEST_PORT) {
+  throw new Error('TEST_PORT env var is required. Run tests via: bun run test:e2e');
+}
+
 export default defineConfig({
   projects: [
     {
@@ -12,14 +19,14 @@ export default defineConfig({
   // output. Skip them in CI where the container produces different results.
   ...(process.env.CI ? { testIgnore: /audio-snapshot/ } : {}),
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: `http://localhost:${TEST_PORT}`,
     launchOptions: {
       args: ['--autoplay-policy=no-user-gesture-required'],
     },
   },
   webServer: {
-    command: 'bun run dev',
-    port: 5173,
-    reuseExistingServer: true,
+    command: `bun run dev -- --port ${TEST_PORT}`,
+    port: TEST_PORT,
+    reuseExistingServer: false,
   },
 });
