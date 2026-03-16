@@ -563,6 +563,15 @@ body.is-editing.has-voices .splash-btn:hover {
   border-radius: 6px;
 }
 
+/* ---- Splash overlay ---- */
+
+.splash-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 55;
+  pointer-events: auto;
+}
+
 /* ---- Landscape block overlay ---- */
 
 .landscape-block {

@@ -25,11 +25,9 @@ export function bindKeyboardShortcuts(deps: {
   toolbar: KeyboardToolbar;
   playback: PlaybackController;
   requestRender: () => void;
-  isSplashActive: () => boolean;
   toggleSolo: () => void;
 }): void {
-  const { store, undo, selection, toolbar, playback, requestRender, isSplashActive, toggleSolo } =
-    deps;
+  const { store, undo, selection, toolbar, playback, requestRender, toggleSolo } = deps;
 
   let clipboard: Voice | undefined;
 
@@ -105,7 +103,7 @@ export function bindKeyboardShortcuts(deps: {
     }
     if (e.key === ' ') {
       e.preventDefault();
-      if (e.repeat || isSplashActive()) {
+      if (e.repeat || !document.body.classList.contains('is-editing')) {
         return;
       }
       if (playback.isPlaying) {

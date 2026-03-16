@@ -178,7 +178,6 @@ const playback: PlaybackController = new PlaybackController({
   requestRender: () => {
     needsRender = true;
   },
-  isSplashActive: (): boolean => splash.isActive,
   getIRBuffer: async () => {
     try {
       await sceneReady;
@@ -193,7 +192,8 @@ const playback: PlaybackController = new PlaybackController({
 
 // ---- Splash screen ----
 
-const splash = new SplashController({ store, stage, audio, playback });
+const splashOverlay = qel('#splash-overlay');
+const splash = new SplashController({ store, audio, playback, overlay: splashOverlay });
 
 // ---- Render loop ----
 
@@ -259,7 +259,6 @@ const canvasInteraction = new CanvasInteractionController({
   canvas: svgCanvas,
   stage,
   canvasWrap,
-  isSplashActive: () => splash.isActive,
   requestRender: () => {
     needsRender = true;
   },
@@ -293,7 +292,6 @@ toolbar.onDuplicate = () => {
 // ---- Keyboard shortcuts ----
 
 bindKeyboardShortcuts({
-  isSplashActive: () => splash.isActive,
   playback,
   requestRender: () => {
     needsRender = true;
@@ -307,7 +305,6 @@ bindKeyboardShortcuts({
 
 playback.bindEvents();
 splash.bindEvents();
-splash.bindLandscapeLock();
 
 // ---- Auto-save to URL (debounced) ----
 
@@ -462,8 +459,8 @@ qel('#btn-randomize').addEventListener('click', () => {
 // ---- Splash preview button ----
 
 qel('#btn-splash').addEventListener('click', () => {
-  splash.resetSeen();
-  location.reload();
+  if (playback.isPlaying) playback.stop();
+  splash.enterPreview();
 });
 
 // ---- Reactive vibe → engine sync ----

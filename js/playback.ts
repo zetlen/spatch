@@ -26,7 +26,6 @@ export class PlaybackController {
   private audio: AudioEngine;
   private getState: () => SigilData;
   private requestRender: () => void;
-  private isSplashActive: () => boolean;
   private getIRBuffer: () => Promise<AudioBuffer | undefined>;
 
   // DOM elements
@@ -68,13 +67,11 @@ export class PlaybackController {
     audio: AudioEngine;
     getState: () => SigilData;
     requestRender: () => void;
-    isSplashActive: () => boolean;
     getIRBuffer: () => Promise<AudioBuffer | undefined>;
   }) {
     this.audio = deps.audio;
     this.getState = deps.getState;
     this.requestRender = deps.requestRender;
-    this.isSplashActive = deps.isSplashActive;
     this.getIRBuffer = deps.getIRBuffer;
 
     this.playBtn = qel('#btn-play');
@@ -197,8 +194,6 @@ export class PlaybackController {
   /** Wire up play button pointer events for radial gesture. */
   bindEvents(): void {
     this.playBtn.addEventListener('pointerdown', (e: PointerEvent) => {
-      // Don't interfere with splash — let event bubble to splash handler
-      if (this.isSplashActive()) return;
       e.preventDefault();
 
       this.audio.warmUp();

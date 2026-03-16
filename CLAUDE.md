@@ -62,7 +62,8 @@ js/
                      undo/redo, escape, tool switch, space play toggle,
                      S solo toggle)
   playback.ts        PlaybackController: play/stop/latch/loop state machine
-  splash.ts          SplashController: splash screen (first visit or empty spatch)
+  splash.ts          SplashController: splash screen state machine (off/splash/landscape),
+                     pointer-intercepting overlay, sessionStorage-based seen tracking
   canvas/
     render.ts        SVG DOM reconciler (voices, selection UI)
     interaction.ts   CanvasInteractionController: pointer/touch input on canvas,
@@ -447,7 +448,8 @@ The current unlock strategy (in `audio/engine.ts:_init()`) uses three layers:
 
 **Event wiring rules:**
 - Global warmup: `touchend`, `click`, `keydown` on `document`.
-- Splash dismiss: `touchend` + `click` on `canvasArea`. Do NOT use `pointerup`.
+- Splash overlay: `pointerdown` + `touchend` + `click` on `#splash-overlay`.
+  Do NOT use `pointerup` — it fires before `touchend` on iOS.
 - Play button: `pointerdown` for eager `warmUp()` (creates the context early,
   even though the gesture doesn't qualify — so it's ready when a qualifying
   event fires). Actual playback starts in the same handler.

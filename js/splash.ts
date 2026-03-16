@@ -1,107 +1,180 @@
-// splash.ts — First-load splash screen controller
+// splash.ts — Splash screen controller
 //
-// Handles the splash overlay shown on first visit: press-and-hold to reveal
-// the app while hearing the current sigil. iOS Safari audio unlock constraints
-// are critical here — see CLAUDE.md for details.
+// State machine with three modes: off (editor active), splash (overlay
+// intercepts pointer events, click plays + reveals), landscape (tap-to-play,
+// never reveals editor). A DOM overlay structurally blocks pointer events —
+// no isSplashActive flag threading needed in other modules.
+//
+// "Seen" state is tracked per-URL in sessionStorage (single key, capped array).
+// The homepage (/) never splashes. iOS Safari audio unlock constraints apply
+// to the overlay's event handlers — see CLAUDE.md for details.
 
 import type { AudioEngine } from './audio/engine.ts';
 import { qel } from './dom.ts';
 import type { PlaybackController } from './playback.ts';
 import type { SigilStore } from './state.ts';
 
-// Minimum time the audio plays before releasing after splash dismiss
+// ---- Seen storage ----
+
+const SEEN_KEY = 'spatch-seen';
+const SEEN_MAX = 100;
+
+function getSeenList(): string[] {
+  try {
+    const raw = sessionStorage.getItem(SEEN_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function isSeen(pathname: string): boolean {
+  return getSeenList().includes(pathname);
+}
+
+function markSeen(pathname: string): void {
+  const list = getSeenList();
+  if (list.includes(pathname)) return;
+  list.push(pathname);
+  while (list.length > SEEN_MAX) {
+    list.shift();
+  }
+  sessionStorage.setItem(SEEN_KEY, JSON.stringify(list));
+}
+
+// Exported for testing
+export { getSeenList as _getSeenList, markSeen as _markSeen, isSeen as _isSeen };
+
+// ---- Constants ----
+
 const MIN_SUSTAIN_MS = 2000;
 
+// ---- State type ----
+
+type SplashState = 'off' | 'splash' | 'landscape';
+
+// ---- Controller ----
+
 /**
- * First-load splash screen controller. Shows a press-and-hold overlay on first
- * visit; dismissing it unlocks iOS Safari audio and reveals the app with a fade.
+ * Splash screen controller. Uses a pointer-intercepting overlay to gate
+ * interaction during splash/landscape modes. No other module needs splash
+ * awareness — pointer blocking is structural (DOM layering).
  */
 export class SplashController {
-  private readonly stage: HTMLElement;
   private readonly audio: AudioEngine;
   private readonly store: SigilStore;
   private readonly playback: PlaybackController;
-  private readonly splashKey: string;
-  private _isActive: boolean;
+  private readonly overlay: HTMLElement;
+  private readonly landscapeBlock: HTMLElement | undefined;
+  private readonly landscapeMql: MediaQueryList;
+
+  private state: SplashState;
+  private preview = false;
   private splashDownTime = 0;
   private splashPointerDown = false;
-  private readonly landscapeMql: MediaQueryList;
-  private readonly handleLandscapeChange: (e: MediaQueryListEvent | MediaQueryList) => void;
-  private landscapeBlock: HTMLElement | undefined;
 
-  // Bound handlers for cleanup
+  // Bound handlers
   private readonly handleDown: (e: PointerEvent) => void;
   private readonly handleUp: () => void;
+  private readonly handleLandscapeChange: (e: MediaQueryListEvent | MediaQueryList) => void;
 
   constructor(deps: {
     store: SigilStore;
-    stage: HTMLElement;
     audio: AudioEngine;
     playback: PlaybackController;
+    overlay: HTMLElement;
   }) {
     this.store = deps.store;
-    this.stage = deps.stage;
     this.audio = deps.audio;
     this.playback = deps.playback;
+    this.overlay = deps.overlay;
+    this.landscapeBlock = document.getElementById('landscape-block') ?? undefined;
 
-    this.splashKey = `spatch-seen:${location.pathname}${location.hash}`;
-    this._isActive = this.store.data.voices.length === 0 || !localStorage.getItem(this.splashKey);
-
-    if (!this._isActive) {
-      document.body.classList.add('is-editing');
+    // Determine initial state
+    const pathname = location.pathname;
+    const isHomepage = pathname === '/';
+    if (isHomepage || isSeen(pathname)) {
+      this.state = 'off';
+    } else {
+      this.state = 'splash';
     }
 
-    // Pre-bind handlers so we can remove them later
-    this.handleDown = (e: PointerEvent) => this.splashDown(e);
-    this.handleUp = () => this.splashUp();
+    this.applyState();
+
+    this.handleDown = (e: PointerEvent) => this.onPointerDown(e);
+    this.handleUp = () => this.onPointerUp();
     this.landscapeMql = matchMedia('(orientation: landscape) and (max-height: 500px)');
     this.handleLandscapeChange = (e: MediaQueryListEvent | MediaQueryList) => {
       this.onLandscapeChange(e.matches);
     };
   }
 
-  /** Whether the splash screen is currently displayed. */
+  /** Whether the splash overlay is currently blocking interaction. */
   get isActive(): boolean {
-    return this._isActive;
+    return this.state !== 'off';
   }
 
-  /** Reset the "seen" flag so the splash shows again on next load. */
-  resetSeen(): void {
-    localStorage.removeItem(this.splashKey);
-  }
-
-  /** Attach pointerdown/touchend/click listeners for splash interaction. */
+  /** Bind overlay listeners and start landscape monitoring. */
   bindEvents(): void {
-    if (!this._isActive) return;
+    this.overlay.addEventListener('pointerdown', this.handleDown);
+    // iOS Safari: touchend/click are qualifying gestures for audio unlock.
+    // Do NOT use pointerup — it fires before touchend on iOS.
+    this.overlay.addEventListener('touchend', this.handleUp);
+    this.overlay.addEventListener('click', this.handleUp);
 
-    // Remove first to prevent double-binding across landscape toggles
-    this.removeSplashListeners();
-    this.stage.addEventListener('pointerdown', this.handleDown);
-    // iOS Safari: touchend is the qualifying gesture for audio unlock.
-    // Desktop fallback: click fires after pointerup on non-touch devices.
-    // Do NOT use pointerup — it fires before touchend on iOS, racing the
-    // audio unlock and leaving the AudioContext suspended.
-    this.stage.addEventListener('touchend', this.handleUp);
-    this.stage.addEventListener('click', this.handleUp);
-  }
-
-  /** Start monitoring for cramped landscape orientation. */
-  bindLandscapeLock(): void {
-    this.landscapeBlock = document.getElementById('landscape-block') ?? undefined;
     this.landscapeMql.addEventListener('change', this.handleLandscapeChange as EventListener);
-    // Check initial state
     this.handleLandscapeChange(this.landscapeMql);
   }
 
-  /** Remove all splash event listeners. */
+  /** Enter splash mode for preview (no effect on seen state). */
+  enterPreview(): void {
+    this.preview = true;
+    this.state = 'splash';
+    this.applyState();
+  }
+
+  /** Clean up listeners. */
   dispose(): void {
-    this.removeSplashListeners();
+    this.overlay.removeEventListener('pointerdown', this.handleDown);
+    this.overlay.removeEventListener('touchend', this.handleUp);
+    this.overlay.removeEventListener('click', this.handleUp);
     this.landscapeMql.removeEventListener('change', this.handleLandscapeChange as EventListener);
   }
 
   // ---- Private ----
 
-  private splashDown(_e: PointerEvent): void {
+  private applyState(): void {
+    if (this.state === 'off') {
+      this.overlay.style.display = 'none';
+      document.body.classList.add('is-editing');
+      document.body.classList.remove('landscape-locked');
+      if (this.landscapeBlock) {
+        this.landscapeBlock.classList.add('hidden');
+        this.landscapeBlock.setAttribute('aria-hidden', 'true');
+      }
+    } else if (this.state === 'splash') {
+      this.overlay.style.display = '';
+      document.body.classList.remove('is-editing');
+      document.body.classList.remove('landscape-locked');
+      if (this.landscapeBlock) {
+        this.landscapeBlock.classList.add('hidden');
+        this.landscapeBlock.setAttribute('aria-hidden', 'true');
+      }
+    } else {
+      // landscape
+      this.overlay.style.display = '';
+      document.body.classList.remove('is-editing');
+      document.body.classList.add('landscape-locked');
+      if (this.landscapeBlock) {
+        this.landscapeBlock.classList.remove('hidden');
+        this.landscapeBlock.setAttribute('aria-hidden', 'false');
+      }
+    }
+  }
+
+  private onPointerDown(_e: PointerEvent): void {
     if (this.splashPointerDown) return; // Ignore multi-touch
     this.splashPointerDown = true;
     this.splashDownTime = Date.now();
@@ -109,67 +182,37 @@ export class SplashController {
     // and those are the only events that can unlock audio.
   }
 
-  private splashUp(): void {
+  private onPointerUp(): void {
     if (!this.splashPointerDown) return;
     this.splashPointerDown = false;
 
     // iOS Safari only unlocks audio from touchend/click — NOT pointerup.
-    // Warm up + start playback here so AudioContext init happens in a
-    // gesture that Safari accepts.
     this.audio.warmUp();
 
-    // Landscape: play audio but don't dismiss splash or reveal toolbars.
-    // Listeners stay bound so the user can tap again.
-    if (this.landscapeMql.matches) {
-      const ready = this.playback.start();
-      const elapsed = Date.now() - this.splashDownTime;
-      const remaining = Math.max(0, MIN_SUSTAIN_MS - elapsed);
-      setTimeout(async () => {
-        try {
-          await ready;
-        } catch {}
-        if (this.audio.isPlaying) {
-          this.playback.releaseAndIdle();
-        }
-      }, remaining);
+    if (this.state === 'landscape') {
+      this.playAndRelease();
       return;
     }
 
+    // splash state — play, then reveal
     const playReady = this.playback.start();
-
     const elapsed = Date.now() - this.splashDownTime;
     const remaining = Math.max(0, MIN_SUSTAIN_MS - elapsed);
-
-    // Audio sustains for remainder, then toolbars fade in after release.
     this.splashReveal(remaining, playReady);
   }
 
-  private onLandscapeChange(isCrampedLandscape: boolean): void {
-    if (isCrampedLandscape) {
-      // Landscape lock: hide toolbars entirely (not just opacity) so tile fills viewport.
-      // Re-bind splash listeners so tap-to-play works (even if splash was already dismissed).
-      this._isActive = true;
-      document.body.classList.add('landscape-locked');
-      document.body.classList.remove('is-editing');
-      this.bindEvents();
-      if (this.landscapeBlock) {
-        this.landscapeBlock.classList.remove('hidden');
-        this.landscapeBlock.setAttribute('aria-hidden', 'false');
+  private playAndRelease(): void {
+    const ready = this.playback.start();
+    const elapsed = Date.now() - this.splashDownTime;
+    const remaining = Math.max(0, MIN_SUSTAIN_MS - elapsed);
+    setTimeout(async () => {
+      try {
+        await ready;
+      } catch {}
+      if (this.audio.isPlaying) {
+        this.playback.releaseAndIdle();
       }
-    } else {
-      document.body.classList.remove('landscape-locked');
-      if (this.landscapeBlock) {
-        this.landscapeBlock.classList.add('hidden');
-        this.landscapeBlock.setAttribute('aria-hidden', 'true');
-      }
-      // If user already dismissed splash before rotating, restore editing
-      if (localStorage.getItem(this.splashKey)) {
-        this._isActive = false;
-        this.removeSplashListeners();
-        document.body.classList.add('is-editing');
-      }
-      // Otherwise, keep splash active — normal dismiss flow applies
-    }
+    }, remaining);
   }
 
   private splashReveal(delayAudioRelease: number, playReady: Promise<void>): void {
@@ -177,9 +220,11 @@ export class SplashController {
     const topBar = qel('#toolbar-top');
     const botBar = qel('#toolbar-bottom');
 
-    // Mark URL as seen immediately (even though UI isn't visible yet)
-    this._isActive = false;
-    localStorage.setItem(this.splashKey, '1');
+    // Mark as seen (unless this is a preview)
+    if (!this.preview) {
+      markSeen(location.pathname);
+    }
+    this.preview = false;
 
     const doRelease = async () => {
       try {
@@ -187,15 +232,14 @@ export class SplashController {
       } catch {}
       if (!this.audio.isPlaying) {
         this.playback.forceStop();
-        this.revealToolbars(topBar, botBar, FADE_DURATION);
+        this.transitionToOff(topBar, botBar, FADE_DURATION);
         return;
       }
       const releaseMs = this.playback.releaseAndIdle();
-      // Start fade partway through the release so it overlaps with the audible tail
       const fadeDelay = releaseMs * 0.3;
       const fadeDuration = Math.max(FADE_DURATION, (releaseMs - fadeDelay) / 1000);
       setTimeout(() => {
-        this.revealToolbars(topBar, botBar, fadeDuration);
+        this.transitionToOff(topBar, botBar, fadeDuration);
       }, fadeDelay);
     };
 
@@ -204,14 +248,14 @@ export class SplashController {
     } else {
       doRelease();
     }
-
-    this.removeSplashListeners();
   }
 
-  private revealToolbars(topBar: HTMLElement, botBar: HTMLElement, duration: number): void {
+  private transitionToOff(topBar: HTMLElement, botBar: HTMLElement, duration: number): void {
     topBar.style.transitionDuration = `${duration}s`;
     botBar.style.transitionDuration = `${duration}s`;
-    document.body.classList.add('is-editing');
+
+    this.state = 'off';
+    this.applyState();
 
     topBar.addEventListener(
       'transitionend',
@@ -223,9 +267,21 @@ export class SplashController {
     );
   }
 
-  private removeSplashListeners(): void {
-    this.stage.removeEventListener('pointerdown', this.handleDown);
-    this.stage.removeEventListener('touchend', this.handleUp);
-    this.stage.removeEventListener('click', this.handleUp);
+  private onLandscapeChange(isCrampedLandscape: boolean): void {
+    if (isCrampedLandscape) {
+      this.state = 'landscape';
+      this.applyState();
+    } else {
+      if (this.state === 'landscape') {
+        const pathname = location.pathname;
+        const isHomepage = pathname === '/';
+        if (isHomepage || isSeen(pathname)) {
+          this.state = 'off';
+        } else {
+          this.state = 'splash';
+        }
+        this.applyState();
+      }
+    }
   }
 }

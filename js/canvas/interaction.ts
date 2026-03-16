@@ -158,7 +158,6 @@ export interface InteractionDeps {
   selection: SelectionManager;
   toolbar: ToolbarDeps;
   requestRender(): void;
-  isSplashActive(): boolean;
   addVoiceFromTool(tool: string, x: NormalizedCoord, y: NormalizedCoord): void;
 }
 
@@ -178,7 +177,6 @@ export class CanvasInteractionController {
   private readonly selection: SelectionManager;
   private readonly toolbar: ToolbarDeps;
   private readonly requestRender: () => void;
-  private readonly isSplashActive: () => boolean;
   private readonly addVoiceFromTool: (tool: string, x: NormalizedCoord, y: NormalizedCoord) => void;
 
   // Bound handlers for cleanup
@@ -198,7 +196,6 @@ export class CanvasInteractionController {
     this.selection = deps.selection;
     this.toolbar = deps.toolbar;
     this.requestRender = deps.requestRender;
-    this.isSplashActive = deps.isSplashActive;
     this.addVoiceFromTool = deps.addVoiceFromTool;
 
     this.boundPointerDown = this.handlePointerDown.bind(this);
@@ -294,9 +291,6 @@ export class CanvasInteractionController {
   // ---- Pointer down ----
 
   private handlePointerDown(e: PointerEvent): void {
-    if (this.isSplashActive()) {
-      return;
-    }
     e.preventDefault();
 
     const { nx, ny } = svgCoordsFromEvent(this.canvas, e);
