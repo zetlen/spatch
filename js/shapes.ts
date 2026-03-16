@@ -10,6 +10,7 @@ import {
   degrees,
   normalizedCoord,
 } from './types.ts';
+import { getStrategy } from './waveforms/index.ts';
 
 // ---- ADSR envelope ↔ canvas geometry ----
 
@@ -77,11 +78,9 @@ export function clampSize(size: number): NormalizedCoord {
 
 /** Get the visual rotation for a voice (derived from timbre). */
 export function voiceRotation(voice: Voice): number {
-  if ('timbre' in voice) {
-    const period = voice.waveform === 'pulse' ? 90 : 120;
-    return Math.min(1, Math.max(0, voice.timbre)) * period;
-  }
-  return 0;
+  if (!('timbre' in voice)) return 0;
+  const period = getStrategy(voice.waveform).rotationPeriod;
+  return Math.min(1, Math.max(0, voice.timbre)) * period;
 }
 
 // Check if a point falls in a clipped-out corner region (outside the border-radius arc).

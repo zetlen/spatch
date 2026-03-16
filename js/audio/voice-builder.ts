@@ -1,70 +1,21 @@
 // voice-builder.ts — Voice audio graph construction, types, and utilities.
 //
-// Contains the AudioVoice type hierarchy, Web Audio utility functions,
-// and the buildVoice factory that constructs the full graph for a single voice.
+// Contains utility functions and the buildVoice factory that constructs
+// the full audio graph for a single voice. Waveform-specific graph
+// construction is delegated to waveform strategies.
 
-import type { AudioEffect, BlendMode, Fill, PatternType, Voice, WaveformType } from '../types.ts';
-import { timbreToPWMOffset, yToFrequency } from './mapping.ts';
+import type { AudioEffect, Fill, PatternType, Voice } from '../types.ts';
+import { yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
 import { vibe } from './vibe.ts';
-
-// ---- Audio voice types ----
-
-/** Base fields shared by all audio voice graph wrappers. */
-export interface AudioVoiceBase {
-  outputNode: StereoPannerNode;
-  effectDispose: (() => void) | undefined;
-  currentEffect: string | undefined;
-  currentBlend: BlendMode;
-  currentBorder: string | undefined; // Serialized border for change detection
-  currentFillKey: string | undefined;
-  hasSweep: boolean;
-  octaveOsc: OscillatorNode | undefined;
-  octaveGainNode: GainNode | undefined;
-  shapeId: string;
-  gain: GainNode;
-  formantF1: BiquadFilterNode;
-  formantF2: BiquadFilterNode;
-  formantMixer: GainNode;
-  brightness: BiquadFilterNode;
-  warmthShaper: WaveShaperNode | undefined;
-  panner: StereoPannerNode;
-  lastX: number;
-  lastY: number;
-  lastSize: number;
-  start(time: number): void;
-  stop(time: number): void;
-}
-
-/** Audio voice wrapper for sine waveform (circle shape). */
-export interface SineAudioVoice extends AudioVoiceBase {
-  waveform: 'sine';
-  oscillator: OscillatorNode;
-}
-
-/** Audio voice wrapper for square/pulse waveform (square shape). */
-export interface SquareAudioVoice extends AudioVoiceBase {
-  waveform: 'square';
-  oscRaw: OscillatorNode;
-  pwmOffset: ConstantSourceNode;
-}
-
-/** Audio voice wrapper for triangle/blend waveform (triangle shape). */
-export interface TriangleAudioVoice extends AudioVoiceBase {
-  waveform: 'triangle';
-  oscSaw: OscillatorNode;
-  oscTri: OscillatorNode;
-  gainSaw: GainNode;
-  gainTri: GainNode;
-}
-
-/** Discriminated union of all shape audio voice types. */
-export type AudioVoice = SineAudioVoice | SquareAudioVoice | TriangleAudioVoice;
+import { getStrategy } from '../waveforms/index.ts';
+import type { AudioSharedNodes } from '../waveforms/types.ts';
+export type { AudioVoice } from '../waveforms/types.ts';
 
 // ---- Utility functions ----
 
 /** Create a hard-clipping waveshaper curve for pulse-width modulation. */
-function createPWMWaveshaper(audioCtx: AudioContext): WaveShaperNode {
+export function createPWMWaveshaper(audioCtx: AudioContext): WaveShaperNode {
   const samples = 1024;
   const curve = new Float32Array(samples);
   for (let i = 0; i < samples; i++) {
@@ -90,6 +41,17 @@ export function safeDisconnect(node: AudioNode): void {
   } catch {}
 }
 
+/** Build a tanh saturation curve for analog warmth. */
+export function makeSaturationCurve(drive: number): Float32Array<ArrayBuffer> {
+  const samples = 1024;
+  const curve = new Float32Array(samples);
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    curve[i] = Math.tanh(x * drive);
+  }
+  return curve;
+}
+
 /** Compute a stable key for a linear fill, or undefined for solid fills. */
 export function fillToKey(fill: Fill): string | undefined {
   if (fill.mode !== 'linear') return undefined;
@@ -101,14 +63,9 @@ export function fillToKey(fill: Fill): string | undefined {
 /**
  * Build the complete Web Audio graph for a single voice.
  *
- * Creates oscillator(s), formant filters, stereo panner, pattern/blend effects,
- * and optional border octave doubling. Returns an {@link AudioVoice} with
- * `start()` and `stop()` methods.
- *
- * Three internal paths handle the three waveform types:
- * - **sine** (circle): single oscillator with soft-saturation warmth
- * - **pulse** (square): sawtooth + PWM waveshaper for variable pulse width
- * - **blend** (triangle): crossfaded sawtooth + triangle pair
+ * Creates shared plumbing (gain, formant filters, stereo panner, pattern/blend
+ * effects, border octave doubling), then delegates waveform-specific oscillator
+ * construction to the waveform strategy's `buildAudioGraph` method.
  *
  * @param ctx - The active AudioContext
  * @param voice - Voice data from the sigil store
@@ -121,8 +78,7 @@ export function buildVoice(
   voice: Voice,
   masterGain: GainNode,
   createPatternEffect: (ctx: AudioContext, effect: PatternType) => AudioEffect | undefined,
-): AudioVoice {
-  const timbre = 'timbre' in voice ? voice.timbre : 0;
+) {
   const gain = new GainNode(ctx, { gain: vibe.voiceGain(voice.waveform, voice.size) });
 
   const freq = yToFrequency(voice.y);
@@ -161,7 +117,7 @@ export function buildVoice(
   lastNode.connect(panner);
   panner.connect(masterGain);
 
-  // Octave doubling: border adds a sine oscillator at shifted frequency.
+  // Octave doubling: border adds an oscillator at shifted frequency.
   // White = up, black = down. Single = 1 octave, double = 2 octaves.
   // Thickness scales the doubled voice gain.
   let octaveOsc: OscillatorNode | undefined;
@@ -172,13 +128,8 @@ export function buildVoice(
     const octaveFreq = freq * 2 ** (direction * octaveShift);
 
     // Match oscillator type to voice waveform (#83)
-    const oscTypeMap: Record<WaveformType, OscillatorType> = {
-      blend: 'sawtooth',
-      pulse: 'square',
-      sine: 'sine',
-    };
     octaveOsc = new OscillatorNode(ctx, {
-      type: oscTypeMap[voice.waveform],
+      type: getStrategy(voice.waveform).oscillatorType,
       frequency: octaveFreq,
     });
 
@@ -200,178 +151,22 @@ export function buildVoice(
     ? `${voice.border.color}:${voice.border.double ? 1 : 0}`
     : undefined;
 
-  const shared = {
-    brightness,
-    currentBlend: voice.blend,
-    currentBorder: borderKey,
-    currentEffect: voice.effect,
-    currentFillKey: fillToKey(voice.fill),
-    hasSweep: false,
-    effectDispose,
+  const shared: AudioSharedNodes = {
+    ctx,
+    gain,
     formantF1,
     formantF2,
     formantMixer,
-    gain,
-    lastX: voice.x as number,
-    lastY: voice.y as number,
-    lastSize: voice.size as number,
-    octaveGainNode,
-    octaveOsc,
-    outputNode: panner,
+    brightness,
     panner,
-    shapeId: voice.id,
-    warmthShaper: undefined as WaveShaperNode | undefined,
+    octaveOsc,
+    octaveGainNode,
+    effectDispose,
+    currentEffect: voice.effect,
+    currentBlend: voice.blend,
+    currentBorder: borderKey,
+    currentFillKey: fillToKey(voice.fill),
   };
 
-  if (voice.waveform === 'pulse') {
-    const osc = new OscillatorNode(ctx, { type: 'sawtooth', frequency: freq });
-
-    const pwmOffset = new ConstantSourceNode(ctx, { offset: timbreToPWMOffset(timbre) });
-
-    const ws = createPWMWaveshaper(ctx);
-
-    osc.connect(ws);
-    pwmOffset.connect(ws);
-    ws.connect(gain);
-
-    pwmOffset.start();
-
-    return {
-      ...shared,
-      oscRaw: osc,
-      pwmOffset,
-      start(time: number) {
-        try {
-          osc.start(time);
-        } catch {}
-        if (octaveOsc) {
-          try {
-            octaveOsc.start(time);
-          } catch {}
-        }
-      },
-      stop(_time: number) {
-        safeStop(osc);
-        safeStop(pwmOffset);
-        if (octaveOsc) {
-          safeStop(octaveOsc);
-        }
-      },
-      waveform: 'square',
-    };
-  }
-
-  if (voice.waveform === 'blend') {
-    const oscSaw = new OscillatorNode(ctx, { type: 'sawtooth', frequency: freq });
-
-    const oscTri = new OscillatorNode(ctx, { type: 'triangle', frequency: freq });
-
-    const gainSaw = new GainNode(ctx);
-    const gainTri = new GainNode(ctx);
-
-    const mix = 1 - Math.abs(timbre - 0.5) * 2;
-    gainTri.gain.value = Math.sin((mix * Math.PI) / 2);
-    gainSaw.gain.value = Math.cos((mix * Math.PI) / 2);
-
-    oscSaw.connect(gainSaw);
-    oscTri.connect(gainTri);
-    gainSaw.connect(gain);
-    gainTri.connect(gain);
-
-    return {
-      ...shared,
-      gainSaw,
-      gainTri,
-      oscSaw,
-      oscTri,
-      start(time: number) {
-        oscSaw.start(time);
-        oscTri.start(time);
-        if (octaveOsc) {
-          try {
-            octaveOsc.start(time);
-          } catch {}
-        }
-      },
-      stop(_time: number) {
-        safeStop(oscSaw);
-        safeStop(oscTri);
-        if (octaveOsc) {
-          safeStop(octaveOsc);
-        }
-      },
-      waveform: 'triangle',
-    };
-  }
-
-  // Sine -- default, with subtle harmonic enrichment (analog impurity)
-  const osc = new OscillatorNode(ctx, { type: 'sine', frequency: freq });
-
-  const sineWarm = new WaveShaperNode(ctx);
-  const warmSamples = 1024;
-  const warmCurve = new Float32Array(warmSamples);
-  for (let i = 0; i < warmSamples; i++) {
-    const x = (i * 2) / warmSamples - 1;
-    warmCurve[i] = Math.tanh(x * vibe.warmth);
-  }
-  sineWarm.curve = warmCurve;
-  sineWarm.oversample = '2x';
-
-  osc.connect(sineWarm);
-  sineWarm.connect(gain);
-
-  return {
-    ...shared,
-    oscillator: osc,
-    warmthShaper: sineWarm,
-    start(time: number) {
-      osc.start(time);
-      if (octaveOsc) {
-        try {
-          octaveOsc.start(time);
-        } catch {}
-      }
-    },
-    stop(_time: number) {
-      safeStop(osc);
-      if (octaveOsc) {
-        safeStop(octaveOsc);
-      }
-    },
-    waveform: 'sine',
-  };
-}
-
-// ---- FM synthesis helpers ----
-
-/** Get the primary oscillator node to use as an FM modulator source. */
-export function getModulatorNode(voice: AudioVoice): OscillatorNode {
-  switch (voice.waveform) {
-    case 'sine':
-      return voice.oscillator;
-    case 'square':
-      return voice.oscRaw;
-    case 'triangle':
-      return voice.oscSaw;
-  }
-}
-
-/** Get all carrier frequency AudioParams that FM should modulate. */
-export function getCarrierFrequencyParams(voice: AudioVoice): AudioParam[] {
-  const params: AudioParam[] = [];
-  switch (voice.waveform) {
-    case 'sine':
-      params.push(voice.oscillator.frequency);
-      break;
-    case 'square':
-      params.push(voice.oscRaw.frequency);
-      break;
-    case 'triangle':
-      params.push(voice.oscSaw.frequency, voice.oscTri.frequency);
-      break;
-  }
-  if (voice.octaveOsc) {
-    params.push(voice.octaveOsc.frequency);
-  }
-  return params;
+  return getStrategy(voice.waveform).buildAudioGraph(ctx, voice, shared);
 }

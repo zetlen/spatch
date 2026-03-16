@@ -147,7 +147,7 @@ export interface Border {
   thickness: NormalizedCoord;
 }
 
-interface VoiceBase {
+export interface VoiceBase {
   id: string;
   x: NormalizedCoord;
   y: NormalizedCoord;
@@ -199,25 +199,6 @@ export interface SigilData {
   envelope: Envelope;
   voices: Voice[];
   scene: number;
-}
-
-/**
- * Map a waveform type to its corresponding geometric shape name.
- * @param waveform - The waveform type
- * @returns The shape name used for SVG rendering
- */
-export function waveformShape(waveform: WaveformType): 'circle' | 'square' | 'triangle' {
-  switch (waveform) {
-    case 'sine': {
-      return 'circle';
-    }
-    case 'pulse': {
-      return 'square';
-    }
-    case 'blend': {
-      return 'triangle';
-    }
-  }
 }
 
 // ---- Audio contracts ----

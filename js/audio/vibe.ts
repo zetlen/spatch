@@ -136,11 +136,11 @@ export class Vibe {
   constructor(opts?: VibeOptions) {
     this.norm = opts?.norm ?? VIBE_DEFAULTS.norm;
     this.refMult = opts?.refMult ?? VIBE_DEFAULTS.refMult;
-    this.GAIN_EXPONENT = {
-      sine: opts?.exponents?.sine ?? VIBE_DEFAULTS.exponents.sine,
-      pulse: opts?.exponents?.pulse ?? VIBE_DEFAULTS.exponents.pulse,
-      blend: opts?.exponents?.blend ?? VIBE_DEFAULTS.exponents.blend,
-    };
+    this.GAIN_EXPONENT = {} as Record<WaveformType, number>;
+    for (const wf of Object.keys(VIBE_DEFAULTS.exponents) as WaveformType[]) {
+      this.GAIN_EXPONENT[wf] =
+        opts?.exponents?.[wf] ?? VIBE_DEFAULTS.exponents[wf] ?? VIBE_DEFAULTS.exponents.sine; // fallback for new waveforms
+    }
     const mergedCoeffs: Record<string, number> = { ...VIBE_DEFAULTS.octaveGainCoeffs };
     if (opts?.octaveGainCoeffs) {
       for (const [k, v] of Object.entries(opts.octaveGainCoeffs)) {
@@ -183,14 +183,19 @@ export class Vibe {
     this.combFreq = opts?.combFreq ?? VIBE_DEFAULTS.combFreq;
 
     const refVoiceGain = this.refMult * this.areaToGain('sine', 0.5);
-    this.WAVEFORM_GAIN = {
-      sine: this.refMult,
-      pulse: refVoiceGain / this.areaToGain('pulse', 0.5),
-      blend: refVoiceGain / this.areaToGain('blend', 0.5),
-    };
+    this.WAVEFORM_GAIN = {} as Record<WaveformType, number>;
+    this.WAVEFORM_GAIN['sine'] = this.refMult;
+    for (const wf of Object.keys(VIBE_DEFAULTS.exponents) as WaveformType[]) {
+      if (wf !== 'sine') {
+        this.WAVEFORM_GAIN[wf] = refVoiceGain / this.areaToGain(wf, 0.5);
+      }
+    }
   }
 
-  /** Compute shape area as fraction of canvas area. */
+  /** Compute shape area as fraction of canvas area.
+   *  Uses a switch rather than getStrategy() because the Vibe constructor
+   *  calls this at module-init time, before the waveform registry is available
+   *  (circular import: strategy files import vibe for runtime audio use). */
   shapeAreaFraction(waveform: WaveformType, size: number): number {
     const half = size / 2;
     switch (waveform) {

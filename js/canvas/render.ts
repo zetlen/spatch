@@ -7,7 +7,8 @@ import { setAttrs, svgEl } from '../dom.ts';
 import { ensureLinearGradient, getSolidFillColor } from '../colors.ts';
 import { ensurePatternDefs, getPatternOverlay } from '../patterns.ts';
 import { voiceRotation } from '../shapes.ts';
-import { type HandleType, type SigilData, type Voice, waveformShape } from '../types.ts';
+import type { HandleType, SigilData, Voice } from '../types.ts';
+import { getStrategy } from '../waveforms/index.ts';
 
 // SVG viewBox units (0-1 space)
 const HANDLE_SIZE = 0.006_25;
@@ -85,87 +86,18 @@ function ensureLayers(svg: SVGSVGElement): {
   return { defs, selectionLayer, voiceLayer };
 }
 
-// ---- Shape geometry ----
-
-function circleAttrs(voice: Voice): Record<string, string> {
-  const r = voice.size / 2;
-  return { cx: String(voice.x), cy: String(voice.y), r: String(r) };
-}
-
-function rectAttrs(voice: Voice): Record<string, string> {
-  const r = voice.size / 2;
-  return {
-    height: String(voice.size),
-    width: String(voice.size),
-    x: String(voice.x - r),
-    y: String(voice.y - r),
-  };
-}
-
-function trianglePoints(voice: Voice): string {
-  const r = voice.size / 2;
-  const pts: string[] = [];
-  for (let i = 0; i < 3; i++) {
-    const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
-    const px = voice.x + Math.cos(angle) * r;
-    const py = voice.y + Math.sin(angle) * r;
-    pts.push(`${px},${py}`);
-  }
-  return pts.join(' ');
-}
+// ---- Shape geometry (delegated to waveform strategies) ----
 
 function createShapeElement(voice: Voice): SVGElement {
-  const shape = waveformShape(voice.waveform);
-  switch (shape) {
-    case 'circle': {
-      const el = svgEl('circle');
-      setAttrs(el, circleAttrs(voice));
-      return el;
-    }
-    case 'square': {
-      const el = svgEl('rect');
-      setAttrs(el, rectAttrs(voice));
-      return el;
-    }
-    case 'triangle': {
-      const el = svgEl('polygon');
-      el.setAttribute('points', trianglePoints(voice));
-      return el;
-    }
-  }
+  return getStrategy(voice.waveform).createSvgElement(voice);
 }
 
 function updateShapeElement(el: SVGElement, voice: Voice): void {
-  const shape = waveformShape(voice.waveform);
-  switch (shape) {
-    case 'circle': {
-      setAttrs(el, circleAttrs(voice));
-      break;
-    }
-    case 'square': {
-      setAttrs(el, rectAttrs(voice));
-      break;
-    }
-    case 'triangle': {
-      el.setAttribute('points', trianglePoints(voice));
-      break;
-    }
-  }
+  getStrategy(voice.waveform).updateSvgElement(el, voice);
 }
 
 function shapeTagName(voice: Voice): string {
-  const shape = waveformShape(voice.waveform);
-  switch (shape) {
-    case 'circle': {
-      return 'circle';
-    }
-    case 'square': {
-      return 'rect';
-    }
-    case 'triangle': {
-      return 'polygon';
-    }
-  }
+  return getStrategy(voice.waveform).svgTag;
 }
 
 // ---- Transform for rotation ----
@@ -381,58 +313,11 @@ function reconcileVoices(
 // ---- Selection UI ----
 
 function createShapeOutline(voice: Voice): SVGElement {
-  const shape = waveformShape(voice.waveform);
-  switch (shape) {
-    case 'circle': {
-      const el = svgEl('circle');
-      setAttrs(el, circleAttrs(voice));
-      return el;
-    }
-    case 'square': {
-      const el = svgEl('rect');
-      setAttrs(el, rectAttrs(voice));
-      return el;
-    }
-    case 'triangle': {
-      const el = svgEl('polygon');
-      el.setAttribute('points', trianglePoints(voice));
-      return el;
-    }
-  }
+  return getStrategy(voice.waveform).createSvgElement(voice);
 }
 
 function shapeHandlePositions(voice: Voice): [HandleType, number, number][] {
-  const r = voice.size / 2;
-  const shape = waveformShape(voice.waveform);
-  switch (shape) {
-    case 'circle': {
-      return [
-        ['e', voice.x + r, voice.y],
-        ['n', voice.x, voice.y - r],
-        ['w', voice.x - r, voice.y],
-        ['s', voice.x, voice.y + r],
-      ];
-    }
-    case 'square': {
-      return [
-        ['nw', voice.x - r, voice.y - r],
-        ['ne', voice.x + r, voice.y - r],
-        ['se', voice.x + r, voice.y + r],
-        ['sw', voice.x - r, voice.y + r],
-      ];
-    }
-    case 'triangle': {
-      const positions: [HandleType, number, number][] = [];
-      for (let i = 0; i < 3; i++) {
-        const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
-        const px = voice.x + Math.cos(angle) * r;
-        const py = voice.y + Math.sin(angle) * r;
-        const handle: HandleType = i === 0 ? 'n' : i === 1 ? 'se' : 'sw';
-        positions.push([handle, px, py]);
-      }
-      return positions;
-    }
-  }
+  return getStrategy(voice.waveform).handlePositions(voice);
 }
 
 function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch: boolean): void {
@@ -492,8 +377,8 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
     selectionLayer.append(rect);
   }
 
-  // Rotation handle (not for sine)
-  if (voice.waveform !== 'sine') {
+  // Rotation handle (only for waveforms with timbre)
+  if (getStrategy(voice.waveform).hasTimbre) {
     const r = voice.size / 2;
     const rotHandleY = voice.y - r - ROT_HANDLE_OFFSET;
 

@@ -10,11 +10,11 @@ import {
   type NormalizedCoord,
   PATTERN_TYPES,
   type Voice,
-  type WaveformType,
   normalizedCoord,
 } from './types.ts';
 import { type SigilStore, type UndoManager } from './state.ts';
 import { SCENES } from './scenes/index.ts';
+import { ALL_STRATEGIES } from './waveforms/index.ts';
 
 // ---- Scale definitions ----
 // Each scale is defined by its intervals (semitone offsets within one octave).
@@ -163,7 +163,7 @@ function createRandomLinearFill(): Fill {
 }
 
 /** Waveform types to pick from when randomizing. */
-const WAVEFORMS: WaveformType[] = ['sine', 'pulse', 'blend'];
+const WAVEFORMS = ALL_STRATEGIES.map((s) => s.waveform);
 
 /** Number of voices to create when randomizing. */
 const RANDOM_VOICE_COUNT = 5;

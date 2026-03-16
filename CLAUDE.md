@@ -74,9 +74,16 @@ js/
                      vibe-driven reverb/EQ/compression, analyser, solo muting
     ir-loader.ts     Two-layer IR cache: fetchIR (bytes) + decodeIR (AudioBuffer)
     mapping.ts       Audio mapping functions (pitch, pan, gain, timbre, formants)
-    voice-builder.ts Voice audio graph construction (oscillators, effects, borders)
+    voice-builder.ts Voice audio graph shared plumbing (formants, effects, borders);
+                     delegates oscillator construction to waveform strategies
     vibe.ts          Vibe class: perceptual gain tuning, reverb, mastering, synthesis params
     formants.ts      Formant filter bank for fill-driven vowel synthesis
+  waveforms/
+    types.ts         WaveformStrategy, AudioVoice, AudioSharedNodes interfaces
+    index.ts         Registry: getStrategy(), ALL_STRATEGIES
+    sine.ts          Sine waveform strategy (circle, sine osc)
+    pulse.ts         Pulse waveform strategy (square, PWM osc)
+    blend.ts         Blend waveform strategy (triangle, saw/tri crossfade)
   scenes/
     scene-types.ts   Scene interface (name, icon, stageBackground, imageCredit, creditUrl?, vibe)
     index.ts         SCENES registry, getScene(), applyScene() crossfade,
@@ -369,6 +376,10 @@ extract it into a shared function or helper. No exceptions. DRY it up.
   converted via `fillToFillDraft()` / `fillDraftToFill()`.
 - **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice`),
   discriminated on the `waveform` field. Sine has no `timbre`; pulse and blend do.
+  All per-waveform behavior (rendering, audio, serialization, state creation)
+  lives in `js/waveforms/<name>.ts` strategy files, dispatched through
+  `getStrategy(voice.waveform)`. `AudioVoice` is a uniform interface with
+  bound methods — the audio engine has zero waveform switching.
 - **InteractionState** is a discriminated union for the canvas interaction state
   machine (idle, dragging, resizing, rotating, etc.), replacing scattered variables.
 - **BlendMode** is a string union of 3 commutative (order-independent)
@@ -477,11 +488,14 @@ Before opening or updating a pull request, verify:
 
 - The render loop is driven by `needsRender` flag + `requestAnimationFrame`. Set
   `needsRender = true` or call `store._notify()` to trigger a redraw.
-- To add a new waveform/shape: add a variant to the Voice union in `types.ts`,
-  update `state.ts:createVoice`, `canvas/render.ts` SVG element creation,
-  `audio/voice-builder.ts`, and `serialize.ts`. Hit testing is handled natively
-  by SVG pointer events. The new variant MUST map every field to both a visual
-  and audio interpretation.
+- To add a new waveform/shape: create `js/waveforms/<name>.ts` implementing
+  `WaveformStrategy` (see existing files for the pattern). Add one import +
+  one map entry in `js/waveforms/index.ts`. Add a variant to the Voice union
+  in `types.ts`. Add a toolbar button in `index.html`. The strategy must
+  provide SVG rendering, audio graph construction, serialization, state
+  factory, and handle positions. Hit testing is handled natively by SVG
+  pointer events. The new variant MUST map every field to both a visual and
+  audio interpretation.
 - To add a new pattern/effect: update `patterns.ts` (visual), `effects.ts`
   (audio), and add a button in `index.html`. Both sides are required.
 - To add a new blend mode: add to the `BLEND_MODES` array in `types.ts`,

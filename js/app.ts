@@ -22,6 +22,7 @@ import { randomize, harmonize } from './harmony.ts';
 import { createHarmonizePanel } from './toolbar/harmonize-panel.ts';
 import { createStagePanel } from './toolbar/stage-panel.ts';
 import { bindLongPress } from './toolbar/expansion-panel.ts';
+import { ALL_STRATEGIES } from './waveforms/index.ts';
 
 // ---- Init ----
 
@@ -232,16 +233,15 @@ renderLoop();
 // Reveal canvas after first render + ADSR corners are applied (no FOUC)
 canvasWrap.classList.add('ready');
 
+// ---- Tool-to-waveform map (derived from waveform strategy registry) ----
+
+const toolToWaveform = new Map(ALL_STRATEGIES.map((s) => [s.shapeName, s.waveform] as const));
+
 // ---- Canvas interaction controller ----
 
 const canvasInteraction = new CanvasInteractionController({
   addVoiceFromTool: (tool: string, x, y) => {
-    const toolToWaveform: Record<string, 'sine' | 'pulse' | 'blend'> = {
-      circle: 'sine',
-      square: 'pulse',
-      triangle: 'blend',
-    };
-    const waveform = toolToWaveform[tool];
+    const waveform = toolToWaveform.get(tool);
     if (!waveform) {
       return;
     }

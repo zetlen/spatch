@@ -11,11 +11,13 @@ import {
   type NormalizedCoord,
   type SigilData,
   type Voice,
+  type VoiceBase,
   type WaveformType,
   normalizedCoord,
 } from './types.ts';
 import { createRandomFill } from './colors.ts';
 import { DEFAULT_BLEND } from './effects.ts';
+import { getStrategy } from './waveforms/index.ts';
 
 let _idCounter = 0;
 /**
@@ -37,7 +39,7 @@ export function createDefaultState(): SigilData {
 }
 
 function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCoord): Voice {
-  const base = {
+  const base: VoiceBase = {
     blend: DEFAULT_BLEND,
     border: undefined as Voice['border'],
     effect: undefined as Voice['effect'],
@@ -47,17 +49,7 @@ function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCo
     x,
     y,
   };
-  switch (waveform) {
-    case 'sine': {
-      return { ...base, waveform: 'sine' };
-    }
-    case 'pulse': {
-      return { ...base, timbre: normalizedCoord(0), waveform: 'pulse' };
-    }
-    case 'blend': {
-      return { ...base, timbre: normalizedCoord(0), waveform: 'blend' };
-    }
-  }
+  return getStrategy(waveform).createVoice(base);
 }
 
 // --- Pure data store (CRUD + reactive signal, no undo, no selection) ---

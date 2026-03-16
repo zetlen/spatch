@@ -1,7 +1,8 @@
 // mapping.ts — Pure pitch/spatial mapping functions for audio synthesis.
 // No Web Audio API dependencies — just math.
 
-import { type NormalizedCoord, normalizedCoord } from '../types.ts';
+import { type NormalizedCoord, type WaveformType, normalizedCoord } from '../types.ts';
+import { getStrategy } from '../waveforms/index.ts';
 
 // ---- Chromatic scale ----
 // 3 octaves from G2 (MIDI 43) to G5 (MIDI 79): 37 semitones
@@ -99,18 +100,6 @@ export function hardSnapYToNote(y: NormalizedCoord): NormalizedCoord {
   return normalizedCoord(1 - clamped * spacing);
 }
 
-// Map rotation to a periodic timbre parameter.
-// Each waveform's visual symmetry period determines the audio cycle:
-// a square repeats every 90 deg, a triangle every 120 deg.
-// Linear sawtooth ramp: every angle within the period maps to a unique
-// timbre value (0 at the start, approaching 1 at the end).
-
-/** Rotation period in degrees for each waveform with rotational timbre. */
-const WAVEFORM_PERIOD: Record<string, number> = {
-  blend: 120,
-  pulse: 90,
-};
-
 /**
  * Map rotation angle to a periodic timbre parameter in [0, 1).
  *
@@ -120,14 +109,12 @@ const WAVEFORM_PERIOD: Record<string, number> = {
  * maps to a unique timbre value. Sine has no timbre and always returns 0.
  *
  * @param rotation - Rotation angle in degrees
- * @param waveform - Waveform type name
- * @returns Timbre value in [0, 1), or 0 for sine
+ * @param waveform - Waveform type
+ * @returns Timbre value in [0, 1), or 0 for waveforms without timbre
  */
-export function rotationToTimbre(rotation: number, waveform: string): number {
-  const period = WAVEFORM_PERIOD[waveform];
-  if (!period) {
-    return 0;
-  } // Sine has no timbre
+export function rotationToTimbre(rotation: number, waveform: WaveformType): number {
+  const period = getStrategy(waveform).rotationPeriod;
+  if (!period) return 0;
   const phase = ((rotation % period) + period) % period;
   return phase / period;
 }

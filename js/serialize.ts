@@ -25,10 +25,10 @@ import {
   type SigilData,
   type SolidFill,
   type Voice,
-  type WaveformType,
   normalizedCoord,
 } from './types.ts';
 import { DEFAULT_BLEND } from './effects.ts';
+import { getStrategy, ALL_STRATEGIES } from './waveforms/index.ts';
 
 /**
  * Serialize sigil state to a compressed URI-safe string via bespoke Base64 encoding.
@@ -111,11 +111,11 @@ export function loadFromURL(): SigilData | undefined {
 const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const B64_MAP = new Map(B64_CHARS.split('').map((c, i) => [c, i]));
 
-function round3(n: number): number {
+export function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
 
-function encodeInt(val: number, chars: number): string {
+export function encodeInt(val: number, chars: number): string {
   let res = '';
   val = Math.max(0, Math.floor(val || 0));
   for (let i = 0; i < chars; i++) {
@@ -125,7 +125,7 @@ function encodeInt(val: number, chars: number): string {
   return res;
 }
 
-function decodeInt(str: string, startIndex: number, chars: number): number {
+export function decodeInt(str: string, startIndex: number, chars: number): number {
   if (startIndex + chars > str.length) {
     throw new Error('Unexpected end of input during parsing');
   }
@@ -141,7 +141,8 @@ const EFFECT_KEYS: (PatternType | undefined)[] = [undefined, ...PATTERN_TYPES].s
 function packVoice(v: Voice): string {
   let out = '';
   let flags = 0;
-  const wf = v.waveform === 'blend' ? 2 : v.waveform === 'pulse' ? 1 : 0;
+  const strategy = getStrategy(v.waveform);
+  const wf = strategy.serializationIndex;
   flags |= (wf & 0x3) << 10;
 
   const eff = Math.max(0, EFFECT_KEYS.indexOf(v.effect));
@@ -165,9 +166,7 @@ function packVoice(v: Voice): string {
   out += encodeInt(round3(v.y) * 1000, 2);
   out += encodeInt(round3(v.size) * 1000, 2);
 
-  if (wf > 0 && 'timbre' in v) {
-    out += encodeInt(round3(v.timbre) * 1000, 2);
-  }
+  out += strategy.packExtra(v);
 
   if (bm > 0 && v.border) {
     out += encodeInt(round3(v.border.thickness) * 1000, 2);
@@ -234,6 +233,8 @@ function unpackB64(str: string): SigilData {
       const flags = decodeInt(str, idx, 2);
       idx += 2;
       const wf = (flags >> 10) & 0x3;
+      const strategy = ALL_STRATEGIES[wf];
+      if (!strategy) break;
       const eff = (flags >> 7) & 0x7;
       const bl = (flags >> 4) & 0x7;
       const fm = (flags >> 3) & 0x1;
@@ -246,10 +247,15 @@ function unpackB64(str: string): SigilData {
       const size = normalizedCoord(decodeInt(str, idx, 2) / 1000);
       idx += 2;
 
-      let timbre = 0;
-      if (wf > 0) {
-        timbre = decodeInt(str, idx, 2) / 1000;
-        idx += 2;
+      // Note: in the current serialization format, `hasTimbre` is equivalent to
+      // `serializationIndex > 0`. If a future waveform has serializationIndex > 0
+      // but no timbre, the serialization format will need a revision. This is
+      // acceptable since CLAUDE.md says "no backwards compatibility until v1."
+      let extraFields: Record<string, unknown> = {};
+      if (strategy.hasTimbre) {
+        const result = strategy.unpackExtra(str, idx);
+        extraFields = result.fields;
+        idx += result.bytesRead;
       }
 
       let border: Border | undefined = undefined;
@@ -294,17 +300,9 @@ function unpackB64(str: string): SigilData {
 
       const effect = EFFECT_KEYS[eff];
       const blend = BLEND_MODES[bl] || DEFAULT_BLEND;
-      const waveform: WaveformType = wf === 2 ? 'blend' : wf === 1 ? 'pulse' : 'sine';
 
       const base = { id: genId('v'), x, y, size, fill, effect, blend, border };
-
-      if (waveform === 'sine') {
-        voices.push(Object.assign(base, { waveform } as const) as Voice);
-      } else {
-        voices.push(
-          Object.assign(base, { waveform, timbre: normalizedCoord(timbre) } as const) as Voice,
-        );
-      }
+      voices.push({ ...strategy.createVoice(base), ...extraFields } as Voice);
     } catch {
       // If we encounter truncated data or garbage, we just drop the
       // incomplete voice and stop processing, returning what we have.

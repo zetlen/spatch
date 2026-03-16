@@ -20,9 +20,9 @@ import {
   type Envelope,
   type HandleType,
   type NormalizedCoord,
-  type WaveformType,
   normalizedCoord,
 } from '../types.ts';
+import { ALL_STRATEGIES, getStrategy } from '../waveforms/index.ts';
 
 // ---- Interaction state machine ----
 //
@@ -94,11 +94,7 @@ function svgCoordsFromEvent(canvas: SVGSVGElement, e: PointerEvent): NormCoords 
 
 // ---- Tool-to-waveform map ----
 
-const toolToWaveform: Record<string, WaveformType> = {
-  circle: 'sine',
-  square: 'pulse',
-  triangle: 'blend',
-};
+const toolToWaveform = new Map(ALL_STRATEGIES.map((s) => [s.shapeName, s.waveform] as const));
 
 // ---- ADSR corner drag helpers ----
 
@@ -353,7 +349,7 @@ export class CanvasInteractionController {
     const tool = this.toolbar.currentTool;
 
     // Shape (voice) placement tools
-    const waveform = toolToWaveform[tool];
+    const waveform = toolToWaveform.get(tool);
     if (waveform) {
       this.addVoiceFromTool(tool, normalizedCoord(nx), hardSnapYToNote(normalizedCoord(ny)));
       return;
@@ -464,7 +460,7 @@ export class CanvasInteractionController {
         return;
       }
 
-      if (voice.waveform === 'sine') {
+      if (!getStrategy(voice.waveform).hasTimbre) {
         this.store.updateVoice(this.interaction.shapeId, { size: newSize });
       } else {
         const angleDelta = angle - this.interaction.initAngle;
@@ -532,7 +528,7 @@ export class CanvasInteractionController {
       if (!voice) {
         return;
       }
-      if (voice.waveform === 'sine') {
+      if (!getStrategy(voice.waveform).hasTimbre) {
         return;
       }
       const rotation = calcRotation(voice, nx, ny, 1);

@@ -2,7 +2,7 @@
 
 import { computeOverlap, createEffect, FM_PARAMS, computeFMDepth } from '../effects.ts';
 import { type Envelope, type SigilData, type Voice } from '../types.ts';
-import { timbreToPWMOffset, yToFrequency } from './mapping.ts';
+import { yToFrequency } from './mapping.ts';
 import {
   applyFormantFilter,
   computeFormantQ,
@@ -17,8 +17,7 @@ import {
   type AudioVoice,
   buildVoice,
   fillToKey,
-  getCarrierFrequencyParams,
-  getModulatorNode,
+  makeSaturationCurve,
   safeDisconnect,
   safeStop,
 } from './voice-builder.ts';
@@ -421,14 +420,7 @@ export class AudioEngine {
   }
 
   private _makeSaturationCurve(drive: number): Float32Array<ArrayBuffer> {
-    const samples = 1024;
-    const curve = new Float32Array(samples);
-    const d = Math.max(0.1, drive);
-    for (let i = 0; i < samples; i++) {
-      const x = (i * 2) / samples - 1;
-      curve[i] = Math.tanh(x * d);
-    }
-    return curve;
+    return makeSaturationCurve(Math.max(0.1, drive));
   }
 
   private _makeExciterCurve(): Float32Array<ArrayBuffer> {
@@ -584,28 +576,7 @@ export class AudioEngine {
         continue;
       }
 
-      const timbre = 'timbre' in voice ? voice.timbre : 0;
-      const freq = yToFrequency(voice.y);
-
-      switch (audioVoice.waveform) {
-        case 'square': {
-          audioVoice.oscRaw.frequency.setValueAtTime(freq, now);
-          audioVoice.pwmOffset.offset.setValueAtTime(timbreToPWMOffset(timbre), now);
-          break;
-        }
-        case 'triangle': {
-          audioVoice.oscSaw.frequency.setValueAtTime(freq, now);
-          audioVoice.oscTri.frequency.setValueAtTime(freq, now);
-          const mix = 1 - Math.abs(timbre - 0.5) * 2;
-          audioVoice.gainTri.gain.setValueAtTime(Math.sin((mix * Math.PI) / 2), now);
-          audioVoice.gainSaw.gain.setValueAtTime(Math.cos((mix * Math.PI) / 2), now);
-          break;
-        }
-        case 'sine': {
-          audioVoice.oscillator.frequency.setValueAtTime(freq, now);
-          break;
-        }
-      }
+      audioVoice.updateParams(voice, now);
 
       const isMuted = soloActive && voice.id !== this._soloVoiceId;
       audioVoice.gain.gain.setValueAtTime(
@@ -674,6 +645,7 @@ export class AudioEngine {
 
       // Update octave oscillator frequency if border is present
       if (audioVoice.octaveOsc && voice.border) {
+        const freq = yToFrequency(voice.y);
         const octaveShift = voice.border.double ? 2 : 1;
         const direction = voice.border.color === 'white' ? 1 : -1;
         const octaveFreq = freq * 2 ** (direction * octaveShift);
@@ -700,15 +672,7 @@ export class AudioEngine {
       for (const av of this.activeVoices) {
         av.formantMixer.gain.setValueAtTime(vibe.formantMix, now);
         av.brightness.Q.setValueAtTime(vibe.brightnessQ, now);
-        if (av.warmthShaper) {
-          const warmSamples = 1024;
-          const warmCurve = new Float32Array(warmSamples);
-          for (let i = 0; i < warmSamples; i++) {
-            const x = (i * 2) / warmSamples - 1;
-            warmCurve[i] = Math.tanh(x * vibe.warmth);
-          }
-          av.warmthShaper.curve = warmCurve;
-        }
+        av.syncGlobalParams(vibe, now);
       }
       this._appliedVibe = vibe;
     }
@@ -857,7 +821,7 @@ export class AudioEngine {
         }
 
         // Update depth
-        const modNode = getModulatorNode(modulatorAudio);
+        const modNode = modulatorAudio.getModulatorNode();
         const modFreq = modNode.frequency.value;
         const depth = computeFMDepth(overlap, params, modFreq);
 
@@ -892,8 +856,8 @@ export class AudioEngine {
   ): FMConnection {
     const params = FM_PARAMS[modulatorData.blend];
     const depthGain = new GainNode(ctx, { gain: 0 });
-    const modulatorNode = getModulatorNode(modulatorAudio);
-    const carrierParams = getCarrierFrequencyParams(carrierAudio);
+    const modulatorNode = modulatorAudio.getModulatorNode();
+    const carrierParams = carrierAudio.getCarrierFrequencyParams();
 
     modulatorNode.connect(depthGain);
     for (const freqParam of carrierParams) {
@@ -1056,9 +1020,6 @@ export class AudioEngine {
 
   _stopVoice(audioVoice: AudioVoice): void {
     audioVoice.stop(0);
-    if (audioVoice.octaveOsc) {
-      safeStop(audioVoice.octaveOsc);
-    }
     safeDisconnect(audioVoice.outputNode);
     audioVoice.effectDispose?.();
   }
