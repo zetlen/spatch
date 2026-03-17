@@ -4,7 +4,7 @@
 // variable pulse width. Timbre controls rotation (90-degree period).
 
 import { setAttrs, svgEl } from '../dom.ts';
-import { safeStop, createPWMWaveshaper } from '../audio/voice-builder.ts';
+import { safeStop, createPWMWaveshaper } from '../audio/node-utils.ts';
 import { timbreToPWMOffset, yToFrequency } from '../audio/mapping.ts';
 import { encodeInt, decodeInt, round3 } from '../serialize.ts';
 import { type NormalizedCoord, normalizedCoord } from '../types.ts';

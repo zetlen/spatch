@@ -12,45 +12,13 @@ import { getStrategy } from '../waveforms/index.ts';
 import type { AudioSharedNodes } from '../waveforms/types.ts';
 export type { AudioVoice } from '../waveforms/types.ts';
 
-// ---- Utility functions ----
-
-/** Create a hard-clipping waveshaper curve for pulse-width modulation. */
-export function createPWMWaveshaper(audioCtx: AudioContext): WaveShaperNode {
-  const samples = 1024;
-  const curve = new Float32Array(samples);
-  for (let i = 0; i < samples; i++) {
-    const x = (i * 2) / samples - 1;
-    curve[i] = x > 0 ? 1 : -1;
-  }
-  const ws = new WaveShaperNode(audioCtx, { curve, oversample: '4x' });
-  return ws;
-}
-
-/** Safely stop and disconnect an AudioScheduledSourceNode. */
-export function safeStop(node: AudioScheduledSourceNode): void {
-  try {
-    node.stop();
-    node.disconnect();
-  } catch {}
-}
-
-/** Safely disconnect an AudioNode. */
-export function safeDisconnect(node: AudioNode): void {
-  try {
-    node.disconnect();
-  } catch {}
-}
-
-/** Build a tanh saturation curve for analog warmth. */
-export function makeSaturationCurve(drive: number): Float32Array<ArrayBuffer> {
-  const samples = 1024;
-  const curve = new Float32Array(samples);
-  for (let i = 0; i < samples; i++) {
-    const x = (i * 2) / samples - 1;
-    curve[i] = Math.tanh(x * drive);
-  }
-  return curve;
-}
+// Re-export utilities from node-utils so callers (engine.ts etc.) don't need to change.
+export {
+  safeStop,
+  safeDisconnect,
+  makeSaturationCurve,
+  createPWMWaveshaper,
+} from './node-utils.ts';
 
 /** Compute a stable key for a linear fill, or undefined for solid fills. */
 export function fillToKey(fill: Fill): string | undefined {
@@ -166,6 +134,7 @@ export function buildVoice(
     currentBlend: voice.blend,
     currentBorder: borderKey,
     currentFillKey: fillToKey(voice.fill),
+    warmth: vibe.warmth,
   };
 
   return getStrategy(voice.waveform).buildAudioGraph(ctx, voice, shared);

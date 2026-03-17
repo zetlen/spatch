@@ -4,9 +4,8 @@
 // shaping. No timbre parameter (circles have no rotation).
 
 import { setAttrs, svgEl } from '../dom.ts';
-import { makeSaturationCurve, safeStop } from '../audio/voice-builder.ts';
+import { makeSaturationCurve, safeStop } from '../audio/node-utils.ts';
 import { yToFrequency } from '../audio/mapping.ts';
-import { vibe } from '../audio/vibe.ts';
 import type { HandleType, Voice, VoiceBase } from '../types.ts';
 import type { AudioSharedNodes, AudioVoice, WaveformStrategy } from './types.ts';
 
@@ -55,7 +54,7 @@ const sine: WaveformStrategy = {
 
     // Soft-saturation warmth shaper (analog impurity)
     const sineWarm = new WaveShaperNode(ctx);
-    sineWarm.curve = makeSaturationCurve(vibe.warmth);
+    sineWarm.curve = makeSaturationCurve(shared.warmth);
     sineWarm.oversample = '2x';
 
     osc.connect(sineWarm);

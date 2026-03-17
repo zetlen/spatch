@@ -24,6 +24,8 @@ export interface AudioSharedNodes {
   currentBlend: BlendMode;
   currentBorder: string | undefined;
   currentFillKey: string | undefined;
+  /** Initial warmth value for the sine saturation shaper; sourced from vibe at build time. */
+  warmth: number;
 }
 
 /** Uniform audio voice interface with bound methods. Replaces the old discriminated union. */

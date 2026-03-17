@@ -5,7 +5,7 @@
 // and the saw/tri blend ratio.
 
 import { svgEl } from '../dom.ts';
-import { safeStop } from '../audio/voice-builder.ts';
+import { safeStop } from '../audio/node-utils.ts';
 import { yToFrequency } from '../audio/mapping.ts';
 import { encodeInt, decodeInt, round3 } from '../serialize.ts';
 import { type NormalizedCoord, normalizedCoord } from '../types.ts';

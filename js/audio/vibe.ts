@@ -6,6 +6,7 @@
 
 import { signal } from '@preact/signals-core';
 import type { BorderColor, WaveformType } from '../types.ts';
+import { getStrategy } from '../waveforms/index.ts';
 
 export interface VibeOptions {
   // Existing
@@ -193,19 +194,10 @@ export class Vibe {
   }
 
   /** Compute shape area as fraction of canvas area.
-   *  Uses a switch rather than getStrategy() because the Vibe constructor
-   *  calls this at module-init time, before the waveform registry is available
-   *  (circular import: strategy files import vibe for runtime audio use). */
+   *  Delegates to each strategy's shapeAreaCoeff so new waveforms are covered automatically. */
   shapeAreaFraction(waveform: WaveformType, size: number): number {
     const half = size / 2;
-    switch (waveform) {
-      case 'sine':
-        return Math.PI * half * half;
-      case 'pulse':
-        return size * size;
-      case 'blend':
-        return ((3 * Math.sqrt(3)) / 4) * half * half;
-    }
+    return getStrategy(waveform).shapeAreaCoeff * half * half;
   }
 
   /** Power curve: normalize area, raise to exponent, map to gain range. */
