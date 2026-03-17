@@ -38,8 +38,11 @@ and hear them as synthesized chords. Every visual property maps to an audio para
 package.json         Package manifest (Bun)
 bun.lock             Lockfile
 vite.config.ts       Vite build/dev config (plugins, MPA input)
-nginx.conf           SPA fallback config for nginx (deployed alongside dist/)
+playwright.config.ts Playwright config (Chromium + WebKit, no Firefox)
+nginx.conf           nginx config: SPA fallback, security headers, cache headers
 tsconfig.json        TypeScript configuration
+README.md            Developer-focused instructions
+LICENSE              GPLv3
 index.html           Main app (source HTML entry point)
 embed.html           Standalone embed viewer (reads state from URL pathname)
 css/style.css        All styles (CSS custom properties, flat hybrid-bevel theme)
@@ -133,8 +136,14 @@ dist/                Build output (gitignored)
 docs/plans/              Design docs and implementation plans
                          Convention: YYYY-MM-DD-{topic}-{design|plan}.md
 tests/
-  unit/*.test.js         Unit tests (bun test, plain JS)
-  integration/*.test.js  Playwright integration tests
+  unit/*.test.js                Unit tests (bun test, plain JS)
+  integration/*.test.js         Playwright integration tests (Chromium + WebKit)
+  integration/helpers/
+    skip-splash.js              Marks URL as seen in sessionStorage
+    audio-capture.js            OfflineAudioContext shim for deterministic audio
+                                snapshot rendering (suspend/resume breakpoints)
+    audio-tap.js                Real-time audio amplitude tap for playback tests
+    seed-random.js              Deterministic Math.random for reproducible tests
 ```
 
 ## How to Run
@@ -167,10 +176,17 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 ## CI/CD
 
 - **Gitea instance**: `got.colonpipe.org`. API token is in `$GITEA_ACCESS_TOKEN`.
-- **Runner**: Custom `mise-playwright` Docker image with mise, Playwright, and
-  browser deps pre-installed. Tool versions (Bun, Node) pinned in `.mise.toml`.
-- **CI check**: `.gitea/workflows/ci.yml` runs on PRs to `main`. Runs typecheck,
-  lint, format check, unit tests, integration tests, and build.
+- **Runner**: Custom `mise-playwright` Docker image with mise, Playwright,
+  browser deps, and Courier New font pre-installed. Tool versions (Bun, Node)
+  pinned in `.mise.toml`. Image source: `../frontend-ci-image`.
+- **CI check**: `.gitea/workflows/ci.yml` runs on PRs to `main`. Runs
+  typecheck, lint, format check, unit tests, integration tests (Chromium +
+  WebKit via Playwright with `--reporter=list`), and build.
+- **Integration test browsers**: Chromium and WebKit only. **Firefox is
+  excluded** because it lacks `OfflineAudioContext.suspend()`, which the audio
+  snapshot tests need to pause rendering at precise times for deterministic
+  waveform capture. Audio snapshots use per-browser baselines (not per-OS)
+  at 5% pixel tolerance to accommodate cross-OS rendering differences.
 - **Versioning**: CalVer (`YYYY.MM.MICRO`), bumped automatically by CI on deploy.
   Micro increments per deploy within the month, resets on month change.
 - **Deploy trigger**: Push to `main` (PR merge) or `workflow_dispatch`.
@@ -178,7 +194,12 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 - **Deploy mechanism**: `docker cp dist/. spatch:/usr/share/nginx/html/`
   into an nginx container, then copies `nginx.conf` to
   `/etc/nginx/conf.d/default.conf` and reloads nginx. The nginx config
-  provides SPA fallback routing (`try_files`) for path-based URLs.
+  provides SPA fallback routing (`try_files`) for path-based URLs, plus
+  security headers (CSP, X-Frame-Options, X-Content-Type-Options,
+  Referrer-Policy, Permissions-Policy) and cache headers (1y immutable
+  for Vite hashed assets, no-cache for HTML). A post-deploy health check
+  curls `https://spatch.music/` for HTTP 200. Deploy runs typecheck, lint,
+  and unit tests but **not** e2e (already run in CI on the PR).
   Site is at `https://spatch.music`.
 - **Bot user**: `tiene` (matches action runner name). Admin collaborator,
   sole user whitelisted for direct push to protected `main`. Its token is

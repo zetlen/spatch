@@ -6,14 +6,14 @@
  * API:
  *   __audioCapture.markEvent(label, timeSec) — register a labeled time marker
  *   __audioCapture.annotate(text) — add a text annotation line
- *   __audioCapture.captureWaveform({ duration? }) → base64 WebP (simple capture)
+ *   __audioCapture.captureWaveform({ duration? }) → base64 PNG (simple capture)
  *
  * Interaction recording (fake-timer style):
  *   __audioCapture.suspendAt(timeSec, label) — register a breakpoint
  *   __audioCapture.startRendering() — begin offline render (fire-and-forget)
  *   __audioCapture.isSuspended — true when paused at a breakpoint
  *   __audioCapture.resume() — continue past the current breakpoint
- *   __audioCapture.finishCapture({ duration? }) → base64 WebP
+ *   __audioCapture.finishCapture({ duration? }) → base64 PNG
  *
  * Output image (1920 × 512):
  *   Top 256px  — time-domain waveform (L/R), peak-normalized, white on black
@@ -72,6 +72,14 @@
 
   // Preserve prototype chain so instanceof checks don't break
   globalThis.AudioContext.prototype = OriginalOfflineAudioContext.prototype;
+
+  // Shim MediaStreamAudioDestinationNode constructor — not available on
+  // OfflineAudioContext. Engine uses `new MediaStreamAudioDestinationNode(ctx)`.
+  globalThis.MediaStreamAudioDestinationNode = function MediaStreamAudioDestinationNode(ctx) {
+    const dummy = ctx.createGain();
+    dummy.stream = new MediaStream();
+    return dummy;
+  };
 
   // ---- Radix-2 Cooley-Tukey FFT (in-place) ----
 
@@ -252,7 +260,7 @@
       g.setLineDash([2, 6]);
       g.lineWidth = 5;
       g.strokeStyle = '#fff';
-      g.font = 'bold 72px monospace';
+      g.font = "bold 72px 'Courier New', monospace";
       g.textBaseline = 'top';
       g.fillStyle = '#fff';
 
@@ -280,7 +288,7 @@
 
     if (annotations.length > 0) {
       g.save();
-      g.font = '32px monospace';
+      g.font = "32px 'Courier New', monospace";
       g.textAlign = 'right';
       g.textBaseline = 'bottom';
       const lineH = 38;
@@ -330,7 +338,7 @@
     },
 
     /**
-     * Render audio and return a waveform + spectrum WebP as a base64 string.
+     * Render audio and return a waveform + spectrum PNG as a base64 string.
      * Simple one-shot capture — for interaction recording, use the
      * suspendAt/startRendering/resume/finishCapture cycle instead.
      * @param {{ duration?: number }} opts
@@ -402,7 +410,7 @@
     },
 
     /**
-     * Wait for rendering to complete and return the waveform WebP.
+     * Wait for rendering to complete and return the waveform PNG.
      * Call after all breakpoints have been resumed.
      * @param {{ duration?: number }} opts
      */

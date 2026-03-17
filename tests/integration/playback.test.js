@@ -16,9 +16,14 @@ test.describe('Playback', () => {
     const box = await canvas.boundingBox();
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
-    // Use Space to latch-play (verifies audio starts)
-    await page.keyboard.press('Space');
-    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
+    // Click play button to start (click is a qualifying gesture for all browsers)
+    const playBtn = page.locator('#btn-play');
+    const btnBox = await playBtn.boundingBox();
+    const cx = btnBox.x + btnBox.width / 2;
+    const cy = btnBox.y + btnBox.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await expect(playBtn).toHaveClass(/playing/);
 
     // Wait a bit for audio to stabilize
     await page.waitForTimeout(200);
@@ -27,11 +32,11 @@ test.describe('Playback', () => {
     const isPlaying = await page.evaluate(() => globalThis.__audioTap?.isPlaying());
     expect(isPlaying).toBe(true);
 
-    // Press Space again to stop
-    await page.keyboard.press('Space');
+    // Release to stop (momentary mode)
+    await page.mouse.up();
 
     // After release time, .playing class should be removed
-    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
+    await expect(playBtn).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 
   test('play button shows stop icon while playing', async ({ page }) => {
@@ -48,7 +53,7 @@ test.describe('Playback', () => {
     await expect(playIcon.locator('path')).toBeVisible();
     await expect(playIcon.locator('use')).toHaveCount(0);
 
-    // Start playing via Space (latched)
+    // Start playing via click (latched via radial gesture)
     await page.keyboard.press('Space');
     await expect(playIcon.locator('use')).toHaveAttribute('href', /player-stop-filled/);
 
@@ -76,7 +81,7 @@ test.describe('Volume curves — relative loudness', () => {
     await page.waitForSelector('#sigil-canvas');
   });
 
-  // Helper: place a shape, play, measure amplitude, stop, clean up
+  // Helper: place a shape, play via click, measure amplitude, stop, clean up
   async function measureAmplitude(page, tool) {
     const canvas = page.locator('#sigil-canvas');
     const box = await canvas.boundingBox();
@@ -84,8 +89,14 @@ test.describe('Volume curves — relative loudness', () => {
     await page.click(`[data-tool="${tool}"]`);
     await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
 
-    await page.keyboard.press('Space');
-    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
+    // Click play button to start (click qualifies as user gesture in all browsers)
+    const playBtn = page.locator('#btn-play');
+    const btnBox = await playBtn.boundingBox();
+    const cx = btnBox.x + btnBox.width / 2;
+    const cy = btnBox.y + btnBox.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await expect(playBtn).toHaveClass(/playing/);
     await page.waitForTimeout(500);
 
     const amplitude = await page.evaluate(async () => {
@@ -97,8 +108,9 @@ test.describe('Volume curves — relative loudness', () => {
       return samples.reduce((a, b) => a + b, 0) / samples.length;
     });
 
-    await page.keyboard.press('Space');
-    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
+    // Release to stop
+    await page.mouse.up();
+    await expect(playBtn).not.toHaveClass(/playing/, { timeout: 5000 });
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Escape');
 

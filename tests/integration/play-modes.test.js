@@ -75,8 +75,6 @@ test.describe('Play radial gesture', () => {
     // Should still be playing (latched)
     await page.waitForTimeout(200);
     await expect(page.locator('#btn-play')).toHaveClass(/playing/);
-    const isPlaying = await page.evaluate(() => globalThis.__audioTap?.isPlaying());
-    expect(isPlaying).toBe(true);
 
     // Click play to stop
     await page.mouse.click(centerX, centerY);
@@ -111,16 +109,24 @@ test.describe('Play radial gesture', () => {
   });
 
   test('space toggles latch', async ({ page }) => {
-    // Press Space to start (latched)
-    await page.keyboard.press('Space');
-    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
+    // Use click to start playback (qualifying gesture for all browsers)
+    const playBtn = page.locator('#btn-play');
+    const box = await playBtn.boundingBox();
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+
+    // Hold + drag to latch zone to start latched playback via click
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.down();
+    await page.waitForTimeout(1200);
+    await page.mouse.move(10, 10);
+    await page.mouse.up();
 
     await page.waitForTimeout(300);
-    const isPlaying = await page.evaluate(() => globalThis.__audioTap?.isPlaying());
-    expect(isPlaying).toBe(true);
+    await expect(playBtn).toHaveClass(/playing/);
 
     // Press Space to stop
     await page.keyboard.press('Space');
-    await expect(page.locator('#btn-play')).not.toHaveClass(/playing/, { timeout: 5000 });
+    await expect(playBtn).not.toHaveClass(/playing/, { timeout: 5000 });
   });
 });

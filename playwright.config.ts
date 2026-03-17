@@ -7,22 +7,34 @@ if (!TEST_PORT) {
   throw new Error('TEST_PORT env var is required. Run tests via: bun run test:e2e');
 }
 
+// Firefox is excluded: it lacks OfflineAudioContext.suspend(), which the audio
+// snapshot tests rely on to pause rendering at precise times and perform
+// mid-playback mutations (rotation, FM overlap changes). Without suspend(),
+// audio snapshots cannot be generated deterministically. See:
+// https://bugzilla.mozilla.org/show_bug.cgi?id=1081168
+
 export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: {
+        browserName: 'chromium',
+        launchOptions: {
+          args: ['--autoplay-policy=no-user-gesture-required'],
+        },
+      },
+    },
+    {
+      name: 'webkit',
+      use: { browserName: 'webkit' },
     },
   ],
   testDir: 'tests/integration',
-  // Audio snapshot tests require a local environment with matching OfflineAudioContext
-  // output. Skip them in CI where the container produces different results.
-  ...(process.env.CI ? { testIgnore: /audio-snapshot/ } : {}),
+  // Per-browser baselines (not per-OS) — Chromium and WebKit produce
+  // different audio output so each needs its own snapshots.
+  snapshotPathTemplate: '{testDir}/{testFileDir}/{testFileName}-snapshots/{arg}-{projectName}{ext}',
   use: {
     baseURL: `http://localhost:${TEST_PORT}`,
-    launchOptions: {
-      args: ['--autoplay-policy=no-user-gesture-required'],
-    },
   },
   webServer: {
     command: `bun run dev -- --port ${TEST_PORT}`,

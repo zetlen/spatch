@@ -14,7 +14,7 @@ jobs:
       - run: bun run lint
       - run: bun run fmt:check
       - run: bun run test:unit
-      - run: bun run test:e2e
+      - run: bun run test:e2e -- --reporter=list
       - run: bun run build
       - name: Quality summary
         run: |
