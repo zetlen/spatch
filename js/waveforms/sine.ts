@@ -3,10 +3,10 @@
 // Maps to a circle shape visually and a sine oscillator with analog warmth
 // shaping. No timbre parameter (circles have no rotation).
 
-import { setAttrs, svgEl } from '../dom.ts';
+import { resizeHandleEl, setAttrs, svgEl } from '../dom.ts';
 import { makeSaturationCurve, safeStop } from '../audio/node-utils.ts';
 import { yToFrequency } from '../audio/mapping.ts';
-import type { HandleType, Voice, VoiceBase } from '../types.ts';
+import { type NormalizedCoord, type Voice, type VoiceBase, normalizedCoord } from '../types.ts';
 import type { AudioSharedNodes, AudioVoice, WaveformStrategy } from './types.ts';
 
 function circleAttrs(voice: Voice): Record<string, string> {
@@ -24,8 +24,7 @@ const sine: WaveformStrategy = {
   oscillatorType: 'sine',
   shapeAreaCoeff: Math.PI,
   formantMaxQ: 4,
-
-  svgAttrs: circleAttrs,
+  gainExponent: 1.0,
 
   createSvgElement(voice: Voice): SVGElement {
     const el = svgEl('circle');
@@ -37,13 +36,13 @@ const sine: WaveformStrategy = {
     setAttrs(el, circleAttrs(voice));
   },
 
-  handlePositions(voice: Voice): [HandleType, number, number][] {
+  selectionHandles(voice: Voice): SVGElement[] {
     const r = voice.size / 2;
     return [
-      ['e', voice.x + r, voice.y],
-      ['n', voice.x, voice.y - r],
-      ['w', voice.x - r, voice.y],
-      ['s', voice.x, voice.y + r],
+      resizeHandleEl('e', voice.x + r, voice.y),
+      resizeHandleEl('n', voice.x, voice.y - r),
+      resizeHandleEl('w', voice.x - r, voice.y),
+      resizeHandleEl('s', voice.x, voice.y + r),
     ];
   },
 
@@ -105,6 +104,14 @@ const sine: WaveformStrategy = {
 
   createVoice(base: VoiceBase): Voice {
     return { ...base, waveform: 'sine' };
+  },
+
+  getTimbre(_voice: Voice): NormalizedCoord {
+    return normalizedCoord(0);
+  },
+
+  withTimbre(_value: NormalizedCoord): Partial<Voice> {
+    return {};
   },
 
   packExtra(_voice: Voice): string {

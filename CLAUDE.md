@@ -51,7 +51,10 @@ scripts/
                              builds SVG sprite, inlines into HTML
 js/
   dom.ts             Typed DOM helper: qel() wraps querySelector with type
-                     parameter and runtime null check
+                     parameter and runtime null check. Also exports selection
+                     handle factories (resizeHandleEl, rotationHandleEls) and
+                     constants (HANDLE_SIZE, ROT_HANDLE_OFFSET) used by
+                     waveform strategies to build their own handle elements
   types.ts           Shared type definitions: branded primitives, Voice
                      (discriminated union), Fill (discriminated union),
                      Envelope, branding functions
@@ -68,7 +71,8 @@ js/
   splash.ts          SplashController: splash screen state machine (off/splash/landscape),
                      pointer-intercepting overlay, sessionStorage-based seen tracking
   canvas/
-    render.ts        SVG DOM reconciler (voices, selection UI)
+    render.ts        SVG DOM reconciler (voices, selection UI); delegates
+                     shape creation and selection handles to waveform strategies
     interaction.ts   CanvasInteractionController: pointer/touch input on canvas,
                      InteractionState discriminated union (idle, dragging,
                      resizing, rotating, adsr, pinch-rotate), double-click /
@@ -78,9 +82,15 @@ js/
                      vibe-driven reverb/EQ/compression, analyser, solo muting
     ir-loader.ts     Two-layer IR cache: fetchIR (bytes) + decodeIR (AudioBuffer)
     mapping.ts       Audio mapping functions (pitch, pan, gain, timbre, formants)
+    node-utils.ts    Pure audio utilities (safeStop, safeDisconnect,
+                     makeSaturationCurve, createPWMWaveshaper) — no vibe or
+                     waveform imports; breaks the vibe↔waveforms dependency cycle
     voice-builder.ts Voice audio graph shared plumbing (formants, effects, borders);
-                     delegates oscillator construction to waveform strategies
-    vibe.ts          Vibe class: perceptual gain tuning, reverb, mastering, synthesis params
+                     threads warmth into AudioSharedNodes; delegates oscillator
+                     construction to waveform strategies
+    vibe.ts          Vibe class: perceptual gain tuning, reverb, mastering,
+                     synthesis params. Reads gainExponent and shapeAreaCoeff
+                     from waveform strategies via ALL_STRATEGIES
     formants.ts      Formant filter bank for fill-driven vowel synthesis
   waveforms/
     types.ts         WaveformStrategy, AudioVoice, AudioSharedNodes interfaces
@@ -133,7 +143,10 @@ js/
   credits.ts         Credits overlay toggle + audio muffling + dynamic photo credit
   tutorial.ts        Interactive tutorial overlay with punch-out highlights
 dist/                Build output (gitignored)
-docs/plans/              Design docs and implementation plans
+docs/                    Design docs, rendered diagrams
+  waveform-strategy-refactor.md  Strategy ownership audit + entity relationships
+  waveform-strategy-er.svg       Rendered ER diagram (static SVG)
+docs/plans/              Implementation plans
                          Convention: YYYY-MM-DD-{topic}-{design|plan}.md
 tests/
   unit/*.test.js                Unit tests (bun test, plain JS)
@@ -212,30 +225,32 @@ Serve the `dist/` directory with any static server (e.g. `bunx serve dist`).
 
 ## Transforms
 
-`SigilData` is the single source of truth. Three transforms consume it:
+`SigilStore` is the single source of truth for persistent state. It contains
+three domains — **Envelope**, **Scene/Vibe**, and **Voices** — each projected
+in three directions:
 
-```
-                  ┌─────────────┐
-                  │  SigilData  │
-                  └──────┬──────┘
-                         │
-            ┌────────────┼────────────┐
-            │            │            │
-            ▼            ▼            ▼
-     ┌─────────┐  ┌─────────────┐  ┌───────┐
-     │   SVG   │  │  Serializer │  │ Audio │
-     │ (bijec) │  │   (bijec)   │  │ (one  │
-     │ data ↔  │  │  data ↔     │  │  way) │
-     │ geometry│  │  URL path   │  │ data →│
-     │         │  │             │  │ graph │
-     └─────────┘  └─────────────┘  └───────┘
-```
+- **Interface** (two-way ↔): state renders to DOM; user input writes back
+- **Serializer** (two-way ↔): state packs/unpacks to/from the URL
+- **Audio** (one-way →): state drives audio engine parameters
 
-**SVG** and **Serializer** are bijective transforms — they must go both
-directions without information loss. The SVG reconciler maps state to geometry
-and geometry back to state (hit testing, resize handles, rotation gestures). The
-serializer maps state to a URL string and back. If either direction is lossy or
-ambiguous, tools or sharing break.
+`WaveformStrategy` is the unified delegate for the Voice domain: it handles
+all three projections (`createSvgElement`/`selectionHandles` for interface,
+`packExtra`/`unpackExtra` for serializer, `buildAudioGraph` for audio).
+Envelope and Scene/Vibe follow the same logical pattern but their delegates
+are currently scattered across `engine.ts`, `serialize.ts`, and UI handlers.
+See `docs/waveform-strategy-refactor.md` for the full entity relationship
+diagram and ownership table.
+
+**Ephemeral view state** sits alongside `SigilStore` as a second layer.
+`PlaybackController` (play/stop/latch/loop/solo), `SelectionManager`
+(selected voice), and `SplashController` drive audio and DOM but are never
+serialized and have no undo history.
+
+**Interface** and **Serializer** are bijective transforms — they must go
+both directions without information loss. The SVG reconciler maps state to
+geometry and geometry back to state (hit testing, resize handles, rotation
+gestures). The serializer maps state to a URL string and back. If either
+direction is lossy or ambiguous, tools or sharing break.
 
 **Audio** is a one-way projection. State maps to audio graph parameters, but we
 never parse audio back into state. When state changes, we reconcile the graph
@@ -245,6 +260,11 @@ never parse audio back into state. When state changes, we reconcile the graph
 The two bijective transforms share no code — one is data↔data, the other is
 data↔geometry — but they share the same **constraint**: every field in
 `SigilData` must survive the round-trip. This is tested, not abstracted.
+
+**Continuous gestures.** Drag/resize/rotate updates call both the store and
+the audio delegate as siblings in the same handler — not via subscription.
+Audio param scheduling requires `ctx.currentTime` captured at call site;
+the render path is RAF-based, reading store state once per frame.
 
 ### The Bijection Principle
 
@@ -348,17 +368,19 @@ design rationale and enumeration of past violations.
   sustain, bottom-right = release.
 
 - **Play modes**: normal (press-and-hold), latch (click to toggle), loop
-  (auto-repeating), solo (mute all except selected).
-
-- **Solo mode** is an ephemeral UI toggle (not serialized, not undoable, not
-  part of `SigilData`). The `S` button beside the play button (inside the
-  stage, wrapped in `div.stage-controls`) toggles solo on/off; `S` key is the
-  keyboard shortcut. When active + voice selected: only the selected voice
-  plays at normal gain, others gain = 0. When active + no selection: all
-  voices play normally. Solo follows selection changes and persists across
-  play/stop cycles. FM connections stay active for muted voices so the soloed
-  voice retains its interactions. Non-soloed voices get a CSS `muted` class
-  (`opacity: 0.25; filter: saturate(0.3)`) with smooth transitions.
+  (auto-repeating). All are part of `PlaybackController` (`playback.ts`).
+  **Solo** is also owned by `PlaybackController` — it is an orthogonal
+  toggle on top of the play mode. The `S` button beside the play button
+  (inside the stage, wrapped in `div.stage-controls`) toggles solo on/off;
+  `S` key is the keyboard shortcut. `SelectionManager` feeds the solo
+  filter: when active + voice selected, only the selected voice plays at
+  normal gain (others gain = 0); when active + no selection, all voices
+  play normally. Solo follows selection changes and persists across
+  play/stop cycles. FM connections stay active for muted voices so the
+  soloed voice retains its interactions. Non-soloed voices get a CSS
+  `muted` class (`opacity: 0.25; filter: saturate(0.3)`) with smooth
+  transitions. Solo is ephemeral view state — not serialized, not
+  undoable, not part of `SigilData`.
 
 - **State** lives in `SigilStore` (js/state.ts). It holds voices,
   envelope, and scene index. All mutations go through this class. `UndoManager`
@@ -398,10 +420,15 @@ extract it into a shared function or helper. No exceptions. DRY it up.
   converted via `fillToFillDraft()` / `fillDraftToFill()`.
 - **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice`),
   discriminated on the `waveform` field. Sine has no `timbre`; pulse and blend do.
-  All per-waveform behavior (rendering, audio, serialization, state creation)
-  lives in `js/waveforms/<name>.ts` strategy files, dispatched through
-  `getStrategy(voice.waveform)`. `AudioVoice` is a uniform interface with
-  bound methods — the audio engine has zero waveform switching.
+  All per-waveform behavior lives in `js/waveforms/<name>.ts` strategy files,
+  dispatched through `getStrategy(voice.waveform)`. Each strategy is the unified
+  delegate for its waveform across all three projections: interface
+  (`createSvgElement`, `selectionHandles`, `getTimbre`/`withTimbre`), serializer
+  (`packExtra`/`unpackExtra`), and audio (`buildAudioGraph`). Strategies also own
+  `gainExponent` and `shapeAreaCoeff` (read by `vibe.ts` via `ALL_STRATEGIES`).
+  `AudioVoice` is a uniform interface with bound methods — the audio engine has
+  zero waveform switching. Callers never test `'timbre' in voice` or check
+  waveform names; they delegate to the strategy instead.
 - **InteractionState** is a discriminated union for the canvas interaction state
   machine (idle, dragging, resizing, rotating, etc.), replacing scattered variables.
 - **BlendMode** is a string union of 3 commutative (order-independent)
@@ -515,10 +542,14 @@ Before opening or updating a pull request, verify:
   `WaveformStrategy` (see existing files for the pattern). Add one import +
   one map entry in `js/waveforms/index.ts`. Add a variant to the Voice union
   in `types.ts`. Add a toolbar button in `index.html`. The strategy must
-  provide SVG rendering, audio graph construction, serialization, state
-  factory, and handle positions. Hit testing is handled natively by SVG
-  pointer events. The new variant MUST map every field to both a visual and
-  audio interpretation.
+  provide: `createSvgElement`/`updateSvgElement` (rendering),
+  `selectionHandles` (resize + optional rotation handles using helpers from
+  `dom.ts`), `buildAudioGraph` (audio), `packExtra`/`unpackExtra`
+  (serialization), `createVoice` (state factory), `getTimbre`/`withTimbre`
+  (timbre access — return no-ops for waveforms without timbre),
+  `gainExponent`, and `shapeAreaCoeff`. Hit testing is handled natively by
+  SVG pointer events. The new variant MUST map every field to both a visual
+  and audio interpretation.
 - To add a new pattern/effect: update `patterns.ts` (visual), `effects.ts`
   (audio), and add a button in `index.html`. Both sides are required.
 - To add a new blend mode: add to the `BLEND_MODES` array in `types.ts`,

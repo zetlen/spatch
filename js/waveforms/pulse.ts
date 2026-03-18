@@ -3,12 +3,12 @@
 // Maps to a square/rect shape visually and a sawtooth + PWM waveshaper for
 // variable pulse width. Timbre controls rotation (90-degree period).
 
-import { setAttrs, svgEl } from '../dom.ts';
+import { resizeHandleEl, rotationHandleEls, setAttrs, svgEl } from '../dom.ts';
 import { safeStop, createPWMWaveshaper } from '../audio/node-utils.ts';
 import { timbreToPWMOffset, yToFrequency } from '../audio/mapping.ts';
 import { encodeInt, decodeInt, round3 } from '../serialize.ts';
 import { type NormalizedCoord, normalizedCoord } from '../types.ts';
-import type { HandleType, Voice, VoiceBase } from '../types.ts';
+import type { Voice, VoiceBase } from '../types.ts';
 import type { AudioSharedNodes, AudioVoice, WaveformStrategy } from './types.ts';
 
 function rectAttrs(voice: Voice): Record<string, string> {
@@ -31,8 +31,7 @@ const pulse: WaveformStrategy = {
   oscillatorType: 'square',
   shapeAreaCoeff: 4,
   formantMaxQ: 8,
-
-  svgAttrs: rectAttrs,
+  gainExponent: 1.6,
 
   createSvgElement(voice: Voice): SVGElement {
     const el = svgEl('rect');
@@ -44,13 +43,14 @@ const pulse: WaveformStrategy = {
     setAttrs(el, rectAttrs(voice));
   },
 
-  handlePositions(voice: Voice): [HandleType, number, number][] {
+  selectionHandles(voice: Voice): SVGElement[] {
     const r = voice.size / 2;
     return [
-      ['nw', voice.x - r, voice.y - r],
-      ['ne', voice.x + r, voice.y - r],
-      ['se', voice.x + r, voice.y + r],
-      ['sw', voice.x - r, voice.y + r],
+      resizeHandleEl('nw', voice.x - r, voice.y - r),
+      resizeHandleEl('ne', voice.x + r, voice.y - r),
+      resizeHandleEl('se', voice.x + r, voice.y + r),
+      resizeHandleEl('sw', voice.x - r, voice.y + r),
+      ...rotationHandleEls(voice.x, voice.y - r),
     ];
   },
 
@@ -118,6 +118,14 @@ const pulse: WaveformStrategy = {
 
   createVoice(base: VoiceBase): Voice {
     return { ...base, timbre: normalizedCoord(0), waveform: 'pulse' };
+  },
+
+  getTimbre(voice: Voice): NormalizedCoord {
+    return 'timbre' in voice ? (voice.timbre as NormalizedCoord) : normalizedCoord(0);
+  },
+
+  withTimbre(value: NormalizedCoord): Partial<Voice> {
+    return { timbre: value };
   },
 
   packExtra(voice: Voice): string {

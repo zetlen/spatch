@@ -6,7 +6,7 @@
 
 import { signal } from '@preact/signals-core';
 import type { BorderColor, WaveformType } from '../types.ts';
-import { getStrategy } from '../waveforms/index.ts';
+import { ALL_STRATEGIES, getStrategy } from '../waveforms/index.ts';
 
 export interface VibeOptions {
   // Existing
@@ -52,7 +52,6 @@ export interface VibeOptions {
 export const VIBE_DEFAULTS = {
   norm: 0.5,
   refMult: 1.1,
-  exponents: { sine: 1.0, pulse: 1.6, blend: 1.3 } as Record<WaveformType, number>,
 
   ir: undefined as string | undefined,
   reverbMix: 0.0,
@@ -138,9 +137,9 @@ export class Vibe {
     this.norm = opts?.norm ?? VIBE_DEFAULTS.norm;
     this.refMult = opts?.refMult ?? VIBE_DEFAULTS.refMult;
     this.GAIN_EXPONENT = {} as Record<WaveformType, number>;
-    for (const wf of Object.keys(VIBE_DEFAULTS.exponents) as WaveformType[]) {
-      this.GAIN_EXPONENT[wf] =
-        opts?.exponents?.[wf] ?? VIBE_DEFAULTS.exponents[wf] ?? VIBE_DEFAULTS.exponents.sine; // fallback for new waveforms
+    for (const strategy of ALL_STRATEGIES) {
+      this.GAIN_EXPONENT[strategy.waveform] =
+        opts?.exponents?.[strategy.waveform] ?? strategy.gainExponent;
     }
     const mergedCoeffs: Record<string, number> = { ...VIBE_DEFAULTS.octaveGainCoeffs };
     if (opts?.octaveGainCoeffs) {
@@ -185,11 +184,11 @@ export class Vibe {
 
     const refVoiceGain = this.refMult * this.areaToGain('sine', 0.5);
     this.WAVEFORM_GAIN = {} as Record<WaveformType, number>;
-    this.WAVEFORM_GAIN['sine'] = this.refMult;
-    for (const wf of Object.keys(VIBE_DEFAULTS.exponents) as WaveformType[]) {
-      if (wf !== 'sine') {
-        this.WAVEFORM_GAIN[wf] = refVoiceGain / this.areaToGain(wf, 0.5);
-      }
+    for (const strategy of ALL_STRATEGIES) {
+      this.WAVEFORM_GAIN[strategy.waveform] =
+        strategy.waveform === 'sine'
+          ? this.refMult
+          : refVoiceGain / this.areaToGain(strategy.waveform, 0.5);
     }
   }
 

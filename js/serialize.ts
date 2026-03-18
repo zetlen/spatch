@@ -247,16 +247,10 @@ function unpackB64(str: string): SigilData {
       const size = normalizedCoord(decodeInt(str, idx, 2) / 1000);
       idx += 2;
 
-      // Note: in the current serialization format, `hasTimbre` is equivalent to
-      // `serializationIndex > 0`. If a future waveform has serializationIndex > 0
-      // but no timbre, the serialization format will need a revision. This is
-      // acceptable since CLAUDE.md says "no backwards compatibility until v1."
       let extraFields: Record<string, unknown> = {};
-      if (strategy.hasTimbre) {
-        const result = strategy.unpackExtra(str, idx);
-        extraFields = result.fields;
-        idx += result.bytesRead;
-      }
+      const result = strategy.unpackExtra(str, idx);
+      extraFields = result.fields;
+      idx += result.bytesRead;
 
       let border: Border | undefined = undefined;
       if (bm > 0) {

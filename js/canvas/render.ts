@@ -7,12 +7,8 @@ import { setAttrs, svgEl } from '../dom.ts';
 import { ensureLinearGradient, getSolidFillColor } from '../colors.ts';
 import { ensurePatternDefs, getPatternOverlay } from '../patterns.ts';
 import { voiceRotation } from '../shapes.ts';
-import type { HandleType, SigilData, Voice } from '../types.ts';
+import type { SigilData, Voice } from '../types.ts';
 import { getStrategy } from '../waveforms/index.ts';
-
-// SVG viewBox units (0-1 space)
-const HANDLE_SIZE = 0.006_25;
-const ROT_HANDLE_OFFSET = 0.031_25;
 
 // ---- Touch tracking ----
 
@@ -140,7 +136,9 @@ function applyPatternOverlay(group: SVGGElement, voice: Voice): void {
     return;
   }
 
-  const mainShape = group.querySelector('circle, rect, polygon') as SVGElement | undefined;
+  const mainShape = group.querySelector(':scope > :not([data-overlay]):not([data-border])') as
+    | SVGElement
+    | undefined;
   if (!mainShape) {
     return;
   }
@@ -312,35 +310,26 @@ function reconcileVoices(
 
 // ---- Selection UI ----
 
-function createShapeOutline(voice: Voice): SVGElement {
-  return getStrategy(voice.waveform).createSvgElement(voice);
-}
-
-function shapeHandlePositions(voice: Voice): [HandleType, number, number][] {
-  return getStrategy(voice.waveform).handlePositions(voice);
-}
-
 function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch: boolean): void {
+  const strategy = getStrategy(voice.waveform);
   const rotDeg = voiceRotation(voice);
   const groupTransform = rotDeg !== 0 ? `rotate(${rotDeg}, ${voice.x}, ${voice.y})` : undefined;
   const strokeWidth = isTouch ? '0.003' : '0.002';
   const dashArray = '0.008 0.008';
 
   // Black shadow outline
-  const shadow = createShapeOutline(voice);
+  const shadow = strategy.createSvgElement(voice);
   setAttrs(shadow, {
     fill: 'none',
     stroke: '#000000',
     'stroke-dasharray': dashArray,
     'stroke-width': strokeWidth,
   });
-  if (groupTransform) {
-    shadow.setAttribute('transform', groupTransform);
-  }
+  if (groupTransform) shadow.setAttribute('transform', groupTransform);
   selectionLayer.append(shadow);
 
   // White marching ants outline
-  const ants = createShapeOutline(voice);
+  const ants = strategy.createSvgElement(voice);
   setAttrs(ants, {
     fill: 'none',
     stroke: '#ffffff',
@@ -348,70 +337,15 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
     'stroke-width': strokeWidth,
   });
   ants.style.animation = 'march 0.7s linear infinite';
-  if (groupTransform) {
-    ants.setAttribute('transform', groupTransform);
-  }
+  if (groupTransform) ants.setAttribute('transform', groupTransform);
   selectionLayer.append(ants);
 
-  if (isTouch) {
-    return;
-  } // Touch: just the marching ants
+  if (isTouch) return; // Touch: just the marching ants
 
-  // Resize handles at shape vertices/cardinal points
-  const handlePositions = shapeHandlePositions(voice);
-  for (const [handle, hx, hy] of handlePositions) {
-    const rect = svgEl('rect');
-    setAttrs(rect, {
-      'data-handle': handle,
-      fill: '#ffffff',
-      height: String(HANDLE_SIZE * 2),
-      stroke: '#2a2a2a',
-      'stroke-width': '0.001',
-      width: String(HANDLE_SIZE * 2),
-      x: String(hx - HANDLE_SIZE),
-      y: String(hy - HANDLE_SIZE),
-    });
-    if (groupTransform) {
-      rect.setAttribute('transform', groupTransform);
-    }
-    selectionLayer.append(rect);
-  }
-
-  // Rotation handle (only for waveforms with timbre)
-  if (getStrategy(voice.waveform).hasTimbre) {
-    const r = voice.size / 2;
-    const rotHandleY = voice.y - r - ROT_HANDLE_OFFSET;
-
-    // Stem line
-    const line = svgEl('line');
-    setAttrs(line, {
-      stroke: 'rgba(255,255,255,0.4)',
-      'stroke-width': '0.001',
-      x1: String(voice.x),
-      x2: String(voice.x),
-      y1: String(voice.y - r),
-      y2: String(rotHandleY),
-    });
-    if (groupTransform) {
-      line.setAttribute('transform', groupTransform);
-    }
-    selectionLayer.append(line);
-
-    // Handle circle
-    const circle = svgEl('circle');
-    setAttrs(circle, {
-      cx: String(voice.x),
-      cy: String(rotHandleY),
-      'data-handle': 'rotate',
-      fill: '#888888',
-      r: String(HANDLE_SIZE * 1.2),
-      stroke: '#2a2a2a',
-      'stroke-width': '0.001',
-    });
-    if (groupTransform) {
-      circle.setAttribute('transform', groupTransform);
-    }
-    selectionLayer.append(circle);
+  // Resize + rotation handles — fully owned by the strategy
+  for (const handle of strategy.selectionHandles(voice)) {
+    if (groupTransform) handle.setAttribute('transform', groupTransform);
+    selectionLayer.append(handle);
   }
 }
 

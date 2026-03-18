@@ -4,12 +4,12 @@
 // triangle oscillator pair. Timbre controls rotation (120-degree period)
 // and the saw/tri blend ratio.
 
-import { svgEl } from '../dom.ts';
+import { resizeHandleEl, rotationHandleEls, svgEl } from '../dom.ts';
 import { safeStop } from '../audio/node-utils.ts';
 import { yToFrequency } from '../audio/mapping.ts';
 import { encodeInt, decodeInt, round3 } from '../serialize.ts';
 import { type NormalizedCoord, normalizedCoord } from '../types.ts';
-import type { HandleType, Voice, VoiceBase } from '../types.ts';
+import type { Voice, VoiceBase } from '../types.ts';
 import type { AudioSharedNodes, AudioVoice, WaveformStrategy } from './types.ts';
 
 function trianglePoints(voice: Voice): string {
@@ -24,10 +24,6 @@ function trianglePoints(voice: Voice): string {
   return pts.join(' ');
 }
 
-function triangleAttrs(voice: Voice): Record<string, string> {
-  return { points: trianglePoints(voice) };
-}
-
 const blend: WaveformStrategy = {
   waveform: 'blend',
   shapeName: 'triangle',
@@ -38,8 +34,7 @@ const blend: WaveformStrategy = {
   oscillatorType: 'sawtooth',
   shapeAreaCoeff: (3 * Math.sqrt(3)) / 4,
   formantMaxQ: 8,
-
-  svgAttrs: triangleAttrs,
+  gainExponent: 1.3,
 
   createSvgElement(voice: Voice): SVGElement {
     const el = svgEl('polygon');
@@ -51,17 +46,18 @@ const blend: WaveformStrategy = {
     el.setAttribute('points', trianglePoints(voice));
   },
 
-  handlePositions(voice: Voice): [HandleType, number, number][] {
+  selectionHandles(voice: Voice): SVGElement[] {
     const r = voice.size / 2;
-    const positions: [HandleType, number, number][] = [];
+    const handles: SVGElement[] = [];
+    const handleTypes = ['n', 'se', 'sw'] as [string, string, string];
     for (let i = 0; i < 3; i++) {
       const angle = (i * 2 * Math.PI) / 3 - Math.PI / 2;
       const px = voice.x + Math.cos(angle) * r;
       const py = voice.y + Math.sin(angle) * r;
-      const handle: HandleType = i === 0 ? 'n' : i === 1 ? 'se' : 'sw';
-      positions.push([handle, px, py]);
+      handles.push(resizeHandleEl(handleTypes[i]!, px, py));
     }
-    return positions;
+    handles.push(...rotationHandleEls(voice.x, voice.y - r));
+    return handles;
   },
 
   buildAudioGraph(ctx: AudioContext, voice: Voice, shared: AudioSharedNodes): AudioVoice {
@@ -132,6 +128,14 @@ const blend: WaveformStrategy = {
 
   createVoice(base: VoiceBase): Voice {
     return { ...base, timbre: normalizedCoord(0), waveform: 'blend' };
+  },
+
+  getTimbre(voice: Voice): NormalizedCoord {
+    return 'timbre' in voice ? (voice.timbre as NormalizedCoord) : normalizedCoord(0);
+  },
+
+  withTimbre(value: NormalizedCoord): Partial<Voice> {
+    return { timbre: value };
   },
 
   packExtra(voice: Voice): string {

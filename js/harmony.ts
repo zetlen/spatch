@@ -14,7 +14,7 @@ import {
 } from './types.ts';
 import { type SigilStore, type UndoManager } from './state.ts';
 import { SCENES } from './scenes/index.ts';
-import { ALL_STRATEGIES } from './waveforms/index.ts';
+import { ALL_STRATEGIES, getStrategy } from './waveforms/index.ts';
 
 // ---- Scale definitions ----
 // Each scale is defined by its intervals (semitone offsets within one octave).
@@ -209,9 +209,9 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
       updates.fill = createRandomLinearFill();
     }
 
-    // 75% chance of random rotation (drives timbre on pulse/blend)
-    if (waveform !== 'sine' && Math.random() < 0.75) {
-      (updates as Partial<{ timbre: NormalizedCoord }>).timbre = normalizedCoord(Math.random());
+    // 75% chance of random rotation (drives timbre on pulse/blend; no-op for sine)
+    if (Math.random() < 0.75) {
+      Object.assign(updates, getStrategy(waveform).withTimbre(normalizedCoord(Math.random())));
     }
 
     // 15% chance of a border (random color, thickness, double)

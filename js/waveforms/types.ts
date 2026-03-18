@@ -6,7 +6,7 @@
 // the old discriminated union. AudioSharedNodes is the common plumbing built
 // before strategy delegation.
 
-import type { BlendMode, HandleType, Voice, VoiceBase, WaveformType } from '../types.ts';
+import type { BlendMode, NormalizedCoord, Voice, VoiceBase, WaveformType } from '../types.ts';
 
 /** Shared audio nodes built by voice-builder.ts before delegating to a strategy. */
 export interface AudioSharedNodes {
@@ -82,16 +82,17 @@ export interface WaveformStrategy {
   readonly shapeAreaCoeff: number;
   /** Maximum formant Q (4 for sine, 8 for harmonics-rich waveforms). */
   readonly formantMaxQ: number;
+  /** Default gain exponent for the power-curve loudness model (scene vibes may override). */
+  readonly gainExponent: number;
 
   // ---- Rendering ----
-  /** Compute SVG attributes for the shape element. */
-  svgAttrs(voice: Voice): Record<string, string>;
   /** Create and return a new SVG shape element for the voice. */
   createSvgElement(voice: Voice): SVGElement;
   /** Update an existing SVG shape element to match the voice. */
   updateSvgElement(el: SVGElement, voice: Voice): void;
-  /** Return resize handle positions for the voice shape. */
-  handlePositions(voice: Voice): [HandleType, number, number][];
+  /** Create and return all selection handle elements (resize squares + rotation handle if applicable).
+   *  Each element has `data-handle` set to its HandleType. */
+  selectionHandles(voice: Voice): SVGElement[];
 
   // ---- Audio ----
   /** Build the waveform-specific audio graph and return an AudioVoice. */
@@ -100,6 +101,13 @@ export interface WaveformStrategy {
   // ---- State ----
   /** Create a Voice from a VoiceBase (adds waveform-specific fields like timbre). */
   createVoice(base: VoiceBase): Voice;
+
+  // ---- Timbre ----
+  /** Get the timbre value for a voice (0 for waveforms without timbre). */
+  getTimbre(voice: Voice): NormalizedCoord;
+  /** Return a partial voice update applying the given timbre value.
+   *  Returns an empty object for waveforms without timbre (no-op). */
+  withTimbre(value: NormalizedCoord): Partial<Voice>;
 
   // ---- Serialization ----
   /** Pack waveform-specific extra bytes (e.g. timbre). Returns empty string if none. */

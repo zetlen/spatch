@@ -15,6 +15,7 @@ import type { VibeOptions } from '../audio/vibe.ts';
 import type { AudioEngine } from '../audio/engine.ts';
 import type { SigilStore } from '../state.ts';
 import type { SigilData, WaveformType } from '../types.ts';
+import { ALL_STRATEGIES } from '../waveforms/index.ts';
 
 interface TunerDeps {
   audio: AudioEngine;
@@ -141,7 +142,10 @@ function readState(state: Record<string, number>, key: string): number {
 }
 
 function defaultForKey(key: string): number {
-  if (key.startsWith('exp:')) return VIBE_DEFAULTS.exponents[key.slice(4) as WaveformType];
+  if (key.startsWith('exp:')) {
+    const wf = key.slice(4) as WaveformType;
+    return ALL_STRATEGIES.find((s) => s.waveform === wf)?.gainExponent ?? 1;
+  }
   if (key.startsWith('oct:')) return VIBE_DEFAULTS.octaveGainCoeffs[key.slice(4)]!;
   return (VIBE_DEFAULTS as unknown as Record<string, number>)[key]!;
 }
@@ -195,7 +199,10 @@ function createDefaultState(): Record<string, number> {
 
 function applyVibeToState(state: Record<string, number>, opts: Partial<VibeOptions>): void {
   const full = { ...VIBE_DEFAULTS, ...opts };
-  const exponents = { ...VIBE_DEFAULTS.exponents, ...opts.exponents };
+  const defaultExponents = Object.fromEntries(
+    ALL_STRATEGIES.map((s) => [s.waveform, s.gainExponent]),
+  );
+  const exponents = { ...defaultExponents, ...opts.exponents } as Record<WaveformType, number>;
   const octave = { ...VIBE_DEFAULTS.octaveGainCoeffs, ...opts.octaveGainCoeffs };
   for (const section of SECTIONS) {
     for (const def of section.sliders) {
@@ -263,7 +270,10 @@ function clearSceneEdits(sceneName: string): void {
 function isEdited(flatState: Record<string, number>, sceneVibe: Partial<VibeOptions>): boolean {
   const reference: Record<string, number> = {};
   const full = { ...VIBE_DEFAULTS, ...sceneVibe };
-  const exponents = { ...VIBE_DEFAULTS.exponents, ...sceneVibe.exponents };
+  const defaultExponents = Object.fromEntries(
+    ALL_STRATEGIES.map((s) => [s.waveform, s.gainExponent]),
+  );
+  const exponents = { ...defaultExponents, ...sceneVibe.exponents } as Record<WaveformType, number>;
   const octave = { ...VIBE_DEFAULTS.octaveGainCoeffs, ...sceneVibe.octaveGainCoeffs };
   for (const section of SECTIONS) {
     for (const def of section.sliders) {
