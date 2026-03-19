@@ -6,11 +6,16 @@
 //   [Envelope] (8 chars): attack, decay, sustain, release (2 chars each, 12-bit, x1000)
 //   [Scene] (1 char): scene index (0-63)
 //   [Voices] (variable length):
-//      Flags (2 chars): 12-bit bitfield storing waveform, effect, blend, fillMode, borderMode
+//      Flags (3 chars): 18-bit bitfield [wf:6][eff:3][bl:3][fm:1][bm:3][spare:2]
+//        wf  bits 17-12  waveform index (0-63, supports up to 64 voice types)
+//        eff bits 11-9   effect index
+//        bl  bits  8-6   blend mode index
+//        fm  bit   5     fill mode (0=solid, 1=linear)
+//        bm  bits  4-2   border mode (0=none,1=white,2=black,3=white-double,4=black-double)
 //      x, y, size (2 chars each)
-//      [Optional] timbre (2 chars, iff waveform > 0)
+//      [Optional] extra fields (variable, strategy-owned via packExtra/unpackExtra)
 //      [Optional] border thickness (2 chars, iff borderMode > 0)
-//      Fill (4 or 10 chars): solid (4) vs linear (10 chars + gradient angle)
+//      Fill (4 or 9 chars): solid (4 chars) vs linear (9 chars: 5-char block [gradAngle/45:3][h:9][s:7][l:7] + 4-char block [h2:9][s2:7][l2:7])
 //
 // Note: HSL and all normalized values are quantized to integers/12-bit maxes during packing.
 
@@ -143,25 +148,25 @@ function packVoice(v: Voice): string {
   let flags = 0;
   const strategy = getStrategy(v.waveform);
   const wf = strategy.serializationIndex;
-  flags |= (wf & 0x3) << 10;
+  flags |= (wf & 0x3f) << 12;
 
   const eff = Math.max(0, EFFECT_KEYS.indexOf(v.effect));
-  flags |= (eff & 0x7) << 7;
+  flags |= (eff & 0x7) << 9;
 
   const bl = Math.max(0, BLEND_MODES.indexOf(v.blend));
-  flags |= (bl & 0x7) << 4;
+  flags |= (bl & 0x7) << 6;
 
   const fm = v.fill.mode === 'linear' ? 1 : 0;
-  flags |= (fm & 0x1) << 3;
+  flags |= (fm & 0x1) << 5;
 
   let bm = 0;
   if (v.border) {
     if (v.border.color === 'white') bm = v.border.double ? 3 : 1;
     else bm = v.border.double ? 4 : 2;
   }
-  flags |= bm & 0x7;
+  flags |= (bm & 0x7) << 2;
 
-  out += encodeInt(flags, 2);
+  out += encodeInt(flags, 3);
   out += encodeInt(round3(v.x) * 1000, 2);
   out += encodeInt(round3(v.y) * 1000, 2);
   out += encodeInt(round3(v.size) * 1000, 2);
@@ -178,9 +183,10 @@ function packVoice(v: Voice): string {
     out += encodeInt(fInt, 4);
   } else {
     const f = v.fill as LinearFill;
-    out += encodeInt(Math.round(f.gradAngle), 2);
+    // gradAngle is quantized to 8 steps of 45° (3 bits); pack alongside h/s/l into one 5-char block.
+    const gradBits = Math.round(f.gradAngle / 45) & 7;
     const f1 = (Math.round(f.h) << 14) | (Math.round(f.s) << 7) | Math.round(f.l);
-    out += encodeInt(f1, 4);
+    out += encodeInt((gradBits << 23) | f1, 5);
     const f2 = (Math.round(f.h2) << 14) | (Math.round(f.s2) << 7) | Math.round(f.l2);
     out += encodeInt(f2, 4);
   }
@@ -230,15 +236,15 @@ function unpackB64(str: string): SigilData {
   const voices: Voice[] = [];
   while (idx < str.length) {
     try {
-      const flags = decodeInt(str, idx, 2);
-      idx += 2;
-      const wf = (flags >> 10) & 0x3;
+      const flags = decodeInt(str, idx, 3);
+      idx += 3;
+      const wf = (flags >> 12) & 0x3f;
       const strategy = ALL_STRATEGIES[wf];
       if (!strategy) break;
-      const eff = (flags >> 7) & 0x7;
-      const bl = (flags >> 4) & 0x7;
-      const fm = (flags >> 3) & 0x1;
-      const bm = flags & 0x7;
+      const eff = (flags >> 9) & 0x7;
+      const bl = (flags >> 6) & 0x7;
+      const fm = (flags >> 5) & 0x1;
+      const bm = (flags >> 2) & 0x7;
 
       const x = normalizedCoord(decodeInt(str, idx, 2) / 1000);
       idx += 2;
@@ -274,10 +280,10 @@ function unpackB64(str: string): SigilData {
           l: fInt & 0x7f,
         } satisfies SolidFill;
       } else {
-        const gradAngle = decodeInt(str, idx, 2);
-        idx += 2;
-        const f1 = decodeInt(str, idx, 4);
-        idx += 4;
+        const f1big = decodeInt(str, idx, 5);
+        idx += 5;
+        const gradAngle = ((f1big >> 23) & 7) * 45;
+        const f1 = f1big & 0x7fffff;
         const f2 = decodeInt(str, idx, 4);
         idx += 4;
         fill = {

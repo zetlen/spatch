@@ -523,13 +523,22 @@ Before opening or updating a pull request, verify:
    Search for comments like `// previously`, `// old approach`, `// workaround
    for`, `// TODO: revert`, or any comment that only makes sense in the context
    of the branch history. Remove or rewrite them.
-2. **No dead code.** Check for unused imports, unexported functions that lost
-   their only caller, variables assigned but never read, and unreachable
-   branches introduced by the change.
-3. **No dead or tautological tests.** If the change removed or renamed
-   functionality, check that tests covering it were updated or removed — not
-   left passing vacuously. A test that asserts a default value equals itself,
-   or that mocks the thing it's testing, is tautological.
+2. **No dead code.** This is a hard requirement, not a suggestion. When a
+   method, property, or interface member is removed or renamed, every call
+   site and every test that exercises it MUST be updated or deleted in the
+   same PR. Check: unused imports, unexported functions that lost their only
+   caller, variables assigned but never read, interface members no longer on
+   the implementing type, and unreachable branches introduced by the change.
+   `bun run lint` catches some of these; a manual grep for the deleted symbol
+   name catches the rest.
+3. **No dead or tautological tests.** When functionality is removed or renamed,
+   the tests that covered it MUST be removed or rewritten in the same PR — not
+   left behind to fail or pass vacuously. A test calling a method that no
+   longer exists is dead. A test asserting a default value equals itself is
+   tautological. Both are worse than no test: they create false confidence and
+   mask real regressions. After every interface change, grep the test files for
+   the old symbol name and verify each hit is either updated or intentionally
+   kept.
 4. **CLAUDE.md is accurate.** Re-read every section of CLAUDE.md. If any
    description, file path, convention, or recipe no longer matches the
    codebase after this PR's changes, fix it before opening.

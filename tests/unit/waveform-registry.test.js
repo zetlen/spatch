@@ -85,25 +85,6 @@ describe('sine strategy identity', () => {
     expect(result.bytesRead).toBe(0);
     expect(Object.keys(result.fields)).toHaveLength(0);
   });
-
-  test('svgAttrs returns circle attributes', () => {
-    const voice = { x: 0.3, y: 0.7, size: 0.2 };
-    const attrs = s.svgAttrs(voice);
-    expect(attrs.cx).toBe('0.3');
-    expect(attrs.cy).toBe('0.7');
-    expect(attrs.r).toBe('0.1');
-  });
-
-  test('handlePositions returns cardinal positions', () => {
-    const voice = { x: 0.5, y: 0.5, size: 0.2 };
-    const handles = s.handlePositions(voice);
-    expect(handles).toHaveLength(4);
-    const types = handles.map((h) => h[0]);
-    expect(types).toContain('n');
-    expect(types).toContain('e');
-    expect(types).toContain('s');
-    expect(types).toContain('w');
-  });
 });
 
 describe('pulse strategy identity', () => {
@@ -157,26 +138,6 @@ describe('pulse strategy identity', () => {
     expect(result.bytesRead).toBe(2);
     expect(result.fields.timbre).toBeCloseTo(0.75);
   });
-
-  test('svgAttrs returns rect attributes', () => {
-    const voice = { x: 0.5, y: 0.5, size: 0.2 };
-    const attrs = s.svgAttrs(voice);
-    expect(attrs.width).toBe('0.2');
-    expect(attrs.height).toBe('0.2');
-    expect(attrs.x).toBe('0.4');
-    expect(attrs.y).toBe('0.4');
-  });
-
-  test('handlePositions returns corner positions', () => {
-    const voice = { x: 0.5, y: 0.5, size: 0.2 };
-    const handles = s.handlePositions(voice);
-    expect(handles).toHaveLength(4);
-    const types = handles.map((h) => h[0]);
-    expect(types).toContain('nw');
-    expect(types).toContain('ne');
-    expect(types).toContain('se');
-    expect(types).toContain('sw');
-  });
 });
 
 describe('blend strategy identity', () => {
@@ -229,58 +190,6 @@ describe('blend strategy identity', () => {
     const result = s.unpackExtra(packed, 0);
     expect(result.bytesRead).toBe(2);
     expect(result.fields.timbre).toBeCloseTo(0.333);
-  });
-
-  test('svgAttrs returns points attribute', () => {
-    const voice = { x: 0.5, y: 0.5, size: 0.2 };
-    const attrs = s.svgAttrs(voice);
-    expect(attrs.points).toBeDefined();
-    expect(typeof attrs.points).toBe('string');
-    // Triangle should have 3 vertices (space-separated pairs)
-    const points = attrs.points.split(' ');
-    expect(points).toHaveLength(3);
-  });
-
-  test('handlePositions returns 3 vertex positions', () => {
-    const voice = { x: 0.5, y: 0.5, size: 0.2 };
-    const handles = s.handlePositions(voice);
-    expect(handles).toHaveLength(3);
-    const types = handles.map((h) => h[0]);
-    expect(types).toContain('n');
-    expect(types).toContain('se');
-    expect(types).toContain('sw');
-  });
-});
-
-describe('strategy svgAttrs match original geometry', () => {
-  test('sine circle attrs match circleAttrs', () => {
-    const voice = { x: 0.35, y: 0.65, size: 0.18 };
-    const attrs = getStrategy('sine').svgAttrs(voice);
-    expect(parseFloat(attrs.cx)).toBeCloseTo(0.35);
-    expect(parseFloat(attrs.cy)).toBeCloseTo(0.65);
-    expect(parseFloat(attrs.r)).toBeCloseTo(0.09);
-  });
-
-  test('pulse rect attrs match rectAttrs', () => {
-    const voice = { x: 0.4, y: 0.6, size: 0.3 };
-    const attrs = getStrategy('pulse').svgAttrs(voice);
-    expect(parseFloat(attrs.x)).toBeCloseTo(0.25);
-    expect(parseFloat(attrs.y)).toBeCloseTo(0.45);
-    expect(parseFloat(attrs.width)).toBeCloseTo(0.3);
-    expect(parseFloat(attrs.height)).toBeCloseTo(0.3);
-  });
-
-  test('blend triangle points match trianglePoints', () => {
-    const voice = { x: 0.5, y: 0.5, size: 0.2 };
-    const attrs = getStrategy('blend').svgAttrs(voice);
-    const points = attrs.points.split(' ').map((p) => p.split(',').map(Number));
-    expect(points).toHaveLength(3);
-
-    // Top vertex: should be at (x, y - r) before rotation offset
-    const r = 0.1;
-    // vertex 0: angle = -PI/2 (top)
-    expect(points[0][0]).toBeCloseTo(0.5);
-    expect(points[0][1]).toBeCloseTo(0.5 - r);
   });
 });
 

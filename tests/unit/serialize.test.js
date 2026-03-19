@@ -285,7 +285,8 @@ describe('deserializeState edge cases', () => {
     expect(withGarbage.voices).toHaveLength(2);
 
     // Test truncated voice (should return 1 voice instead of 2)
-    // The second voice is 12 chars long, so slicing off 4 chars corrupts it.
+    // The second voice is 13 chars long (3 flags + 2 x + 2 y + 2 size + 4 fill),
+    // so slicing off 4 chars corrupts it.
     const truncated = deserializeState(encoded.slice(0, encoded.length - 4));
     expect(truncated).not.toBeUndefined();
     expect(truncated.voices).toHaveLength(1);
