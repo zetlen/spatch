@@ -35,8 +35,8 @@ export function cents(n: number): Cents {
 
 // ---- Voice types ----
 
-/** Waveform discriminant: sine (circle), pulse (square), or blend (triangle). */
-export type WaveformType = 'sine' | 'pulse' | 'blend';
+/** Waveform discriminant: sine (circle), pulse (square), blend (triangle), or astroid. */
+export type WaveformType = 'sine' | 'pulse' | 'blend' | 'astroid';
 
 /** Pattern overlay type applied to a voice shape for visual texture and audio effect. */
 export const PATTERN_TYPES = ['stripes', 'checker', 'noise', 'plaid'] as const;
@@ -175,8 +175,14 @@ export interface BlendVoice extends VoiceBase {
   timbre: NormalizedCoord;
 }
 
+/** Astroid waveform voice (astroid shape). Timbre controls supersaw detune/spread via rotation. */
+export interface AstroidVoice extends VoiceBase {
+  waveform: 'astroid';
+  timbre: NormalizedCoord;
+}
+
 /** Discriminated union of voice types, keyed on the `waveform` field. */
-export type Voice = SineVoice | PulseVoice | BlendVoice;
+export type Voice = SineVoice | PulseVoice | BlendVoice | AstroidVoice;
 
 // ---- Envelope ----
 

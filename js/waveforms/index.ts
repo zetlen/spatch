@@ -8,11 +8,13 @@ import type { WaveformStrategy } from './types.ts';
 import sine from './sine.ts';
 import pulse from './pulse.ts';
 import blend from './blend.ts';
+import astroid from './astroid.ts';
 
 const STRATEGIES = new Map<WaveformType, WaveformStrategy>([
   ['sine', sine],
   ['pulse', pulse],
   ['blend', blend],
+  ['astroid', astroid],
 ]);
 
 /** Look up the strategy for a waveform type. */

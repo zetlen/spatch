@@ -98,6 +98,7 @@ js/
     sine.ts          Sine waveform strategy (circle, sine osc)
     pulse.ts         Pulse waveform strategy (square, PWM osc)
     blend.ts         Blend waveform strategy (triangle, saw/tri crossfade)
+    astroid.ts       Astroid waveform strategy (astroid curve, 6-oscillator supersaw)
   scenes/
     scene-types.ts   Scene interface (name, icon, stageBackground, imageCredit, creditUrl?, vibe)
     index.ts         SCENES registry, getScene(), applyScene() crossfade,
@@ -287,7 +288,7 @@ design rationale and enumeration of past violations.
 ## Key Concepts
 
 - **Voices** are the primary objects: circle (sine), square (pulse), triangle
-  (saw/tri blend). Each voice is a discriminated union on `waveform`. Every field
+  (saw/tri blend), and astroid (6-oscillator supersaw). Each voice is a discriminated union on `waveform`. Every field
   maps to both a visual property and an audio parameter:
   - `x` → horizontal position + stereo pan
   - `y` → vertical position + pitch (chromatic, 3 octaves G2–G5, magnetic
@@ -295,10 +296,10 @@ design rationale and enumeration of past violations.
   - `size` → shape area + gain
   - `fill` → color/gradient + formant filter (hue→vowel, sat→Q, light→brightness)
   - `effect` → pattern overlay + audio effect chain
-  - `timbre` (pulse/blend only) → rotation + waveform parameter. Linear sawtooth
-    ramp, periodic per vertex count (90° for square, 120° for triangle). Every
-    angle within the period maps to a unique timbre. Circles have no timbre and
-    no rotation.
+  - `timbre` (pulse/blend/astroid only) → rotation + waveform parameter. Linear
+    sawtooth ramp, periodic per vertex count (90° for square and astroid, 120° for
+    triangle). Every angle within the period maps to a unique timbre. Circles have
+    no timbre and no rotation.
   - `blend` → CSS `mix-blend-mode` + cross-voice FM synthesis.
     Default is `screen`. All 3 modes are commutative (symmetric), so voice
     ordering is not data — DOM order has no effect on visuals or audio.
@@ -308,8 +309,8 @@ design rationale and enumeration of past violations.
     frequency — bidirectional FM synthesis. The blend mode determines the
     FM character: screen (default, no FM), multiply (exponential depth,
     index 1.5), difference (linear depth, index 1.5). Modulation depth is
-    derived geometrically from pairwise shape overlap. The 9 waveform-pair
-    combinations (sine/pulse/blend × sine/pulse/blend) produce naturally
+    derived geometrically from pairwise shape overlap. The 16 waveform-pair
+    combinations (sine/pulse/blend/astroid × sine/pulse/blend/astroid) produce naturally
     distinct FM timbres because different modulator waveforms create
     different harmonic spectra.
   - `border` → inset stroke(s) on the shape + octave-doubled sine oscillator.
@@ -418,8 +419,8 @@ extract it into a shared function or helper. No exceptions. DRY it up.
 - **Fill** is a discriminated union (`SolidFill | LinearFill`). The
   toolbar uses a flat `FillDraft` bag internally for mode-switching without data loss,
   converted via `fillToFillDraft()` / `fillDraftToFill()`.
-- **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice`),
-  discriminated on the `waveform` field. Sine has no `timbre`; pulse and blend do.
+- **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice | AstroidVoice`),
+  discriminated on the `waveform` field. Sine has no `timbre`; pulse, blend, and astroid do.
   All per-waveform behavior lives in `js/waveforms/<name>.ts` strategy files,
   dispatched through `getStrategy(voice.waveform)`. Each strategy is the unified
   delegate for its waveform across all three projections: interface

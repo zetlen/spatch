@@ -3,7 +3,7 @@ import { getStrategy, ALL_STRATEGIES } from '../../js/waveforms/index.ts';
 
 describe('waveform strategy registry', () => {
   test('getStrategy returns a strategy for each waveform type', () => {
-    const waveforms = ['sine', 'pulse', 'blend'];
+    const waveforms = ['sine', 'pulse', 'blend', 'astroid'];
     for (const wf of waveforms) {
       const strategy = getStrategy(wf);
       expect(strategy).toBeDefined();
@@ -11,12 +11,13 @@ describe('waveform strategy registry', () => {
     }
   });
 
-  test('ALL_STRATEGIES contains all three strategies', () => {
-    expect(ALL_STRATEGIES).toHaveLength(3);
+  test('ALL_STRATEGIES contains all strategies', () => {
+    expect(ALL_STRATEGIES).toHaveLength(4);
     const waveforms = ALL_STRATEGIES.map((s) => s.waveform);
     expect(waveforms).toContain('sine');
     expect(waveforms).toContain('pulse');
     expect(waveforms).toContain('blend');
+    expect(waveforms).toContain('astroid');
   });
 
   test('ALL_STRATEGIES is sorted by serializationIndex', () => {
@@ -27,10 +28,11 @@ describe('waveform strategy registry', () => {
     }
   });
 
-  test('serialization indices are 0, 1, 2', () => {
+  test('serialization indices are 0, 1, 2, 3', () => {
     expect(ALL_STRATEGIES[0].serializationIndex).toBe(0);
     expect(ALL_STRATEGIES[1].serializationIndex).toBe(1);
     expect(ALL_STRATEGIES[2].serializationIndex).toBe(2);
+    expect(ALL_STRATEGIES[3].serializationIndex).toBe(3);
   });
 });
 
@@ -193,16 +195,71 @@ describe('blend strategy identity', () => {
   });
 });
 
+describe('astroid strategy identity', () => {
+  const s = getStrategy('astroid');
+
+  test('identity properties', () => {
+    expect(s.shapeName).toBe('astroid');
+    expect(s.svgTag).toBe('path');
+    expect(s.hasTimbre).toBe(true);
+    expect(s.rotationPeriod).toBe(90);
+    expect(s.serializationIndex).toBe(3);
+    expect(s.oscillatorType).toBe('sawtooth');
+    expect(s.shapeAreaCoeff).toBeCloseTo((3 * Math.PI) / 8);
+    expect(s.formantMaxQ).toBe(8);
+  });
+
+  test('createVoice produces astroid voice with timbre', () => {
+    const base = {
+      id: 'test4',
+      x: 0.4,
+      y: 0.6,
+      size: 0.2,
+      fill: { mode: 'solid', h: 60, s: 70, l: 50 },
+      effect: undefined,
+      blend: 'screen',
+      border: undefined,
+    };
+    const voice = s.createVoice(base);
+    expect(voice.waveform).toBe('astroid');
+    expect('timbre' in voice).toBe(true);
+    expect(voice.timbre).toBe(0);
+  });
+
+  test('packExtra/unpackExtra round-trip timbre', () => {
+    const voice = {
+      waveform: 'astroid',
+      timbre: 0.5,
+      id: 'v4',
+      x: 0.5,
+      y: 0.5,
+      size: 0.25,
+      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
+      effect: undefined,
+      blend: 'screen',
+      border: undefined,
+    };
+    const packed = s.packExtra(voice);
+    expect(packed).toHaveLength(2);
+
+    const result = s.unpackExtra(packed, 0);
+    expect(result.bytesRead).toBe(2);
+    expect(result.fields.timbre).toBeCloseTo(0.5);
+  });
+});
+
 describe('strategy serialization indices match existing format', () => {
-  test('sine = 0, pulse = 1, blend = 2', () => {
+  test('sine = 0, pulse = 1, blend = 2, astroid = 3', () => {
     expect(getStrategy('sine').serializationIndex).toBe(0);
     expect(getStrategy('pulse').serializationIndex).toBe(1);
     expect(getStrategy('blend').serializationIndex).toBe(2);
+    expect(getStrategy('astroid').serializationIndex).toBe(3);
   });
 
   test('ALL_STRATEGIES[wf] lookup by index matches getStrategy', () => {
     expect(ALL_STRATEGIES[0]).toBe(getStrategy('sine'));
     expect(ALL_STRATEGIES[1]).toBe(getStrategy('pulse'));
     expect(ALL_STRATEGIES[2]).toBe(getStrategy('blend'));
+    expect(ALL_STRATEGIES[3]).toBe(getStrategy('astroid'));
   });
 });

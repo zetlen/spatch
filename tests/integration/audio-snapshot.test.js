@@ -423,6 +423,81 @@ test.describe('Audio waveform snapshots', () => {
     });
   });
 
+  // ---- Astroid waveform tests ----
+  test.describe('astroid waveform', () => {
+    test('single astroid voice at timbre=0 (center pair only)', async ({ page }) => {
+      await placeShape(page, 'astroid');
+      await page.evaluate(() => {
+        const voices = globalThis.__testStore.data.voices;
+        globalThis.__testStore.updateVoice(voices[0].id, { timbre: 0 });
+      });
+      const png = await captureAudio(page);
+      expect(Buffer.from(png, 'base64')).toMatchSnapshot('astroid-timbre-0.png', {
+        maxDiffPixelRatio: 0.05,
+      });
+    });
+
+    test('single astroid voice at timbre=1 (full spread)', async ({ page }) => {
+      await placeShape(page, 'astroid');
+      await page.evaluate(() => {
+        const voices = globalThis.__testStore.data.voices;
+        globalThis.__testStore.updateVoice(voices[0].id, { timbre: 1 });
+      });
+      const png = await captureAudio(page);
+      expect(Buffer.from(png, 'base64')).toMatchSnapshot('astroid-timbre-1.png', {
+        maxDiffPixelRatio: 0.05,
+      });
+    });
+
+    test('astroid rotation 0° → 45° mid-playback', async ({ page }) => {
+      await placeShape(page, 'astroid');
+      await annotateState(page);
+      await page.evaluate(() => {
+        globalThis.__audioCapture.annotate('0° → 45° at t=1s');
+      });
+
+      await page.keyboard.press('Space');
+      await expect(page.locator('#btn-play')).toHaveClass(/playing/);
+
+      await page.evaluate(() => {
+        globalThis.__audioCapture.suspendAt(1.0, 'rotate');
+        globalThis.__audioCapture.startRendering();
+      });
+
+      await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
+
+      const canvasWrap = page.locator('#canvas-wrap');
+      const box = await canvasWrap.boundingBox();
+      const cx = box.x + box.width * 0.5;
+      const cy = box.y + box.height * 0.5;
+
+      const rotHandle = page.locator('[data-handle="rotate"]');
+      await rotHandle.waitFor({ state: 'attached' });
+      const handleNY = await rotHandle.evaluate((el) => parseFloat(el.getAttribute('cy')));
+      const hx = cx;
+      const hy = box.y + box.height * handleNY;
+
+      // 45° clockwise from up
+      const r = cy - hy;
+      const targetX = cx + r * Math.sin((45 * Math.PI) / 180);
+      const targetY = cy - r * Math.cos((45 * Math.PI) / 180);
+
+      await page.mouse.move(hx, hy);
+      await page.mouse.down();
+      await page.mouse.move(targetX, targetY, { steps: 5 });
+      await page.mouse.up();
+
+      await page.evaluate(() => globalThis.__audioCapture.resume());
+
+      const png = await page.evaluate(() =>
+        globalThis.__audioCapture.finishCapture({ duration: 3 }),
+      );
+      expect(Buffer.from(png, 'base64')).toMatchSnapshot('astroid-rotation.png', {
+        maxDiffPixelRatio: 0.05,
+      });
+    });
+  });
+
   test('5 voices with multiply blend in a diagonal cluster', async ({ page }) => {
     // 5 overlapping voices along a diagonal: each adjacent pair overlaps ~55%,
     // next-nearest pairs overlap ~10%, far pairs don't overlap.

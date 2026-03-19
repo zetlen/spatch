@@ -26,6 +26,7 @@ const WAVEFORM_COLORS: Record<WaveformType, string> = {
   sine: '#4488ff',
   pulse: '#ff4444',
   blend: '#44cc44',
+  astroid: '#ffaa22',
 };
 
 interface SliderDef {
