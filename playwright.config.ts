@@ -13,7 +13,13 @@ if (!TEST_PORT) {
 // audio snapshots cannot be generated deterministically. See:
 // https://bugzilla.mozilla.org/show_bug.cgi?id=1081168
 
+// PLAYWRIGHT_WORKERS overrides the worker count. Set it in CI (where LXC
+// containers inherit /proc/cpuinfo from the host and os.cpus() lies) or
+// locally to taste. Unset = Playwright default (half of os.cpus().length).
+const workers = process.env.PLAYWRIGHT_WORKERS ? Number(process.env.PLAYWRIGHT_WORKERS) : undefined;
+
 export default defineConfig({
+  workers,
   projects: [
     {
       name: 'chromium',
@@ -37,8 +43,9 @@ export default defineConfig({
     baseURL: `http://localhost:${TEST_PORT}`,
   },
   webServer: {
-    command: `bun run dev -- --port ${TEST_PORT}`,
+    command: `bun run preview --port ${TEST_PORT}`,
     port: TEST_PORT,
     reuseExistingServer: false,
   },
+  reporter: 'list',
 });

@@ -6,11 +6,12 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "preview": "vite preview",
+    "preview": "vite build && vite preview",
     "clean": "rm -rf dist",
     "test": "bun test && bun run test:e2e",
     "test:unit": "bun test",
     "test:e2e": "TEST_PORT=$(get-port) bunx playwright test",
+    "test:e2e:docker": "docker run --rm -v \"$PWD\":/work -w /work tiene/frontend-ci-image bash -c 'mise install && bun install --frozen-lockfile && bun run test:e2e'",
     "check": "tsc --noEmit",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

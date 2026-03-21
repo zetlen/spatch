@@ -64,21 +64,23 @@ function spatchPlugin(): Plugin {
 // ---------------------------------------------------------------------------
 
 function spaFallbackPlugin(): Plugin {
+  const rewrite: import('connect').NextHandleFunction = (req, _res, next) => {
+    // Rewrite known app routes to their HTML entry points.
+    // Everything else (assets, Vite internals) passes through untouched.
+    if (req.url?.startsWith('/embed/')) {
+      req.url = '/embed.html';
+    } else if (req.url?.startsWith('/s/')) {
+      req.url = '/index.html';
+    }
+    next();
+  };
   return {
     name: 'spa-fallback',
     configureServer(server) {
-      // Runs before Vite's built-in middleware (no return wrapper)
-      // so URL rewrites happen before Vite tries to serve the file.
-      server.middlewares.use((req, _res, next) => {
-        // Rewrite known app routes to their HTML entry points.
-        // Everything else (assets, Vite internals) passes through untouched.
-        if (req.url?.startsWith('/embed/')) {
-          req.url = '/embed.html';
-        } else if (req.url?.startsWith('/s/')) {
-          req.url = '/index.html';
-        }
-        next();
-      });
+      server.middlewares.use(rewrite);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(rewrite);
     },
   };
 }

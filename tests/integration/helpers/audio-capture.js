@@ -260,7 +260,7 @@
       g.setLineDash([2, 6]);
       g.lineWidth = 5;
       g.strokeStyle = '#fff';
-      g.font = "bold 72px 'Courier New', monospace";
+      g.font = "bold 72px 'Helvetica'";
       g.textBaseline = 'top';
       g.fillStyle = '#fff';
 
@@ -288,7 +288,7 @@
 
     if (annotations.length > 0) {
       g.save();
-      g.font = "32px 'Courier New', monospace";
+      g.font = "32px 'Helvetica'";
       g.textAlign = 'right';
       g.textBaseline = 'bottom';
       const lineH = 38;
