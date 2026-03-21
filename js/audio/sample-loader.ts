@@ -1,16 +1,17 @@
-// ir-loader.ts — Fetch and decode impulse response files for convolution reverb.
+// sample-loader.ts — Fetch and decode audio sample files.
 //
-// Two-layer cache: fetchIR() caches raw ArrayBuffers (no AudioContext needed),
-// decodeIR() caches decoded AudioBuffers. This split lets scenes prefetch IR
-// bytes at page load before an AudioContext exists.
+// Two-layer cache: fetchSample() caches raw ArrayBuffers (no AudioContext needed),
+// decodeSample() caches decoded AudioBuffers. This split lets callers prefetch
+// bytes at page load before an AudioContext exists. Used for both scene impulse
+// responses and stamp voice samples.
 
 const byteCache = new Map<string, ArrayBuffer>();
 const bytePending = new Map<string, Promise<ArrayBuffer>>();
 const decodedCache = new Map<string, AudioBuffer>();
 const decodedPending = new Map<string, Promise<AudioBuffer>>();
 
-/** Fetch IR bytes (network + byte cache). No AudioContext needed. */
-export function fetchIR(filename: string): Promise<ArrayBuffer> {
+/** Fetch sample bytes (network + byte cache). No AudioContext needed. */
+export function fetchSample(filename: string): Promise<ArrayBuffer> {
   const cached = byteCache.get(filename);
   if (cached) return Promise.resolve(cached);
 
@@ -23,7 +24,7 @@ export function fetchIR(filename: string): Promise<ArrayBuffer> {
   const promise = Promise.resolve()
     .then(() => fetch(filename))
     .then((res) => {
-      if (!res.ok) throw new Error(`Failed to load IR: ${res.status} ${filename}`);
+      if (!res.ok) throw new Error(`Failed to load sample: ${res.status} ${filename}`);
       return res.arrayBuffer();
     })
     .then((buf) => {
@@ -40,8 +41,8 @@ export function fetchIR(filename: string): Promise<ArrayBuffer> {
   return promise;
 }
 
-/** Decode a fetched IR into an AudioBuffer (decoded cache). Fetches if not prefetched. */
-export function decodeIR(ctx: BaseAudioContext, filename: string): Promise<AudioBuffer> {
+/** Decode a fetched sample into an AudioBuffer (decoded cache). Fetches if not prefetched. */
+export function decodeSample(ctx: BaseAudioContext, filename: string): Promise<AudioBuffer> {
   const cached = decodedCache.get(filename);
   if (cached) return Promise.resolve(cached);
 
@@ -49,7 +50,7 @@ export function decodeIR(ctx: BaseAudioContext, filename: string): Promise<Audio
   if (inflight) return inflight;
 
   // decodeAudioData consumes its ArrayBuffer, so pass a copy to preserve the byte cache.
-  const promise = fetchIR(filename)
+  const promise = fetchSample(filename)
     .then((bytes) => ctx.decodeAudioData(bytes.slice(0)))
     .then((decoded) => {
       decodedCache.set(filename, decoded);
@@ -59,6 +60,11 @@ export function decodeIR(ctx: BaseAudioContext, filename: string): Promise<Audio
 
   decodedPending.set(filename, promise);
   return promise;
+}
+
+/** Get a previously decoded AudioBuffer from the cache, or undefined if not yet decoded. */
+export function getCachedSample(filename: string): AudioBuffer | undefined {
+  return decodedCache.get(filename);
 }
 
 /** Clear all caches (testing only). */

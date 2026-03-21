@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { fetchIR, decodeIR, _clearCaches } from '../../js/audio/ir-loader.ts';
+import { fetchSample, decodeSample, _clearCaches } from '../../js/audio/sample-loader.ts';
 
 // Stub fetch globally
 let fetchStub;
@@ -22,12 +22,12 @@ function stubFetchFail() {
   globalThis.fetch = () => Promise.resolve({ ok: false, status: 404 });
 }
 
-describe('fetchIR', () => {
+describe('fetchSample', () => {
   test('fetches and caches ArrayBuffer', async () => {
     const buf = new ArrayBuffer(16);
     stubFetch(buf);
 
-    const result = await fetchIR('test.m4a');
+    const result = await fetchSample('test.m4a');
     expect(result).toBe(buf);
 
     // Second call returns cached value without fetch
@@ -36,7 +36,7 @@ describe('fetchIR', () => {
       fetchCalled = true;
       return Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) });
     };
-    const cached = await fetchIR('test.m4a');
+    const cached = await fetchSample('test.m4a');
     expect(cached).toBe(buf);
     expect(fetchCalled).toBe(false);
   });
@@ -50,31 +50,31 @@ describe('fetchIR', () => {
       return Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(buf) });
     };
 
-    const [a, b] = await Promise.all([fetchIR('dup.m4a'), fetchIR('dup.m4a')]);
+    const [a, b] = await Promise.all([fetchSample('dup.m4a'), fetchSample('dup.m4a')]);
     expect(a).toBe(b);
     expect(callCount).toBe(1);
   });
 
   test('rejects on HTTP error', async () => {
     stubFetchFail();
-    await expect(fetchIR('missing.m4a')).rejects.toThrow('Failed to load IR');
+    await expect(fetchSample('missing.m4a')).rejects.toThrow('Failed to load sample');
   });
 });
 
-describe('decodeIR', () => {
+describe('decodeSample', () => {
   test('decodes prefetched bytes and caches AudioBuffer', async () => {
     const buf = new ArrayBuffer(16);
     stubFetch(buf);
-    await fetchIR('decode-test.m4a');
+    await fetchSample('decode-test.m4a');
 
     const decoded = { duration: 1, length: 44100 };
     const ctx = { decodeAudioData: () => Promise.resolve(decoded) };
 
-    const result = await decodeIR(ctx, 'decode-test.m4a');
+    const result = await decodeSample(ctx, 'decode-test.m4a');
     expect(result).toBe(decoded);
 
     // Second call returns cached decoded buffer
-    const result2 = await decodeIR(ctx, 'decode-test.m4a');
+    const result2 = await decodeSample(ctx, 'decode-test.m4a');
     expect(result2).toBe(decoded);
   });
 
@@ -85,7 +85,7 @@ describe('decodeIR', () => {
     const decoded = { duration: 1, length: 44100 };
     const ctx = { decodeAudioData: () => Promise.resolve(decoded) };
 
-    const result = await decodeIR(ctx, 'auto-fetch.m4a');
+    const result = await decodeSample(ctx, 'auto-fetch.m4a');
     expect(result).toBe(decoded);
   });
 });

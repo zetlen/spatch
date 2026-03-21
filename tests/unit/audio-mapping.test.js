@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { rotationToTimbre, snapYToNote, yToFrequency } from '../../js/audio/mapping.ts';
+import {
+  rotationToTimbre,
+  snapYToNote,
+  yToFrequency,
+  yToPlaybackRate,
+} from '../../js/audio/mapping.ts';
 import {
   applyFormantFilter,
   computeFormantQ,
@@ -407,5 +412,35 @@ describe('applyFormantFilter', () => {
 
     expect(f1.frequency.value).toBe(solidC2.frequency.value);
     expect(b.frequency.value).toBe(solidC2b.frequency.value);
+  });
+});
+
+describe('yToPlaybackRate', () => {
+  test('returns 1.0 when y maps to the reference pitch', () => {
+    // Find the Y that produces a frequency closest to 440 Hz
+    // yToFrequency maps Y=0 to highest, Y=1 to lowest
+    const freq = yToFrequency(0.5);
+    const rate = yToPlaybackRate(0.5, freq);
+    expect(rate).toBeCloseTo(1.0);
+  });
+
+  test('rate > 1 for y above reference (higher pitch)', () => {
+    const refPitch = yToFrequency(0.5);
+    // Y=0.3 is higher pitch than Y=0.5
+    const rate = yToPlaybackRate(0.3, refPitch);
+    expect(rate).toBeGreaterThan(1.0);
+  });
+
+  test('rate < 1 for y below reference (lower pitch)', () => {
+    const refPitch = yToFrequency(0.5);
+    // Y=0.7 is lower pitch than Y=0.5
+    const rate = yToPlaybackRate(0.7, refPitch);
+    expect(rate).toBeLessThan(1.0);
+  });
+
+  test('rate equals yToFrequency / referencePitch', () => {
+    const refPitch = 440;
+    const rate = yToPlaybackRate(0.25, refPitch);
+    expect(rate).toBeCloseTo(yToFrequency(0.25) / refPitch);
   });
 });

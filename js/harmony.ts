@@ -13,6 +13,7 @@ import {
   normalizedCoord,
 } from './types.ts';
 import { type SigilStore, type UndoManager } from './state.ts';
+import { STAMPLE_COUNT } from './stamples/index.ts';
 import { SCENES } from './scenes/index.ts';
 import { ALL_STRATEGIES, getStrategy } from './waveforms/index.ts';
 
@@ -162,8 +163,13 @@ function createRandomLinearFill(): Fill {
   };
 }
 
-/** Waveform types to pick from when randomizing. */
-const WAVEFORMS = ALL_STRATEGIES.map((s) => s.waveform);
+/** Waveform types to pick from when randomizing.
+ *  Stamps are excluded unless enabled via localStorage flag. */
+const WAVEFORMS = ALL_STRATEGIES.map((s) => s.waveform).filter(
+  (wf) =>
+    wf !== 'stamp' ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('spatch:stamps') === '1'),
+);
 
 /** Number of voices to create when randomizing. */
 const RANDOM_VOICE_COUNT = 5;
@@ -214,8 +220,10 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
       Object.assign(updates, getStrategy(waveform).withTimbre(normalizedCoord(Math.random())));
     }
 
-    // 15% chance of a border (random color, thickness, double)
-    if (Math.random() < 0.15) {
+    // 15% chance of a border (random color, thickness, double).
+    // Stamps skip borders — border adds an octave-doubled oscillator
+    // which doesn't apply to sample-based voices.
+    if (waveform !== 'stamp' && Math.random() < 0.15) {
       updates.border = {
         color: Math.random() < 0.5 ? 'white' : 'black',
         double: Math.random() < 0.3,
@@ -231,6 +239,11 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
     // 50% chance of a random blend mode
     if (Math.random() < 0.5) {
       updates.blend = BLEND_MODES[Math.floor(Math.random() * BLEND_MODES.length)]!;
+    }
+
+    // Randomize stamp variant for stamp voices
+    if (waveform === 'stamp') {
+      (updates as Record<string, unknown>).stamp = Math.floor(Math.random() * STAMPLE_COUNT);
     }
 
     store.updateVoice(lastVoice.id, updates);

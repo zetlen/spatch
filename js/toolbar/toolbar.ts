@@ -173,6 +173,9 @@ export class Toolbar {
       if (this.selectedId) {
         this.undo.snapshot();
         this.store.removeVoice(this.selectedId);
+        this.currentTool = 'select';
+        this._updateToolActive();
+        if (this.onToolChange) this.onToolChange('deselect');
       }
     });
   }

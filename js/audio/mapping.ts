@@ -101,6 +101,22 @@ export function hardSnapYToNote(y: NormalizedCoord): NormalizedCoord {
 }
 
 /**
+ * Map a normalized Y coordinate to a playback rate for sample-based voices.
+ *
+ * Uses the same chromatic pitch grid as yToFrequency, but returns a rate
+ * ratio relative to the sample's reference pitch. Rate > 1 plays faster
+ * (higher pitch), rate < 1 plays slower (lower pitch) — like speeding up
+ * a record from 33 to 45 RPM.
+ *
+ * @param y - Normalized Y coordinate (0 = top/high, 1 = bottom/low)
+ * @param referencePitch - The original pitch of the sample in Hz
+ * @returns Playback rate ratio
+ */
+export function yToPlaybackRate(y: NormalizedCoord, referencePitch: number): number {
+  return yToFrequency(y) / referencePitch;
+}
+
+/**
  * Map rotation angle to a periodic timbre parameter in [0, 1).
  *
  * Each waveform's visual symmetry period determines the audio cycle:

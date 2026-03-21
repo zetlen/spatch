@@ -317,8 +317,12 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
   const strokeWidth = isTouch ? '0.003' : '0.002';
   const dashArray = '0.008 0.008';
 
+  const makeOutline = strategy.createSelectionElement
+    ? () => strategy.createSelectionElement!(voice)
+    : () => strategy.createSvgElement(voice);
+
   // Black shadow outline
-  const shadow = strategy.createSvgElement(voice);
+  const shadow = makeOutline();
   setAttrs(shadow, {
     fill: 'none',
     stroke: '#000000',
@@ -329,7 +333,7 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
   selectionLayer.append(shadow);
 
   // White marching ants outline
-  const ants = strategy.createSvgElement(voice);
+  const ants = makeOutline();
   setAttrs(ants, {
     fill: 'none',
     stroke: '#ffffff',

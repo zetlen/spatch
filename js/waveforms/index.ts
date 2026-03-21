@@ -9,12 +9,14 @@ import sine from './sine.ts';
 import pulse from './pulse.ts';
 import blend from './blend.ts';
 import astroid from './astroid.ts';
+import stamp from './stamp.ts';
 
 const STRATEGIES = new Map<WaveformType, WaveformStrategy>([
   ['sine', sine],
   ['pulse', pulse],
   ['blend', blend],
   ['astroid', astroid],
+  ['stamp', stamp],
 ]);
 
 /** Look up the strategy for a waveform type. */

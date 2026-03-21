@@ -8,7 +8,10 @@ import { qel } from './dom.ts';
 import { Vibe, setVibe } from './audio/vibe.ts';
 import { getScene } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
+import { prefetchStampSamples, initStampSymbols, decodeStampSamples } from './waveforms/stamp.ts';
 import type { SigilData } from './types.ts';
+
+prefetchStampSamples();
 
 const MIN_PLAY_MS = 2000;
 
@@ -70,6 +73,7 @@ function boot(sigil: SigilData): void {
     const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
     function onFirstGesture(): void {
       audio.warmUp();
+      if (audio.audioCtx) decodeStampSamples(audio.audioCtx);
       for (const evt of warmUpEvents) {
         document.removeEventListener(evt, onFirstGesture);
       }
@@ -82,6 +86,9 @@ function boot(sigil: SigilData): void {
   // ADSR corner radii (static — only set once, not on embed so scene bg shows through corners)
   updateCanvasBorderRadius(tile, sigil.envelope);
   updateCanvasBorderRadius(svgRoot, sigil.envelope, 10);
+
+  // Inject stamp symbols before first render
+  initStampSymbols(svgRoot);
 
   // Initial render (one-shot — state never changes in embed)
   render(svgRoot, sigil, undefined);

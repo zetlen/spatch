@@ -11,7 +11,7 @@ import {
   lightnessToCutoff,
   scheduleFormantSweep,
 } from './formants.ts';
-import { decodeIR } from './ir-loader.ts';
+import { decodeSample } from './sample-loader.ts';
 import { type Vibe, vibe } from './vibe.ts';
 import {
   type AudioVoice,
@@ -229,12 +229,14 @@ export class AudioEngine {
     // Build voices
     const soloActive =
       this._soloVoiceId !== undefined && sigilState.voices.some((v) => v.id === this._soloVoiceId);
+    const decayTime = now + attack;
     for (const voice of sigilState.voices) {
       const audioVoice = this._buildVoice(ctx, voice);
       if (soloActive && voice.id !== this._soloVoiceId) {
         audioVoice.gain.gain.setValueAtTime(0, now);
       }
       audioVoice.start(now);
+      audioVoice.onDecay?.(decayTime);
       this.activeVoices.push(audioVoice);
     }
 
@@ -914,7 +916,7 @@ export class AudioEngine {
       this._pendingIRBuffer = undefined;
     } else {
       const convolver = this._reverbConvolver;
-      decodeIR(ctx, vibe.ir)
+      decodeSample(ctx, vibe.ir)
         .then((buf) => {
           convolver.buffer = buf;
         })

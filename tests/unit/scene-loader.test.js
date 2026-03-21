@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { _clearCaches } from '../../js/audio/ir-loader.ts';
+import { _clearCaches } from '../../js/audio/sample-loader.ts';
 
 // Stub globalThis.fetch before importing the module under test, so fetchIR
 // doesn't hit the network during module-level side effects.

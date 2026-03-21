@@ -238,6 +238,8 @@ body {
   position: relative;
   overflow: hidden;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
   z-index: 1;
   width: min(100cqi, calc(100cqb - var(--play-btn-size) - 24px), 800px);
   aspect-ratio: 1;

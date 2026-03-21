@@ -9,6 +9,7 @@ import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, pathToState, resetDirty, saveToURL } from './serialize.ts';
 import { applyScene, getScene, initStageLayers, randomSceneIndex, SCENES } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
+import { prefetchStampSamples, initStampSymbols, decodeStampSamples } from './waveforms/stamp.ts';
 import { Vibe, setVibe, vibeSignal } from './audio/vibe.ts';
 import { qel } from './dom.ts';
 import { SelectionManager } from './state.ts';
@@ -21,6 +22,7 @@ import { initShare } from './share.ts';
 import { randomize, harmonize } from './harmony.ts';
 import { createHarmonizePanel } from './toolbar/harmonize-panel.ts';
 import { createStagePanel } from './toolbar/stage-panel.ts';
+import { createStamplePanel } from './toolbar/stample-panel.ts';
 import { bindLongPress } from './toolbar/expansion-panel.ts';
 import { ALL_STRATEGIES } from './waveforms/index.ts';
 
@@ -42,12 +44,23 @@ if ('__audioCapture' in globalThis) {
   (globalThis as Record<string, unknown>).__testAudio = audio;
 }
 
+// Stamp voices are gated behind a localStorage flag while the UX is refined.
+// Enable in console: localStorage.setItem('spatch:stamps', '1')
+const stampsEnabled =
+  typeof localStorage !== 'undefined' && localStorage.getItem('spatch:stamps') === '1';
+
+if (stampsEnabled) {
+  prefetchStampSamples();
+  initStampSymbols(svgCanvas);
+}
+
 // Pre-warm AudioContext on first user gesture. iOS Safari only allows audio
 // From touchend, click, doubleclick, or keydown — NOT pointerdown/mousedown.
 {
   const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
   function onFirstGesture(): void {
     audio.warmUp();
+    if (stampsEnabled && audio.audioCtx) decodeStampSamples(audio.audioCtx);
     for (const evt of warmUpEvents) {
       document.removeEventListener(evt, onFirstGesture);
     }
@@ -146,6 +159,31 @@ let sceneReady: Promise<void> = Promise.resolve();
     },
     () => toolbar.panels.toggle('stage'),
   );
+}
+
+// Stamp button: click opens stample picker panel (no delay).
+// Hidden unless stamps are enabled via localStorage flag.
+{
+  const btnStamp = qel('#btn-stamp');
+  if (stampsEnabled) {
+    const stampleArea = qel('#stample-panel');
+    const stamplePanel = createStamplePanel({
+      area: stampleArea,
+      store,
+      undo,
+      getSelectedId: () => selection.voiceId,
+      requestRender: () => {
+        needsRender = true;
+      },
+      onDismiss: () => toolbar.panels.close(),
+    });
+    toolbar.panels.register('stample', stamplePanel, btnStamp, stampleArea);
+    btnStamp.addEventListener('click', () => {
+      toolbar.panels.toggle('stample');
+    });
+  } else {
+    btnStamp.style.display = 'none';
+  }
 }
 
 // React to scene changes (and apply the initial scene on first run):

@@ -1,12 +1,12 @@
 // loader.ts — Scene asset prefetch and loading.
 //
-// Preloads scene images (via Image) and IR bytes (via fetchIR) so they're
+// Preloads scene images (via Image) and IR bytes (via fetchSample) so they're
 // ready before a scene transition. Individual asset failures are absorbed
 // (logged as warnings) so the scene always resolves. Caches successful
 // prefetches; clears failed entries so retries are possible.
 
 import type { Scene } from './scene-types';
-import { fetchIR, decodeIR } from '../audio/ir-loader';
+import { fetchSample, decodeSample } from '../audio/sample-loader';
 import { SCENES, getScene } from './index';
 
 const imageLoaded = new Set<string>();
@@ -63,7 +63,7 @@ export function prefetchScene(scene: Scene): Promise<void> {
 
   if (scene.vibe.ir) {
     tasks.push(
-      fetchIR(scene.vibe.ir)
+      fetchSample(scene.vibe.ir)
         .then(() => undefined)
         .catch((err) => {
           console.warn(`[spatch] Scene "${key}": IR failed —`, err.message);
@@ -84,11 +84,11 @@ export function prefetchScene(scene: Scene): Promise<void> {
 
 /**
  * Decode the prefetched IR for a scene. Returns undefined if the scene has no IR.
- * If not yet prefetched, fetches automatically (via decodeIR's internal fetchIR).
+ * If not yet prefetched, fetches automatically (via decodeSample's internal fetchSample).
  */
 export function loadSceneIR(ctx: BaseAudioContext, scene: Scene): Promise<AudioBuffer | undefined> {
   if (!scene.vibe.ir) return Promise.resolve(undefined);
-  return decodeIR(ctx, scene.vibe.ir);
+  return decodeSample(ctx, scene.vibe.ir);
 }
 
 /**

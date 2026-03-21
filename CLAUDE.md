@@ -80,7 +80,8 @@ js/
   audio/
     engine.ts        AudioEngine class: Web Audio lifecycle, voice management,
                      vibe-driven reverb/EQ/compression, analyser, solo muting
-    ir-loader.ts     Two-layer IR cache: fetchIR (bytes) + decodeIR (AudioBuffer)
+    sample-loader.ts Two-layer sample cache: fetchSample (bytes) + decodeSample
+                     (AudioBuffer). Used for both scene IRs and stample audio
     mapping.ts       Audio mapping functions (pitch, pan, gain, timbre, formants)
     node-utils.ts    Pure audio utilities (safeStop, safeDisconnect,
                      makeSaturationCurve, createPWMWaveshaper) — no vibe or
@@ -99,6 +100,15 @@ js/
     pulse.ts         Pulse waveform strategy (square, PWM osc)
     blend.ts         Blend waveform strategy (triangle, saw/tri crossfade)
     astroid.ts       Astroid waveform strategy (astroid curve, 6-oscillator supersaw)
+    stamp.ts         Stamp waveform strategy (stample silhouette, sample playback)
+  stamples/
+    stample-types.ts Stample interface (name, svgRaw, sampleUrl, referencePitch,
+                     tuning params, hull path)
+    index.ts         STAMPLES registry, getStample(), ResolvedStample, StampleSvg
+    <name>/          One directory per stample (see "Stample convention" below)
+      index.ts       Default export of Stample object
+      stamp.svg      Detailed SVG silhouette for rendering
+      sample.mp3     Audio sample
   scenes/
     scene-types.ts   Scene interface (name, icon, stageBackground, imageCredit, creditUrl?, vibe)
     index.ts         SCENES registry, getScene(), applyScene() crossfade,
@@ -121,6 +131,7 @@ js/
     pattern-panel.ts Pattern effect expansion panel (declarative entries)
     harmonize-panel.ts Scale picker expansion panel (declarative entries)
     stage-panel.ts   Scene picker expansion panel (declarative entries)
+    stample-panel.ts Stample picker expansion panel (stamp voice variant selector)
     dom-helpers.ts   createIconButton and svgEl helpers for toolbar panels
   debug/
     vibe-tuner.ts    Vibe tuner side drawer (shipped in prod, dynamically imported
@@ -288,7 +299,8 @@ design rationale and enumeration of past violations.
 ## Key Concepts
 
 - **Voices** are the primary objects: circle (sine), square (pulse), triangle
-  (saw/tri blend), and astroid (6-oscillator supersaw). Each voice is a discriminated union on `waveform`. Every field
+  (saw/tri blend), astroid (6-oscillator supersaw), and stamp (sample-based
+  silhouette). Each voice is a discriminated union on `waveform`. Every field
   maps to both a visual property and an audio parameter:
   - `x` → horizontal position + stereo pan
   - `y` → vertical position + pitch (chromatic, 3 octaves G2–G5, magnetic
@@ -298,8 +310,11 @@ design rationale and enumeration of past violations.
   - `effect` → pattern overlay + audio effect chain
   - `timbre` (pulse/blend/astroid only) → rotation + waveform parameter. Linear
     sawtooth ramp, periodic per vertex count (90° for square and astroid, 120° for
-    triangle). Every angle within the period maps to a unique timbre. Circles have
-    no timbre and no rotation.
+    triangle). Every angle within the period maps to a unique timbre. Circles and
+    stamps have no timbre and no rotation.
+  - `stamp` (stamp only) → index into the STAMPLES registry, selecting which
+    silhouette SVG and audio sample to use. Pitch is controlled via sample
+    playback rate rather than oscillators.
   - `blend` → CSS `mix-blend-mode` + cross-voice FM synthesis.
     Default is `screen`. All 3 modes are commutative (symmetric), so voice
     ordering is not data — DOM order has no effect on visuals or audio.
@@ -310,7 +325,7 @@ design rationale and enumeration of past violations.
     FM character: screen (default, no FM), multiply (exponential depth,
     index 1.5), difference (linear depth, index 1.5). Modulation depth is
     derived geometrically from pairwise shape overlap. The 16 waveform-pair
-    combinations (sine/pulse/blend/astroid × sine/pulse/blend/astroid) produce naturally
+    combinations (sine/pulse/blend/astroid/stamp × sine/pulse/blend/astroid/stamp) produce naturally
     distinct FM timbres because different modulator waveforms create
     different harmonic spectra.
   - `border` → inset stroke(s) on the shape + octave-doubled sine oscillator.
@@ -345,10 +360,11 @@ design rationale and enumeration of past violations.
   `setVibe()` updates alongside the module binding. `app.ts` subscribes
   via `effect()` to push vibe changes to the audio engine in real time.
   Imperative audio code (`engine.ts`, `voice-builder.ts`, `formants.ts`)
-  reads the non-reactive `vibe` export directly. IR loading uses a
-  two-phase cache (`audio/ir-loader.ts`): `fetchIR()` fetches raw bytes
-  (no AudioContext needed, enabling prefetch before user gesture), and
-  `decodeIR()` decodes to an `AudioBuffer` on demand. The debug tuner
+  reads the non-reactive `vibe` export directly. Sample loading uses a
+  two-phase cache (`audio/sample-loader.ts`): `fetchSample()` fetches raw
+  bytes (no AudioContext needed, enabling prefetch before user gesture), and
+  `decodeSample()` decodes to an `AudioBuffer` on demand. Used for both
+  scene IRs and stample audio samples. The debug tuner
   (hidden URL param) exposes all params in a side drawer and auto-syncs
   sliders when the scene changes externally.
 
@@ -419,8 +435,10 @@ extract it into a shared function or helper. No exceptions. DRY it up.
 - **Fill** is a discriminated union (`SolidFill | LinearFill`). The
   toolbar uses a flat `FillDraft` bag internally for mode-switching without data loss,
   converted via `fillToFillDraft()` / `fillDraftToFill()`.
-- **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice | AstroidVoice`),
-  discriminated on the `waveform` field. Sine has no `timbre`; pulse, blend, and astroid do.
+- **Voice** is a discriminated union (`SineVoice | PulseVoice | BlendVoice | AstroidVoice | StampVoice`),
+  discriminated on the `waveform` field. Sine and stamp have no `timbre`;
+  pulse, blend, and astroid do. Stamp has a `stamp: number` field indexing
+  into the STAMPLES registry.
   All per-waveform behavior lives in `js/waveforms/<name>.ts` strategy files,
   dispatched through `getStrategy(voice.waveform)`. Each strategy is the unified
   delegate for its waveform across all three projections: interface
@@ -594,9 +612,14 @@ Before opening or updating a pull request, verify:
   exports a `Scene` object. Import and add it to `SCENES` in
   `js/scenes/index.ts`. Tune vibe params using the hidden vibe tuner URL param. See "Scene
   convention" below for the full format.
+- To add a new stample: create a directory under `js/stamples/<name>/` with
+  `stamp.svg` (detailed silhouette), `sample.mp3` (audio sample), and an
+  `index.ts` that default-exports a `Stample` object. Import and add it to
+  `STAMPLES` in `js/stamples/index.ts`. See "Stample convention" below for
+  the full format.
 - The `embed.html` page imports the same modules as the main app but only uses
   `canvas/render.ts`, `audio/engine.ts`, `serialize.ts`, `scenes/`,
-  `audio/ir-loader.ts`, and `shapes.ts`. It reads state from the URL
+  `audio/sample-loader.ts`, and `shapes.ts`. It reads state from the URL
   pathname (`/embed/<data>`) with hash migration for old URLs. It blocks
   reveal and playback until scene assets are loaded. The script `src`
   must use an absolute path (`/js/embed-entry.ts`) because the page is
@@ -637,7 +660,7 @@ export default scene;
 
 Vite resolves the `.jpg` and `.m4a` imports to asset URLs at build time. The
 `ir` field in `vibe` points to the IR file's URL; it is fetched by
-`ir-loader.ts` and decoded into an `AudioBuffer` for the ConvolverNode. Scenes
+`sample-loader.ts` and decoded into an `AudioBuffer` for the ConvolverNode. Scenes
 without an IR file omit the `ir` import and field.
 
 **To add a new scene:**
@@ -646,7 +669,53 @@ without an IR file omit the `ir` import and field.
 3. Tune vibe overrides using the hidden vibe tuner URL param in dev mode.
 
 **Asset loading:** `prefetchScene()` preloads both the background image (via
-`new Image()`) and IR bytes (via `fetchIR()`) before a scene transition begins.
-`loadSceneIR()` decodes the prefetched bytes into an `AudioBuffer` when an
-`AudioContext` is available. After each scene change, the next scene's assets
+`new Image()`) and IR bytes (via `fetchSample()`) before a scene transition
+begins. `loadSceneIR()` decodes the prefetched bytes into an `AudioBuffer` when
+an `AudioContext` is available. After each scene change, the next scene's assets
 are preloaded in the background via `preloadNextScene()`.
+
+## Stample Convention
+
+Each stample is a self-contained directory under `js/stamples/<name>/`:
+
+```
+js/stamples/palm-tree/
+  index.ts       Stample definition (default export)
+  stamp.svg      Detailed SVG silhouette for rendering
+  sample.mp3     Audio sample for playback
+```
+
+The `index.ts` follows a fixed pattern:
+
+```ts
+import type { Stample } from '../stample-types';
+import svgRaw from './stamp.svg?raw';
+import sampleUrl from './sample.mp3';
+
+const stample: Stample = {
+  name: 'stample-name',
+  svgRaw,
+  sampleUrl,
+  referencePitch: 1200,      // Hz — native pitch of the sample
+  shapeAreaCoeff: 1.2,       // area-to-gain coefficient
+  gainExponent: 1.0,         // gain curve exponent
+  formantMaxQ: 4,            // max formant filter Q
+  // Hull path must use only M, L, Z commands (no curves/arcs).
+  // Coordinates match the stamp SVG's viewBox.
+  hull: 'M 630,575 L 670,580 ... Z',
+};
+
+export default stample;
+```
+
+Vite resolves the `.svg?raw` import to a raw string and the `.mp3` import to
+an asset URL at build time. The `hull` path is a simplified outline of the
+silhouette used for selection marching ants and hit-testing. It must use only
+`M`, `L`, and `Z` SVG path commands — no curves or arcs.
+
+**To add a new stample:**
+1. Create `js/stamples/<name>/` with `stamp.svg`, `sample.mp3`, and `index.ts`.
+2. Import the stample in `js/stamples/index.ts` and append it to the `STAMPLES`
+   array via `resolve()`.
+3. The hull path should trace the stample's silhouette outline using only
+   `M`, `L`, `Z` commands in the SVG's viewBox coordinate space.

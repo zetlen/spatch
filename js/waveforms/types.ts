@@ -53,7 +53,12 @@ export interface AudioVoice {
   lastSize: number;
 
   // Bound by strategy -- no external dispatch needed
+  /** Called when playback begins (attack phase starts). */
   start(time: number): void;
+  /** Called when the attack phase ends and decay begins. Optional — stamps
+   *  use this to fire their one-shot sample at peak amplitude. */
+  onDecay?(time: number): void;
+  /** Called when release begins (user stops playing). */
   stop(time: number): void;
   updateParams(voice: Voice, now: number): void;
   /** Sync strategy-specific params when global vibe changes (e.g. warmth shaper). */
@@ -90,6 +95,10 @@ export interface WaveformStrategy {
   createSvgElement(voice: Voice): SVGElement;
   /** Update an existing SVG shape element to match the voice. */
   updateSvgElement(el: SVGElement, voice: Voice): void;
+  /** Create an SVG element for the selection outline (marching ants).
+   *  Defaults to createSvgElement if not provided. Override for waveforms
+   *  where the rendered shape can't take a stroke (e.g. <use> + <symbol>). */
+  createSelectionElement?(voice: Voice): SVGElement;
   /** Create and return all selection handle elements (resize squares + rotation handle if applicable).
    *  Each element has `data-handle` set to its HandleType. */
   selectionHandles(voice: Voice): SVGElement[];

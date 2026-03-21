@@ -525,4 +525,76 @@ test.describe('Audio waveform snapshots', () => {
       maxDiffPixelRatio: 0.05,
     });
   });
+
+  // Stamp audio tests verify non-silence rather than pixel-exact snapshots.
+  // Sample decoding (decodeAudioData) varies across platforms — the same MP3
+  // decoded on macOS vs the CI Docker image produces different PCM, making
+  // snapshot comparisons brittle. Oscillator tests don't have this problem
+  // because the math is deterministic.
+  test.describe('stamp voices', () => {
+    /** Assert captured audio PNG has non-trivial content (not all-black). */
+    function expectNonSilent(pngBase64) {
+      const buf = Buffer.from(pngBase64, 'base64');
+      // A silent capture is ~5KB (axes + labels only). Real audio is 30KB+.
+      expect(buf.length).toBeGreaterThan(15000);
+    }
+
+    test('single palm-tree stamp produces audio', async ({ page }) => {
+      await page.evaluate(() => {
+        const store = globalThis.__testStore;
+        store.addVoice('stamp', 0.5, 0.5);
+        store.updateVoice(store.data.voices.at(-1).id, { stamp: 0 });
+      });
+      const png = await captureAudio(page);
+      expectNonSilent(png);
+    });
+
+    test('single energy-dome stamp at high pitch produces audio', async ({ page }) => {
+      await page.evaluate(() => {
+        const store = globalThis.__testStore;
+        store.addVoice('stamp', 0.5, 0.2);
+        store.updateVoice(store.data.voices.at(-1).id, { stamp: 1 });
+      });
+      const png = await captureAudio(page);
+      expectNonSilent(png);
+    });
+
+    test('single champagne stamp at low pitch produces audio', async ({ page }) => {
+      await page.evaluate(() => {
+        const store = globalThis.__testStore;
+        store.addVoice('stamp', 0.5, 0.8);
+        store.updateVoice(store.data.voices.at(-1).id, { stamp: 2 });
+      });
+      const png = await captureAudio(page);
+      expectNonSilent(png);
+    });
+
+    test('stamp mixed with oscillator voices produces audio', async ({ page }) => {
+      await page.evaluate(() => {
+        const store = globalThis.__testStore;
+        store.addVoice('sine', 0.3, 0.3);
+        store.addVoice('stamp', 0.5, 0.5);
+        store.updateVoice(store.data.voices.at(-1).id, { stamp: 0 });
+        store.addVoice('pulse', 0.6, 0.55);
+        store.updateVoice(store.data.voices.at(-1).id, {
+          blend: 'multiply',
+          size: 0.3,
+        });
+      });
+      const png = await captureAudio(page);
+      expectNonSilent(png);
+    });
+
+    test('two stamps at different pitches produce audio', async ({ page }) => {
+      await page.evaluate(() => {
+        const store = globalThis.__testStore;
+        store.addVoice('stamp', 0.3, 0.2);
+        store.updateVoice(store.data.voices.at(-1).id, { stamp: 1 });
+        store.addVoice('stamp', 0.7, 0.7);
+        store.updateVoice(store.data.voices.at(-1).id, { stamp: 2 });
+      });
+      const png = await captureAudio(page);
+      expectNonSilent(png);
+    });
+  });
 });

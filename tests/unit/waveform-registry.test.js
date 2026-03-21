@@ -3,7 +3,7 @@ import { getStrategy, ALL_STRATEGIES } from '../../js/waveforms/index.ts';
 
 describe('waveform strategy registry', () => {
   test('getStrategy returns a strategy for each waveform type', () => {
-    const waveforms = ['sine', 'pulse', 'blend', 'astroid'];
+    const waveforms = ['sine', 'pulse', 'blend', 'astroid', 'stamp'];
     for (const wf of waveforms) {
       const strategy = getStrategy(wf);
       expect(strategy).toBeDefined();
@@ -12,12 +12,13 @@ describe('waveform strategy registry', () => {
   });
 
   test('ALL_STRATEGIES contains all strategies', () => {
-    expect(ALL_STRATEGIES).toHaveLength(4);
+    expect(ALL_STRATEGIES).toHaveLength(5);
     const waveforms = ALL_STRATEGIES.map((s) => s.waveform);
     expect(waveforms).toContain('sine');
     expect(waveforms).toContain('pulse');
     expect(waveforms).toContain('blend');
     expect(waveforms).toContain('astroid');
+    expect(waveforms).toContain('stamp');
   });
 
   test('ALL_STRATEGIES is sorted by serializationIndex', () => {
@@ -28,11 +29,12 @@ describe('waveform strategy registry', () => {
     }
   });
 
-  test('serialization indices are 0, 1, 2, 3', () => {
+  test('serialization indices are 0–4', () => {
     expect(ALL_STRATEGIES[0].serializationIndex).toBe(0);
     expect(ALL_STRATEGIES[1].serializationIndex).toBe(1);
     expect(ALL_STRATEGIES[2].serializationIndex).toBe(2);
     expect(ALL_STRATEGIES[3].serializationIndex).toBe(3);
+    expect(ALL_STRATEGIES[4].serializationIndex).toBe(4);
   });
 });
 
@@ -249,11 +251,12 @@ describe('astroid strategy identity', () => {
 });
 
 describe('strategy serialization indices match existing format', () => {
-  test('sine = 0, pulse = 1, blend = 2, astroid = 3', () => {
+  test('sine = 0, pulse = 1, blend = 2, astroid = 3, stamp = 4', () => {
     expect(getStrategy('sine').serializationIndex).toBe(0);
     expect(getStrategy('pulse').serializationIndex).toBe(1);
     expect(getStrategy('blend').serializationIndex).toBe(2);
     expect(getStrategy('astroid').serializationIndex).toBe(3);
+    expect(getStrategy('stamp').serializationIndex).toBe(4);
   });
 
   test('ALL_STRATEGIES[wf] lookup by index matches getStrategy', () => {
@@ -261,5 +264,77 @@ describe('strategy serialization indices match existing format', () => {
     expect(ALL_STRATEGIES[1]).toBe(getStrategy('pulse'));
     expect(ALL_STRATEGIES[2]).toBe(getStrategy('blend'));
     expect(ALL_STRATEGIES[3]).toBe(getStrategy('astroid'));
+    expect(ALL_STRATEGIES[4]).toBe(getStrategy('stamp'));
+  });
+});
+
+// ---- Stamp strategy tests ----
+
+describe('stamp strategy', () => {
+  const s = getStrategy('stamp');
+
+  test('identity properties', () => {
+    expect(s.shapeName).toBe('stamp');
+    expect(s.svgTag).toBe('g');
+    expect(s.hasTimbre).toBe(false);
+    expect(s.rotationPeriod).toBe(0);
+    expect(s.serializationIndex).toBe(4);
+    expect(s.oscillatorType).toBe('sine');
+  });
+
+  test('createVoice produces stamp voice with stamp field', () => {
+    const base = {
+      id: 'st1',
+      x: 0.5,
+      y: 0.5,
+      size: 0.25,
+      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
+      effect: undefined,
+      blend: 'screen',
+      border: undefined,
+    };
+    const voice = s.createVoice(base);
+    expect(voice.waveform).toBe('stamp');
+    expect('stamp' in voice).toBe(true);
+    expect('timbre' in voice).toBe(false);
+  });
+
+  test('packExtra/unpackExtra round-trips stamp index', () => {
+    const voice = {
+      waveform: 'stamp',
+      stamp: 2,
+      id: 'st2',
+      x: 0.5,
+      y: 0.5,
+      size: 0.25,
+      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
+      effect: undefined,
+      blend: 'screen',
+      border: undefined,
+    };
+    const packed = s.packExtra(voice);
+    expect(packed).toHaveLength(1);
+
+    const result = s.unpackExtra(packed, 0);
+    expect(result.bytesRead).toBe(1);
+    expect(result.fields.stamp).toBe(2);
+  });
+
+  test('packExtra/unpackExtra round-trips stamp index 0', () => {
+    const voice = {
+      waveform: 'stamp',
+      stamp: 0,
+      id: 'st3',
+      x: 0.5,
+      y: 0.5,
+      size: 0.25,
+      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
+      effect: undefined,
+      blend: 'screen',
+      border: undefined,
+    };
+    const packed = s.packExtra(voice);
+    const result = s.unpackExtra(packed, 0);
+    expect(result.fields.stamp).toBe(0);
   });
 });
