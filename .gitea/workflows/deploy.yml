@@ -13,7 +13,7 @@ jobs:
         with:
           token: ${{ secrets.PUSH_TOKEN }}
 
-      - run: mise install
+      - run: apt install -y unzip && curl -fsSL https://bun.com/install | bash
       - run: bun install --frozen-lockfile && bun run check && bun run lint && bun run test:unit
 
       - name: Build
