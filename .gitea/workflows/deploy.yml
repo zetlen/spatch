@@ -14,10 +14,7 @@ jobs:
           token: ${{ secrets.PUSH_TOKEN }}
 
       - run: mise install
-      - run: bun install --frozen-lockfile
-      - run: bun run check
-      - run: bun run lint
-      - run: bun run test:unit
+      - run: bun install --frozen-lockfile && bun run check && bun run lint && bun run test:unit
 
       - name: Build
         env:
