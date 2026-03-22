@@ -1,6 +1,6 @@
 {
   "name": "spatch",
-  "version": "2026.03.91",
+  "version": "2026.03.92",
   "private": true,
   "type": "module",
   "scripts": {
