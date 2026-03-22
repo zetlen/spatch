@@ -8,15 +8,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    env:
+      BUN_INSTALL: /root/.bun
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.PUSH_TOKEN }}
 
-      - run: |
-          apt install -y unzip && curl -fsSL https://bun.com/install | bash
-          . ~/.bashrc
-          bun install --frozen-lockfile && bun run check && bun run lint && bun run test:unit
+      - name: Install Bun
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends unzip
+          curl -fsSL https://bun.sh/install | bash
+          echo "$BUN_INSTALL/bin" >> $GITHUB_PATH
+
+      - run: bun install --frozen-lockfile && bun run check && bun run lint && bun run test:unit
 
       - name: Build
         env:
