@@ -1,7 +1,7 @@
 // engine.ts — Web Audio engine: AudioEngine class
 
 import { computeOverlap, createEffect, FM_PARAMS, computeFMDepth } from '../effects.ts';
-import { type Envelope, type SigilData, type Voice } from '../types.ts';
+import { type Envelope, type NormalizedCoord, type SigilData, type Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import {
   applyFormantFilter,
@@ -234,6 +234,7 @@ export class AudioEngine {
       const audioVoice = this._buildVoice(ctx, voice);
       if (soloActive && voice.id !== this._soloVoiceId) {
         audioVoice.gain.gain.setValueAtTime(0, now);
+        if (audioVoice.octaveGainNode) audioVoice.octaveGainNode.gain.setValueAtTime(0, now);
       }
       audioVoice.start(now);
       audioVoice.onDecay?.(decayTime);
@@ -516,6 +517,7 @@ export class AudioEngine {
         const audioVoice = this._buildVoice(ctx, voice);
         if (soloActive && voice.id !== this._soloVoiceId) {
           audioVoice.gain.gain.setValueAtTime(0, now);
+          if (audioVoice.octaveGainNode) audioVoice.octaveGainNode.gain.setValueAtTime(0, now);
         }
         audioVoice.start(now);
         // Schedule diphthong sweep for new linear-fill voices added mid-playback
@@ -571,6 +573,7 @@ export class AudioEngine {
         const rebuilt = this._buildVoice(ctx, voice);
         if (soloActive && voice.id !== this._soloVoiceId) {
           rebuilt.gain.gain.setValueAtTime(0, now);
+          if (rebuilt.octaveGainNode) rebuilt.octaveGainNode.gain.setValueAtTime(0, now);
         }
         rebuilt.start(now);
         this.activeVoices.push(rebuilt);
@@ -585,6 +588,20 @@ export class AudioEngine {
         isMuted ? 0 : vibe.voiceGain(voice.waveform, voice.size),
         now,
       );
+      if (audioVoice.octaveGainNode) {
+        audioVoice.octaveGainNode.gain.setValueAtTime(
+          isMuted
+            ? 0
+            : vibe.borderOctaveGain(
+                voice.waveform,
+                voice.size,
+                voice.border?.thickness ?? (0 as NormalizedCoord),
+                voice.border?.color ?? 'white',
+                voice.border?.double ?? false,
+              ),
+          now,
+        );
+      }
       audioVoice.panner.pan.setValueAtTime(vibe.xToPan(voice.x), now);
 
       // Detect position/size changes for incremental FM sync

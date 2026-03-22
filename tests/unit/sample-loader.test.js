@@ -1,15 +1,18 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { fetchSample, decodeSample, _clearCaches } from '../../js/audio/sample-loader.ts';
 
-// Stub fetch globally
-let fetchStub;
+// Save/restore fetch in beforeEach/afterEach so parallel test files
+// don't race on the global. The stub functions no longer save it.
+let originalFetch;
+beforeEach(() => {
+  originalFetch = globalThis.fetch;
+});
 afterEach(() => {
+  globalThis.fetch = originalFetch;
   _clearCaches();
-  globalThis.fetch = fetchStub;
 });
 
 function stubFetch(arrayBuffer) {
-  fetchStub = globalThis.fetch;
   globalThis.fetch = () =>
     Promise.resolve({
       ok: true,
@@ -18,7 +21,6 @@ function stubFetch(arrayBuffer) {
 }
 
 function stubFetchFail() {
-  fetchStub = globalThis.fetch;
   globalThis.fetch = () => Promise.resolve({ ok: false, status: 404 });
 }
 
@@ -44,7 +46,6 @@ describe('fetchSample', () => {
   test('deduplicates concurrent requests', async () => {
     let callCount = 0;
     const buf = new ArrayBuffer(16);
-    fetchStub = globalThis.fetch;
     globalThis.fetch = () => {
       callCount++;
       return Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(buf) });
