@@ -13,8 +13,10 @@ jobs:
         with:
           token: ${{ secrets.PUSH_TOKEN }}
 
-      - run: apt install -y unzip && curl -fsSL https://bun.com/install | bash
-      - run: bun install --frozen-lockfile && bun run check && bun run lint && bun run test:unit
+      - run: |
+          apt install -y unzip && curl -fsSL https://bun.com/install | bash
+          . ~/.bashrc
+          bun install --frozen-lockfile && bun run check && bun run lint && bun run test:unit
 
       - name: Build
         env:
