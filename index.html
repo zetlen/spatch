@@ -2,6 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- user-scalable=no: prevents double-tap zoom on mobile, which would
+         intercept the double-click gesture used for selection cycling -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
@@ -66,6 +68,9 @@
       </header>
 
       <main id="stage">
+        <!-- canvas-wrap: div owns dark bg, ADSR corner radii, bevel border, and
+             audio-reactive elevation shadow. SVG is transparent and renders shapes
+             + selection UI only, ensuring they appear above the shadow. -->
         <div id="canvas-wrap">
           <div id="tile"></div>
           <svg id="sigil-canvas" viewBox="0 0 1 1" preserveAspectRatio="xMidYMid meet"></svg>
