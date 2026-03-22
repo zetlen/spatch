@@ -38,15 +38,22 @@ jobs:
       - run: bun run lint
       - run: bun run test:unit
 
-      - name: Build and deploy
+      - name: Build
         env:
           VITE_UMAMI_URL: ${{ vars.VITE_UMAMI_URL }}
           VITE_UMAMI_SITE_ID: ${{ vars.VITE_UMAMI_SITE_ID }}
+        run: bun run build
+
+      - name: Deploy via rsync
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
-          bun run build
-          docker cp dist/. spatch:/usr/share/nginx/html/
-          docker cp nginx.conf spatch:/etc/nginx/conf.d/default.conf
-          docker exec spatch nginx -s reload
+          eval "$(ssh-agent -s)"
+          echo "$DEPLOY_SSH_KEY" | ssh-add -
+          rsync -az -e 'ssh -o StrictHostKeyChecking=accept-new' --delete dist/ ${{ vars.DEPLOY_HOST }}:${{ vars.DEPLOY_TARGET }}/
+          rsync -az -e 'ssh -o StrictHostKeyChecking=accept-new' nginx.conf ${{ vars.DEPLOY_HOST }}:/etc/nginx/conf.d/default.conf
+          ssh -o StrictHostKeyChecking=accept-new ${{ vars.DEPLOY_HOST }} 'sudo nginx -s reload'
+          ssh-agent -k
 
       - name: Post-deploy health check
         run: |
