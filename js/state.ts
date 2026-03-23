@@ -17,7 +17,7 @@ import {
 } from './types.ts';
 import { createRandomFill } from './colors.ts';
 import { DEFAULT_BLEND } from './effects.ts';
-import { getStrategy } from './waveforms/index.ts';
+import { createVoice as registryCreateVoice } from './voices/registry.ts';
 
 let _idCounter = 0;
 /**
@@ -49,7 +49,7 @@ function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCo
     x,
     y,
   };
-  return getStrategy(waveform).createVoice(base);
+  return registryCreateVoice(waveform, base);
 }
 
 // --- Pure data store (CRUD + reactive signal, no undo, no selection) ---

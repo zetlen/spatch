@@ -6,7 +6,7 @@
 
 import type { SigilStore, UndoManager } from '../state.ts';
 import { STAMPLES } from '../stamples/index.ts';
-import { setDefaultStampleIndex, getDefaultStampleIndex } from '../waveforms/stamp.ts';
+import { setDefaultStampleIndex, getDefaultStampleIndex } from '../voices/stamp/lifecycle.ts';
 import { createExpansionPanel, type ExpansionPanel } from './expansion-panel.ts';
 
 export function createStamplePanel(deps: {

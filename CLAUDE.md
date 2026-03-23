@@ -73,14 +73,19 @@ js/
     voice-builder.ts Voice audio graph plumbing (formants, effects, borders)
     vibe.ts          Vibe class: gain curves, reverb, EQ, compression, synthesis
     formants.ts      Formant filter bank for fill-driven vowel synthesis
-  waveforms/
-    types.ts         WaveformStrategy, AudioVoice, AudioSharedNodes interfaces
-    index.ts         Registry: getStrategy(), ALL_STRATEGIES
-    sine.ts          Circle → sine oscillator
-    pulse.ts         Square → PWM oscillator
-    blend.ts         Triangle → saw/tri crossfade
-    astroid.ts       Astroid curve → 6-oscillator supersaw
-    stamp.ts         Stample silhouette → sample playback
+  voices/
+    types.ts         Delegate interfaces (VoiceUI, VoicePlayer, VoiceSerializer),
+                     AudioVoice, AudioSharedNodes
+    registry.ts      Voice type registry: get(), getById(), all(), createVoice()
+    b64.ts           Base64 encode/decode utilities
+    serializers/
+      oscillator.ts  Shared register serializer (sine, pulse, blend, astroid)
+      sample.ts      Shared register serializer (stamp, future sample voices)
+    sine/            Circle → sine oscillator (ui.ts, player.ts, index.ts)
+    pulse/           Square → PWM oscillator (ui.ts, player.ts, index.ts)
+    blend/           Triangle → saw/tri crossfade (ui.ts, player.ts, index.ts)
+    astroid/         Astroid → 6-osc supersaw (ui.ts, player.ts, index.ts)
+    stamp/           Stample → sample playback (ui.ts, player.ts, lifecycle.ts, index.ts)
   stamples/
     stample-types.ts Stample interface
     index.ts         STAMPLES registry, getStample(), resolve()
@@ -189,8 +194,10 @@ See `docs/plans/2026-03-01-bijective-audio-visual-design.md` for full rationale.
 Interface and Serializer are bijective — every field must round-trip without
 loss. Audio is one-way; there is no `audioToState()`.
 
-`WaveformStrategy` is the unified delegate for the Voice domain across all
-three projections. See `docs/waveform-strategy-refactor.md` for the ER diagram.
+The voice registry (`js/voices/registry.ts`) maps each waveform type to
+three delegates — **UI** (SVG + interaction), **Player** (audio graph),
+**Serializer** (register-based wire format). See
+`docs/plans/2026-03-23-voice-delegates-design.md` for the full design.
 
 **Ephemeral view state** (`PlaybackController`, `SelectionManager`,
 `SplashController`) drives audio and DOM but is never serialized, no undo.
@@ -224,8 +231,9 @@ Field-level details (blend, border, fill, ADSR, play modes) are documented
 in code comments (`types.ts`, `effects.ts`, `voice-builder.ts`, `shapes.ts`,
 `playback.ts`).
 
-**Serialization policy**: bespoke Base64, bitfield-packed, path-based. **No
-backwards compatibility until v1** — no migration code, no version checks.
+**Serialization policy**: v2 register-based format. Perceptually quantized
+(6-bit spatial, 3-bit envelope, 3-bit border). Version byte enables future
+evolution. v1 URLs are not migrated. **No backwards compatibility until v1.**
 
 ## Code Conventions
 
@@ -233,8 +241,9 @@ backwards compatibility until v1** — no migration code, no version checks.
 - Coordinates: normalized 0–1, branded `NormalizedCoord`. Use `normalizedCoord()`,
   `degrees()`, `cents()` from `types.ts` at boundaries — no raw `as` casts.
 - Shape IDs: counter + random suffix (e.g., `s1a3f`).
-- Per-waveform behavior: `js/waveforms/<name>.ts` strategies dispatched via
-  `getStrategy()`. `AudioVoice` is uniform — callers never test waveform names.
+- Per-waveform behavior: `js/voices/<name>/` folders with UI, Player, and
+  index.ts delegates. Dispatched via `registry.get(wf)`. `AudioVoice` is
+  uniform — callers never test waveform names.
 - `InteractionState`: discriminated union for canvas state machine.
 - Voice DOM order not enforced by reconciler — allows selection cycling to
   persist across renders.
@@ -269,11 +278,16 @@ Privileges revoked after any `await`. See `audio/engine.ts:_init()` and
 
 ### Add a new waveform/shape
 
-1. Create `js/waveforms/<name>.ts` implementing `WaveformStrategy`:
-   `createSvgElement`/`updateSvgElement`, `selectionHandles`, `buildAudioGraph`,
-   `packExtra`/`unpackExtra`, `createVoice`, `getTimbre`/`withTimbre`,
-   `gainExponent`, `shapeAreaCoeff`.
-2. Add import + map entry in `js/waveforms/index.ts`.
+1. Create `js/voices/<name>/` with three files:
+   - `ui.ts`: SVG rendering (`createSvgElement`, `updateSvgElement`,
+     `selectionHandles`) implementing `VoiceUI`.
+   - `player.ts`: Audio graph (`buildAudioGraph`) implementing `VoicePlayer`.
+     Set `oscillatorType`, `shapeAreaCoeff`, `formantMaxQ`, `gainExponent`.
+   - `index.ts`: Registry entry wiring UI + Player + serializer.
+     Use `oscillatorSerializer` for oscillator voices, `sampleSerializer` for
+     sample-based voices. Set `createVoice` factory with waveform-specific
+     field defaults.
+2. Add import + `register()` call in `js/voices/registry.ts`.
 3. Add Voice variant in `types.ts`.
 4. Add toolbar button in `index.html`.
 5. Every field MUST have both visual and audio mappings.

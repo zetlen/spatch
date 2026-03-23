@@ -8,7 +8,7 @@ import { ensureLinearGradient, getSolidFillColor } from '../colors.ts';
 import { ensurePatternDefs, getPatternOverlay } from '../patterns.ts';
 import { voiceRotation } from '../shapes.ts';
 import type { SigilData, Voice } from '../types.ts';
-import { getStrategy } from '../waveforms/index.ts';
+import { get } from '../voices/registry.ts';
 
 // ---- Touch tracking ----
 
@@ -85,15 +85,15 @@ function ensureLayers(svg: SVGSVGElement): {
 // ---- Shape geometry (delegated to waveform strategies) ----
 
 function createShapeElement(voice: Voice): SVGElement {
-  return getStrategy(voice.waveform).createSvgElement(voice);
+  return get(voice.waveform).ui.createSvgElement(voice);
 }
 
 function updateShapeElement(el: SVGElement, voice: Voice): void {
-  getStrategy(voice.waveform).updateSvgElement(el, voice);
+  get(voice.waveform).ui.updateSvgElement(el, voice);
 }
 
 function shapeTagName(voice: Voice): string {
-  return getStrategy(voice.waveform).svgTag;
+  return get(voice.waveform).ui.svgTag;
 }
 
 // ---- Transform for rotation ----
@@ -311,15 +311,15 @@ function reconcileVoices(
 // ---- Selection UI ----
 
 function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch: boolean): void {
-  const strategy = getStrategy(voice.waveform);
+  const ui = get(voice.waveform).ui;
   const rotDeg = voiceRotation(voice);
   const groupTransform = rotDeg !== 0 ? `rotate(${rotDeg}, ${voice.x}, ${voice.y})` : undefined;
   const strokeWidth = isTouch ? '0.003' : '0.002';
   const dashArray = '0.008 0.008';
 
-  const makeOutline = strategy.createSelectionElement
-    ? () => strategy.createSelectionElement!(voice)
-    : () => strategy.createSvgElement(voice);
+  const makeOutline = ui.createSelectionElement
+    ? () => ui.createSelectionElement!(voice)
+    : () => ui.createSvgElement(voice);
 
   // Black shadow outline
   const shadow = makeOutline();
@@ -346,8 +346,8 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
 
   if (isTouch) return; // Touch: just the marching ants
 
-  // Resize + rotation handles — fully owned by the strategy
-  for (const handle of strategy.selectionHandles(voice)) {
+  // Resize + rotation handles — fully owned by the UI delegate
+  for (const handle of ui.selectionHandles(voice)) {
     if (groupTransform) handle.setAttribute('transform', groupTransform);
     selectionLayer.append(handle);
   }

@@ -6,7 +6,7 @@
 
 import { signal } from '@preact/signals-core';
 import type { BorderColor, WaveformType } from '../types.ts';
-import { ALL_STRATEGIES, getStrategy } from '../waveforms/index.ts';
+import { all, get } from '../voices/registry.ts';
 
 export interface VibeOptions {
   // Existing
@@ -137,9 +137,9 @@ export class Vibe {
     this.norm = opts?.norm ?? VIBE_DEFAULTS.norm;
     this.refMult = opts?.refMult ?? VIBE_DEFAULTS.refMult;
     this.GAIN_EXPONENT = {} as Record<WaveformType, number>;
-    for (const strategy of ALL_STRATEGIES) {
-      this.GAIN_EXPONENT[strategy.waveform] =
-        opts?.exponents?.[strategy.waveform] ?? strategy.gainExponent;
+    for (const entry of all()) {
+      this.GAIN_EXPONENT[entry.waveform] =
+        opts?.exponents?.[entry.waveform] ?? entry.player.gainExponent;
     }
     const mergedCoeffs: Record<string, number> = { ...VIBE_DEFAULTS.octaveGainCoeffs };
     if (opts?.octaveGainCoeffs) {
@@ -184,11 +184,11 @@ export class Vibe {
 
     const refVoiceGain = this.refMult * this.areaToGain('sine', 0.5);
     this.WAVEFORM_GAIN = {} as Record<WaveformType, number>;
-    for (const strategy of ALL_STRATEGIES) {
-      this.WAVEFORM_GAIN[strategy.waveform] =
-        strategy.waveform === 'sine'
+    for (const entry of all()) {
+      this.WAVEFORM_GAIN[entry.waveform] =
+        entry.waveform === 'sine'
           ? this.refMult
-          : refVoiceGain / this.areaToGain(strategy.waveform, 0.5);
+          : refVoiceGain / this.areaToGain(entry.waveform, 0.5);
     }
   }
 
@@ -196,7 +196,7 @@ export class Vibe {
    *  Delegates to each strategy's shapeAreaCoeff so new waveforms are covered automatically. */
   shapeAreaFraction(waveform: WaveformType, size: number): number {
     const half = size / 2;
-    return getStrategy(waveform).shapeAreaCoeff * half * half;
+    return get(waveform).player.shapeAreaCoeff * half * half;
   }
 
   /** Power curve: normalize area, raise to exponent, map to gain range. */

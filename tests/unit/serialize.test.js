@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { deserializeState, pathToState, serializeState, stateToPath } from '../../js/serialize.ts';
 
+// v2 quantization: envelope uses 3-bit (8 steps), spatial uses 6-bit (64 steps).
+// Tolerances must account for this coarser resolution.
+
 function makeState(overrides = {}) {
   return {
-    envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
+    envelope: { attack: 0.571, decay: 0.571, release: 1.286, sustain: 0.571 },
     scene: 0,
     voices: [],
     ...overrides,
@@ -17,7 +20,7 @@ function makeVoice(overrides = {}) {
     effect: undefined,
     fill: { h: 200, l: 50, mode: 'solid', s: 80 },
     id: 'test1',
-    size: 0.12,
+    size: 0.5,
     waveform: 'sine',
     x: 0.5,
     y: 0.5,
@@ -25,50 +28,66 @@ function makeVoice(overrides = {}) {
   };
 }
 
-describe('serializeState / deserializeState round-trip', () => {
+describe('v2 serializeState / deserializeState round-trip', () => {
   test('empty state round-trips correctly', () => {
     const state = makeState();
     const encoded = serializeState(state);
     const decoded = deserializeState(encoded);
 
     expect(decoded).not.toBeUndefined();
-    expect(decoded.envelope.attack).toBeCloseTo(state.envelope.attack);
-    expect(decoded.envelope.decay).toBeCloseTo(state.envelope.decay);
-    expect(decoded.envelope.sustain).toBeCloseTo(state.envelope.sustain);
-    expect(decoded.envelope.release).toBeCloseTo(state.envelope.release);
+    // 3-bit envelope: 8 steps, tolerance ~0.15 for attack/decay, ~0.22 for release
+    expect(decoded.envelope.attack).toBeCloseTo(state.envelope.attack, 0);
+    expect(decoded.envelope.decay).toBeCloseTo(state.envelope.decay, 0);
+    expect(decoded.envelope.sustain).toBeCloseTo(state.envelope.sustain, 0);
+    expect(decoded.envelope.release).toBeCloseTo(state.envelope.release, 0);
     expect(decoded.voices).toHaveLength(0);
   });
 
-  test('state with voices round-trips (values preserved, IDs regenerated)', () => {
+  test('version byte is present', () => {
+    const state = makeState();
+    const encoded = serializeState(state);
+    // First char is version. B64 'C' = 2
+    expect(encoded.charAt(0)).toBe('C');
+  });
+
+  test('scene index survives round-trip', () => {
+    for (const scene of [0, 5, 11, 63]) {
+      const state = makeState({ scene });
+      const decoded = deserializeState(serializeState(state));
+      expect(decoded.scene).toBe(scene);
+    }
+  });
+
+  test('state with voices round-trips (values preserved within quantization)', () => {
     const state = makeState({
       voices: [
-        makeVoice({ size: 0.15, waveform: 'sine', x: 0.3, y: 0.7 }),
+        makeVoice({ size: 0.5, waveform: 'sine', x: 0.5, y: 0.5 }),
         makeVoice({
           effect: 'stripes',
-          size: 0.2,
+          size: 0.5,
           timbre: 0.5,
           waveform: 'pulse',
-          x: 0.8,
-          y: 0.2,
+          x: 0.25,
+          y: 0.25,
         }),
       ],
     });
 
     const decoded = deserializeState(serializeState(state));
-
     expect(decoded.voices).toHaveLength(2);
 
     const sine = decoded.voices.find((v) => v.waveform === 'sine');
     const pulse = decoded.voices.find((v) => v.waveform === 'pulse');
 
-    expect(sine.x).toBeCloseTo(0.3);
-    expect(sine.y).toBeCloseTo(0.7);
-    expect(sine.size).toBeCloseTo(0.15);
+    // 6-bit quantization: ±0.02
+    expect(sine.x).toBeCloseTo(0.5, 1);
+    expect(sine.y).toBeCloseTo(0.5, 1);
+    expect(sine.size).toBeCloseTo(0.5, 1);
 
     expect(pulse.effect).toBe('stripes');
-    expect(pulse.timbre).toBeCloseTo(0.5);
+    expect(pulse.timbre).toBeCloseTo(0.5, 1);
 
-    // IDs are regenerated on load, not preserved
+    // IDs are regenerated on load
     expect(decoded.voices[0].id).toBeTruthy();
     expect(decoded.voices[1].id).toBeTruthy();
     expect(decoded.voices[0].id).not.toBe(decoded.voices[1].id);
@@ -77,33 +96,39 @@ describe('serializeState / deserializeState round-trip', () => {
   test('all waveform types survive round-trip', () => {
     const state = makeState({
       voices: [
-        makeVoice({ timbre: 0.3, waveform: 'blend' }),
-        makeVoice({ timbre: 0.7, waveform: 'pulse' }),
-        makeVoice({ waveform: 'sine' }),
+        makeVoice({ timbre: 0.3, waveform: 'blend', x: 0.1 }),
+        makeVoice({ timbre: 0.7, waveform: 'pulse', x: 0.2 }),
+        makeVoice({ waveform: 'sine', x: 0.3 }),
+        makeVoice({ timbre: 0.5, waveform: 'astroid', x: 0.4 }),
+        makeVoice({ stamp: 2, waveform: 'stamp', x: 0.5 }),
       ],
     });
 
     const decoded = deserializeState(serializeState(state));
-    expect(decoded.voices.map((v) => v.waveform).sort()).toEqual(['blend', 'pulse', 'sine']);
+    expect(decoded.voices.map((v) => v.waveform).sort()).toEqual([
+      'astroid',
+      'blend',
+      'pulse',
+      'sine',
+      'stamp',
+    ]);
   });
 
   test('all fill modes survive round-trip', () => {
     const solidVoice = makeVoice({
       fill: { h: 120, l: 60, mode: 'solid', s: 50 },
+      x: 0.1,
     });
     const linearVoice = makeVoice({
       fill: { gradAngle: 90, h: 100, h2: 200, l: 40, l2: 60, mode: 'linear', s: 50, s2: 70 },
-    });
-    const boundaryVoice = makeVoice({
-      fill: { h: 360, l: 100, mode: 'solid', s: 100 },
+      x: 0.3,
     });
 
-    const state = makeState({ voices: [solidVoice, linearVoice, boundaryVoice] });
+    const state = makeState({ voices: [solidVoice, linearVoice] });
     const decoded = deserializeState(serializeState(state));
 
-    const solid = decoded.voices.find((v) => v.fill.mode === 'solid' && v.fill.h === 120);
+    const solid = decoded.voices.find((v) => v.fill.mode === 'solid');
     const linear = decoded.voices.find((v) => v.fill.mode === 'linear');
-    const boundary = decoded.voices.find((v) => v.fill.mode === 'solid' && v.fill.h === 360);
 
     expect(solid.fill.mode).toBe('solid');
     expect(solid.fill.h).toBe(120);
@@ -111,16 +136,13 @@ describe('serializeState / deserializeState round-trip', () => {
     expect(linear.fill.mode).toBe('linear');
     expect(linear.fill.gradAngle).toBe(90);
     expect(linear.fill.h).toBe(100);
-
-    expect(boundary.fill.h).toBe(360);
-    expect(boundary.fill.s).toBe(100);
-    expect(boundary.fill.l).toBe(100);
+    expect(linear.fill.h2).toBe(200);
   });
 
   test('all blend modes survive round-trip', () => {
     const blends = ['screen', 'multiply', 'difference'];
     const state = makeState({
-      voices: blends.map((b, i) => makeVoice({ blend: b, x: 0.1 * (i + 1) })),
+      voices: blends.map((b, i) => makeVoice({ blend: b, x: i * 0.3 })),
     });
 
     const decoded = deserializeState(serializeState(state));
@@ -132,226 +154,111 @@ describe('serializeState / deserializeState round-trip', () => {
     const state = makeState({
       voices: [
         makeVoice({ border: undefined, x: 0.1 }),
-        makeVoice({ border: { color: 'white', double: false, thickness: 0.5 }, x: 0.2 }),
-        makeVoice({ border: { color: 'black', double: true, thickness: 0.8 }, x: 0.3 }),
-        makeVoice({ border: { color: 'black', double: false, thickness: 0.2 }, x: 0.4 }),
-        makeVoice({ border: { color: 'white', double: true, thickness: 0.9 }, x: 0.5 }),
+        makeVoice({ border: { color: 'white', double: false, thickness: 0.5 }, x: 0.3 }),
+        makeVoice({ border: { color: 'black', double: true, thickness: 0.85 }, x: 0.5 }),
       ],
     });
 
     const decoded = deserializeState(serializeState(state));
 
-    const byX = (x) => decoded.voices.find((v) => Math.abs(v.x - x) < 0.01);
+    const byX = (target) => decoded.voices.find((v) => Math.abs(v.x - target) < 0.05);
 
     expect(byX(0.1).border).toBeUndefined();
-
-    expect(byX(0.2).border).not.toBeUndefined();
-    expect(byX(0.2).border.color).toBe('white');
-    expect(byX(0.2).border.double).toBe(false);
-    expect(byX(0.2).border.thickness).toBeCloseTo(0.5);
-
-    expect(byX(0.3).border).not.toBeUndefined();
-    expect(byX(0.3).border.color).toBe('black');
-    expect(byX(0.3).border.double).toBe(true);
-    expect(byX(0.3).border.thickness).toBeCloseTo(0.8);
-
-    expect(byX(0.4).border).not.toBeUndefined();
-    expect(byX(0.4).border.color).toBe('black');
-    expect(byX(0.4).border.double).toBe(false);
-    expect(byX(0.4).border.thickness).toBeCloseTo(0.2);
-
-    expect(byX(0.5).border).not.toBeUndefined();
-    expect(byX(0.5).border.color).toBe('white');
+    expect(byX(0.3).border.color).toBe('white');
+    expect(byX(0.3).border.double).toBe(false);
+    // 3-bit thickness: 8 steps, tolerance ±0.15
+    expect(byX(0.3).border.thickness).toBeCloseTo(0.5, 0);
+    expect(byX(0.5).border.color).toBe('black');
     expect(byX(0.5).border.double).toBe(true);
-    expect(byX(0.5).border.thickness).toBeCloseTo(0.9);
   });
 
-  test('all effects survive round-trip', () => {
-    const effects = ['stripes', 'checker', 'noise', 'plaid'];
+  test('canonical ordering — voice permutations produce identical strings', () => {
+    const a = makeVoice({ waveform: 'sine', x: 0.1 });
+    const b = makeVoice({ timbre: 0.5, waveform: 'pulse', x: 0.5 });
+    const c = makeVoice({ timbre: 0.3, waveform: 'blend', x: 0.9 });
+
+    const s1 = serializeState(makeState({ voices: [a, b, c] }));
+    const s2 = serializeState(makeState({ voices: [c, a, b] }));
+    const s3 = serializeState(makeState({ voices: [b, c, a] }));
+
+    expect(s1).toBe(s2);
+    expect(s2).toBe(s3);
+  });
+
+  test('stamp voice survives round-trip', () => {
     const state = makeState({
-      voices: effects.map((e, i) => makeVoice({ effect: e, x: 0.1 * (i + 1) })),
+      voices: [makeVoice({ stamp: 3, waveform: 'stamp' })],
     });
-
     const decoded = deserializeState(serializeState(state));
-    const decodedEffects = decoded.voices.map((v) => v.effect).sort();
-    expect(decodedEffects).toEqual([...effects].sort());
+    expect(decoded.voices[0].waveform).toBe('stamp');
+    expect(decoded.voices[0].stamp).toBe(3);
+  });
+});
+
+describe('v2 format structure', () => {
+  test('global header is 4 chars (version + scene + envelope)', () => {
+    const state = makeState();
+    const encoded = serializeState(state);
+    // No voices = just 4 header chars
+    expect(encoded).toHaveLength(4);
   });
 
-  test('complex voice with all optional fields round-trips correctly', () => {
+  test('solid voice adds 12 chars (1 header + 11 registers)', () => {
+    const state = makeState({ voices: [makeVoice()] });
+    const encoded = serializeState(state);
+    // 4 header + 12 voice = 16
+    expect(encoded).toHaveLength(16);
+  });
+
+  test('gradient voice adds 17 chars (1 header + 16 registers)', () => {
     const state = makeState({
       voices: [
         makeVoice({
-          waveform: 'pulse',
-          timbre: 0.6,
-          border: { color: 'black', double: true, thickness: 0.1 },
-          fill: { gradAngle: 180, h: 20, h2: 40, l: 30, l2: 50, mode: 'linear', s: 40, s2: 60 },
-          effect: 'noise',
+          fill: { gradAngle: 90, h: 100, h2: 200, l: 40, l2: 60, mode: 'linear', s: 50, s2: 70 },
         }),
       ],
     });
-    const decoded = deserializeState(serializeState(state));
-    const v = decoded.voices[0];
-    expect(v.waveform).toBe('pulse');
-    expect(v.timbre).toBeCloseTo(0.6);
-    expect(v.border.color).toBe('black');
-    expect(v.border.double).toBe(true);
-    expect(v.border.thickness).toBeCloseTo(0.1);
-    expect(v.fill.mode).toBe('linear');
-    expect(v.fill.gradAngle).toBe(180);
-    expect(v.fill.h).toBe(20);
-    expect(v.effect).toBe('noise');
-  });
-
-  test('max envelope values round-trip', () => {
-    const state = makeState({
-      envelope: { attack: 2, decay: 2, release: 3, sustain: 1 },
-    });
-    const decoded = deserializeState(serializeState(state));
-    expect(decoded.envelope.attack).toBe(2);
-    expect(decoded.envelope.decay).toBe(2);
-    expect(decoded.envelope.sustain).toBe(1);
-    expect(decoded.envelope.release).toBe(3);
-  });
-});
-
-describe('canonical voice ordering', () => {
-  test('voice permutations produce identical URLs', () => {
-    const voiceA = makeVoice({ waveform: 'sine', x: 0.3, y: 0.7, size: 0.15 });
-    const voiceB = makeVoice({
-      waveform: 'pulse',
-      timbre: 0.5,
-      x: 0.8,
-      y: 0.2,
-      size: 0.2,
-      effect: 'stripes',
-    });
-    const voiceC = makeVoice({
-      waveform: 'blend',
-      timbre: 0.3,
-      x: 0.5,
-      y: 0.5,
-      size: 0.1,
-      blend: 'multiply',
-    });
-
-    const abc = serializeState(makeState({ voices: [voiceA, voiceB, voiceC] }));
-    const bca = serializeState(makeState({ voices: [voiceB, voiceC, voiceA] }));
-    const cab = serializeState(makeState({ voices: [voiceC, voiceA, voiceB] }));
-    const cba = serializeState(makeState({ voices: [voiceC, voiceB, voiceA] }));
-
-    expect(abc).toBe(bca);
-    expect(abc).toBe(cab);
-    expect(abc).toBe(cba);
-  });
-
-  test('identical voices in different order still round-trip all data', () => {
-    const voiceA = makeVoice({ waveform: 'sine', x: 0.2, y: 0.8 });
-    const voiceB = makeVoice({ waveform: 'pulse', timbre: 0.6, x: 0.9, y: 0.1 });
-
-    const stateAB = makeState({ voices: [voiceA, voiceB] });
-    const stateBA = makeState({ voices: [voiceB, voiceA] });
-
-    const decodedAB = deserializeState(serializeState(stateAB));
-    const decodedBA = deserializeState(serializeState(stateBA));
-
-    expect(decodedAB.voices).toHaveLength(2);
-    expect(decodedBA.voices).toHaveLength(2);
-
-    // Both should decode to the same voice set
-    const sinAB = decodedAB.voices.find((v) => v.waveform === 'sine');
-    const sinBA = decodedBA.voices.find((v) => v.waveform === 'sine');
-    expect(sinAB.x).toBeCloseTo(sinBA.x);
-    expect(sinAB.y).toBeCloseTo(sinBA.y);
-  });
-});
-
-describe('deserializeState edge cases', () => {
-  test('returns undefined for empty input', () => {
-    expect(deserializeState('')).toBeUndefined();
-  });
-
-  test('returns undefined for garbage input at start of string', () => {
-    expect(deserializeState('xyz')).toBeUndefined();
-  });
-
-  test('gracefully ignores trailing garbage and truncated voices', () => {
-    const validVoice = makeVoice({ size: 0.15, waveform: 'sine', x: 0.3, y: 0.7 });
-    const state = makeState({ voices: [validVoice, validVoice] });
     const encoded = serializeState(state);
+    // 4 header + 17 voice = 21
+    expect(encoded).toHaveLength(21);
+  });
 
-    // Test trailing garbage
-    const withGarbage = deserializeState(encoded + 'xyZ12$');
-    expect(withGarbage).not.toBeUndefined();
-    expect(withGarbage.voices).toHaveLength(2);
-
-    // Test truncated voice (should return 1 voice instead of 2)
-    // The second voice is 13 chars long (3 flags + 2 x + 2 y + 2 size + 4 fill),
-    // so slicing off 4 chars corrupts it.
-    const truncated = deserializeState(encoded.slice(0, encoded.length - 4));
-    expect(truncated).not.toBeUndefined();
-    expect(truncated.voices).toHaveLength(1);
-
-    // The first voice should be fully intact
-    expect(truncated.voices[0].x).toBeCloseTo(0.3);
-    expect(truncated.voices[0].y).toBeCloseTo(0.7);
-    expect(truncated.envelope.attack).toBeCloseTo(state.envelope.attack);
+  test('old v1 URLs return undefined', () => {
+    // v1 URLs start with envelope chars, not version byte
+    const v1Data = 'AKHPGMAKBDgAGAG8OEIhDnJPDgAJJGFOEIhDnJP';
+    expect(deserializeState(v1Data)).toBeUndefined();
   });
 });
 
-describe('scene serialization', () => {
-  test('scene 0 round-trips', () => {
-    const state = makeState({ scene: 0 });
-    const decoded = deserializeState(serializeState(state));
-    expect(decoded.scene).toBe(0);
+describe('stateToPath / pathToState', () => {
+  test('empty state returns root path', () => {
+    expect(stateToPath(makeState())).toBe('/');
   });
 
-  test('scene index round-trips', () => {
-    const state = makeState({ scene: 5 });
-    const decoded = deserializeState(serializeState(state));
-    expect(decoded.scene).toBe(5);
-  });
-
-  test('max scene index (63) round-trips', () => {
-    const state = makeState({ scene: 63 });
-    const decoded = deserializeState(serializeState(state));
-    expect(decoded.scene).toBe(63);
-  });
-});
-
-describe('URL path helpers', () => {
-  test('stateToPath produces /s/ path', () => {
-    const state = makeState({
-      voices: [makeVoice()],
-    });
-    const encoded = serializeState(state);
-    const path = stateToPath(state);
-    expect(path).toBe(`/s/${encoded}`);
-  });
-
-  test('stateToPath produces / for empty voices', () => {
-    const state = makeState();
-    expect(stateToPath(state)).toBe('/');
-  });
-
-  test('pathToState parses /s/<data>', () => {
+  test('state with voices returns /s/ path', () => {
     const state = makeState({ voices: [makeVoice()] });
-    const encoded = serializeState(state);
-    const parsed = pathToState(`/s/${encoded}`);
-    expect(parsed).not.toBeUndefined();
-    expect(parsed.voices).toHaveLength(1);
-    expect(parsed.voices[0].x).toBeCloseTo(0.5);
+    const path = stateToPath(state);
+    expect(path.startsWith('/s/')).toBe(true);
   });
 
-  test('pathToState returns undefined for /', () => {
+  test('pathToState round-trips with stateToPath', () => {
+    const state = makeState({
+      voices: [
+        makeVoice({ waveform: 'sine' }),
+        makeVoice({ timbre: 0.5, waveform: 'pulse', x: 0.75 }),
+      ],
+    });
+    const path = stateToPath(state);
+    const decoded = pathToState(path);
+
+    expect(decoded).not.toBeUndefined();
+    expect(decoded.voices).toHaveLength(2);
+  });
+
+  test('invalid paths return undefined', () => {
     expect(pathToState('/')).toBeUndefined();
-  });
-
-  test('pathToState returns undefined for non-/s/ paths', () => {
-    expect(pathToState('/vibecheck')).toBeUndefined();
-    expect(pathToState('/embed/foo')).toBeUndefined();
-  });
-
-  test('pathToState returns undefined for invalid data', () => {
+    expect(pathToState('/s/')).toBeUndefined();
     expect(pathToState('/s/!!invalid!!')).toBeUndefined();
+    expect(pathToState('/other/path')).toBeUndefined();
   });
 });

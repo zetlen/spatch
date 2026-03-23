@@ -9,7 +9,11 @@ import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, pathToState, resetDirty, saveToURL } from './serialize.ts';
 import { applyScene, getScene, initStageLayers, randomSceneIndex, SCENES } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
-import { prefetchStampSamples, initStampSymbols, decodeStampSamples } from './waveforms/stamp.ts';
+import {
+  prefetchStampSamples,
+  initStampSymbols,
+  decodeStampSamples,
+} from './voices/stamp/lifecycle.ts';
 import { Vibe, setVibe, vibeSignal } from './audio/vibe.ts';
 import { qel } from './dom.ts';
 import { SelectionManager } from './state.ts';
@@ -24,7 +28,7 @@ import { createHarmonizePanel } from './toolbar/harmonize-panel.ts';
 import { createStagePanel } from './toolbar/stage-panel.ts';
 import { createStamplePanel } from './toolbar/stample-panel.ts';
 import { bindLongPress } from './toolbar/expansion-panel.ts';
-import { ALL_STRATEGIES } from './waveforms/index.ts';
+import { all } from './voices/registry.ts';
 
 // ---- Init ----
 
@@ -277,7 +281,7 @@ canvasWrap.classList.add('ready');
 
 // ---- Tool-to-waveform map (derived from waveform strategy registry) ----
 
-const toolToWaveform = new Map(ALL_STRATEGIES.map((s) => [s.shapeName, s.waveform] as const));
+const toolToWaveform = new Map(all().map((e) => [e.ui.shapeName, e.waveform] as const));
 
 // ---- Canvas interaction controller ----
 

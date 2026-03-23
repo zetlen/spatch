@@ -15,7 +15,7 @@ import {
 import { type SigilStore, type UndoManager } from './state.ts';
 import { STAMPLE_COUNT } from './stamples/index.ts';
 import { SCENES } from './scenes/index.ts';
-import { ALL_STRATEGIES, getStrategy } from './waveforms/index.ts';
+import { all, hasTimbre } from './voices/registry.ts';
 
 // ---- Scale definitions ----
 // Each scale is defined by its intervals (semitone offsets within one octave).
@@ -165,11 +165,13 @@ function createRandomLinearFill(): Fill {
 
 /** Waveform types to pick from when randomizing.
  *  Stamps are excluded unless enabled via localStorage flag. */
-const WAVEFORMS = ALL_STRATEGIES.map((s) => s.waveform).filter(
-  (wf) =>
-    wf !== 'stamp' ||
-    (typeof localStorage !== 'undefined' && localStorage.getItem('spatch:stamps') === '1'),
-);
+const WAVEFORMS = all()
+  .map((e) => e.waveform)
+  .filter(
+    (wf) =>
+      wf !== 'stamp' ||
+      (typeof localStorage !== 'undefined' && localStorage.getItem('spatch:stamps') === '1'),
+  );
 
 /** Number of voices to create when randomizing. */
 const RANDOM_VOICE_COUNT = 5;
@@ -217,7 +219,7 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
 
     // 75% chance of random rotation (drives timbre on pulse/blend; no-op for sine)
     if (Math.random() < 0.75) {
-      Object.assign(updates, getStrategy(waveform).withTimbre(normalizedCoord(Math.random())));
+      Object.assign(updates, hasTimbre(waveform) ? { timbre: normalizedCoord(Math.random()) } : {});
     }
 
     // 15% chance of a border (random color, thickness, double).

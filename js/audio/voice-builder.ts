@@ -8,9 +8,9 @@ import type { AudioEffect, Fill, PatternType, Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
 import { vibe } from './vibe.ts';
-import { getStrategy } from '../waveforms/index.ts';
-import type { AudioSharedNodes } from '../waveforms/types.ts';
-export type { AudioVoice } from '../waveforms/types.ts';
+import { get } from '../voices/registry.ts';
+import type { AudioSharedNodes } from '../voices/types.ts';
+export type { AudioVoice } from '../voices/types.ts';
 
 // Re-export utilities from node-utils so callers (engine.ts etc.) don't need to change.
 export {
@@ -97,7 +97,7 @@ export function buildVoice(
 
     // Match oscillator type to voice waveform (#83)
     octaveOsc = new OscillatorNode(ctx, {
-      type: getStrategy(voice.waveform).oscillatorType,
+      type: get(voice.waveform).player.oscillatorType,
       frequency: octaveFreq,
     });
 
@@ -137,5 +137,5 @@ export function buildVoice(
     warmth: vibe.warmth,
   };
 
-  return getStrategy(voice.waveform).buildAudioGraph(ctx, voice, shared);
+  return get(voice.waveform).player.buildAudioGraph(ctx, voice, shared);
 }

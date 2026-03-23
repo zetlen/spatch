@@ -1,19 +1,19 @@
 import { describe, expect, test } from 'bun:test';
-import { getStrategy, ALL_STRATEGIES } from '../../js/waveforms/index.ts';
+import { get, getById, all, hasTimbre, createVoice } from '../../js/voices/registry.ts';
 
-describe('waveform strategy registry', () => {
-  test('getStrategy returns a strategy for each waveform type', () => {
+describe('voice registry', () => {
+  test('get() returns an entry for each waveform type', () => {
     const waveforms = ['sine', 'pulse', 'blend', 'astroid', 'stamp'];
     for (const wf of waveforms) {
-      const strategy = getStrategy(wf);
-      expect(strategy).toBeDefined();
-      expect(strategy.waveform).toBe(wf);
+      const entry = get(wf);
+      expect(entry).toBeDefined();
+      expect(entry.waveform).toBe(wf);
     }
   });
 
-  test('ALL_STRATEGIES contains all strategies', () => {
-    expect(ALL_STRATEGIES).toHaveLength(5);
-    const waveforms = ALL_STRATEGIES.map((s) => s.waveform);
+  test('all() returns 5 entries', () => {
+    expect(all()).toHaveLength(5);
+    const waveforms = all().map((e) => e.waveform);
     expect(waveforms).toContain('sine');
     expect(waveforms).toContain('pulse');
     expect(waveforms).toContain('blend');
@@ -21,35 +21,48 @@ describe('waveform strategy registry', () => {
     expect(waveforms).toContain('stamp');
   });
 
-  test('ALL_STRATEGIES is sorted by serializationIndex', () => {
-    for (let i = 1; i < ALL_STRATEGIES.length; i++) {
-      expect(ALL_STRATEGIES[i].serializationIndex).toBeGreaterThan(
-        ALL_STRATEGIES[i - 1].serializationIndex,
-      );
+  test('all() is sorted by id', () => {
+    const entries = all();
+    for (let i = 1; i < entries.length; i++) {
+      expect(entries[i].id).toBeGreaterThan(entries[i - 1].id);
     }
   });
 
-  test('serialization indices are 0–4', () => {
-    expect(ALL_STRATEGIES[0].serializationIndex).toBe(0);
-    expect(ALL_STRATEGIES[1].serializationIndex).toBe(1);
-    expect(ALL_STRATEGIES[2].serializationIndex).toBe(2);
-    expect(ALL_STRATEGIES[3].serializationIndex).toBe(3);
-    expect(ALL_STRATEGIES[4].serializationIndex).toBe(4);
+  test('IDs are 0-4', () => {
+    const entries = all();
+    expect(entries[0].id).toBe(0);
+    expect(entries[1].id).toBe(1);
+    expect(entries[2].id).toBe(2);
+    expect(entries[3].id).toBe(3);
+    expect(entries[4].id).toBe(4);
+  });
+
+  test('getById() matches get()', () => {
+    for (const entry of all()) {
+      expect(getById(entry.id)).toBe(entry);
+    }
+  });
+
+  test('getById() returns undefined for invalid ID', () => {
+    expect(getById(99)).toBeUndefined();
   });
 });
 
-describe('sine strategy identity', () => {
-  const s = getStrategy('sine');
+describe('sine entry', () => {
+  const entry = get('sine');
 
-  test('identity properties', () => {
-    expect(s.shapeName).toBe('circle');
-    expect(s.svgTag).toBe('circle');
-    expect(s.hasTimbre).toBe(false);
-    expect(s.rotationPeriod).toBe(0);
-    expect(s.serializationIndex).toBe(0);
-    expect(s.oscillatorType).toBe('sine');
-    expect(s.shapeAreaCoeff).toBeCloseTo(Math.PI);
-    expect(s.formantMaxQ).toBe(4);
+  test('identity', () => {
+    expect(entry.ui.shapeName).toBe('circle');
+    expect(entry.ui.svgTag).toBe('circle');
+    expect(entry.rotationPeriod).toBe(0);
+    expect(entry.id).toBe(0);
+    expect(entry.player.oscillatorType).toBe('sine');
+    expect(entry.player.shapeAreaCoeff).toBeCloseTo(Math.PI);
+    expect(entry.player.formantMaxQ).toBe(4);
+  });
+
+  test('hasTimbre is false', () => {
+    expect(hasTimbre('sine')).toBe(false);
   });
 
   test('createVoice produces sine voice without timbre', () => {
@@ -63,46 +76,27 @@ describe('sine strategy identity', () => {
       blend: 'screen',
       border: undefined,
     };
-    const voice = s.createVoice(base);
+    const voice = createVoice('sine', base);
     expect(voice.waveform).toBe('sine');
     expect('timbre' in voice).toBe(false);
-    expect(voice.x).toBe(0.5);
-  });
-
-  test('packExtra returns empty string', () => {
-    const voice = {
-      waveform: 'sine',
-      id: 'v1',
-      x: 0.5,
-      y: 0.5,
-      size: 0.25,
-      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
-      effect: undefined,
-      blend: 'screen',
-      border: undefined,
-    };
-    expect(s.packExtra(voice)).toBe('');
-  });
-
-  test('unpackExtra reads zero bytes', () => {
-    const result = s.unpackExtra('ABCDEF', 0);
-    expect(result.bytesRead).toBe(0);
-    expect(Object.keys(result.fields)).toHaveLength(0);
   });
 });
 
-describe('pulse strategy identity', () => {
-  const s = getStrategy('pulse');
+describe('pulse entry', () => {
+  const entry = get('pulse');
 
-  test('identity properties', () => {
-    expect(s.shapeName).toBe('square');
-    expect(s.svgTag).toBe('rect');
-    expect(s.hasTimbre).toBe(true);
-    expect(s.rotationPeriod).toBe(90);
-    expect(s.serializationIndex).toBe(1);
-    expect(s.oscillatorType).toBe('square');
-    expect(s.shapeAreaCoeff).toBe(4);
-    expect(s.formantMaxQ).toBe(8);
+  test('identity', () => {
+    expect(entry.ui.shapeName).toBe('square');
+    expect(entry.ui.svgTag).toBe('rect');
+    expect(entry.rotationPeriod).toBe(90);
+    expect(entry.id).toBe(1);
+    expect(entry.player.oscillatorType).toBe('square');
+    expect(entry.player.shapeAreaCoeff).toBe(4);
+    expect(entry.player.formantMaxQ).toBe(8);
+  });
+
+  test('hasTimbre is true', () => {
+    expect(hasTimbre('pulse')).toBe(true);
   });
 
   test('createVoice produces pulse voice with timbre', () => {
@@ -116,170 +110,58 @@ describe('pulse strategy identity', () => {
       blend: 'screen',
       border: undefined,
     };
-    const voice = s.createVoice(base);
+    const voice = createVoice('pulse', base);
     expect(voice.waveform).toBe('pulse');
     expect('timbre' in voice).toBe(true);
     expect(voice.timbre).toBe(0);
   });
+});
 
-  test('packExtra/unpackExtra round-trip timbre', () => {
-    const voice = {
-      waveform: 'pulse',
-      timbre: 0.75,
-      id: 'v2',
-      x: 0.5,
-      y: 0.5,
-      size: 0.25,
-      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
-      effect: undefined,
-      blend: 'screen',
-      border: undefined,
-    };
-    const packed = s.packExtra(voice);
-    expect(packed).toHaveLength(2);
+describe('blend entry', () => {
+  const entry = get('blend');
 
-    const result = s.unpackExtra(packed, 0);
-    expect(result.bytesRead).toBe(2);
-    expect(result.fields.timbre).toBeCloseTo(0.75);
+  test('identity', () => {
+    expect(entry.ui.shapeName).toBe('triangle');
+    expect(entry.ui.svgTag).toBe('polygon');
+    expect(entry.rotationPeriod).toBe(120);
+    expect(entry.id).toBe(2);
+    expect(entry.player.oscillatorType).toBe('sawtooth');
+    expect(entry.player.shapeAreaCoeff).toBeCloseTo((3 * Math.sqrt(3)) / 4);
+    expect(entry.player.formantMaxQ).toBe(8);
+  });
+
+  test('hasTimbre is true', () => {
+    expect(hasTimbre('blend')).toBe(true);
   });
 });
 
-describe('blend strategy identity', () => {
-  const s = getStrategy('blend');
+describe('astroid entry', () => {
+  const entry = get('astroid');
 
-  test('identity properties', () => {
-    expect(s.shapeName).toBe('triangle');
-    expect(s.svgTag).toBe('polygon');
-    expect(s.hasTimbre).toBe(true);
-    expect(s.rotationPeriod).toBe(120);
-    expect(s.serializationIndex).toBe(2);
-    expect(s.oscillatorType).toBe('sawtooth');
-    expect(s.shapeAreaCoeff).toBeCloseTo((3 * Math.sqrt(3)) / 4);
-    expect(s.formantMaxQ).toBe(8);
-  });
-
-  test('createVoice produces blend voice with timbre', () => {
-    const base = {
-      id: 'test3',
-      x: 0.6,
-      y: 0.2,
-      size: 0.3,
-      fill: { mode: 'solid', h: 240, s: 90, l: 40 },
-      effect: undefined,
-      blend: 'screen',
-      border: undefined,
-    };
-    const voice = s.createVoice(base);
-    expect(voice.waveform).toBe('blend');
-    expect('timbre' in voice).toBe(true);
-    expect(voice.timbre).toBe(0);
-  });
-
-  test('packExtra/unpackExtra round-trip timbre', () => {
-    const voice = {
-      waveform: 'blend',
-      timbre: 0.333,
-      id: 'v3',
-      x: 0.5,
-      y: 0.5,
-      size: 0.25,
-      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
-      effect: undefined,
-      blend: 'screen',
-      border: undefined,
-    };
-    const packed = s.packExtra(voice);
-    expect(packed).toHaveLength(2);
-
-    const result = s.unpackExtra(packed, 0);
-    expect(result.bytesRead).toBe(2);
-    expect(result.fields.timbre).toBeCloseTo(0.333);
+  test('identity', () => {
+    expect(entry.ui.shapeName).toBe('astroid');
+    expect(entry.ui.svgTag).toBe('path');
+    expect(entry.rotationPeriod).toBe(90);
+    expect(entry.id).toBe(3);
+    expect(entry.player.oscillatorType).toBe('sawtooth');
+    expect(entry.player.shapeAreaCoeff).toBeCloseTo((3 * Math.PI) / 8);
+    expect(entry.player.formantMaxQ).toBe(8);
   });
 });
 
-describe('astroid strategy identity', () => {
-  const s = getStrategy('astroid');
+describe('stamp entry', () => {
+  const entry = get('stamp');
 
-  test('identity properties', () => {
-    expect(s.shapeName).toBe('astroid');
-    expect(s.svgTag).toBe('path');
-    expect(s.hasTimbre).toBe(true);
-    expect(s.rotationPeriod).toBe(90);
-    expect(s.serializationIndex).toBe(3);
-    expect(s.oscillatorType).toBe('sawtooth');
-    expect(s.shapeAreaCoeff).toBeCloseTo((3 * Math.PI) / 8);
-    expect(s.formantMaxQ).toBe(8);
+  test('identity', () => {
+    expect(entry.ui.shapeName).toBe('stamp');
+    expect(entry.ui.svgTag).toBe('g');
+    expect(entry.rotationPeriod).toBe(0);
+    expect(entry.id).toBe(4);
+    expect(entry.player.oscillatorType).toBe('sine');
   });
 
-  test('createVoice produces astroid voice with timbre', () => {
-    const base = {
-      id: 'test4',
-      x: 0.4,
-      y: 0.6,
-      size: 0.2,
-      fill: { mode: 'solid', h: 60, s: 70, l: 50 },
-      effect: undefined,
-      blend: 'screen',
-      border: undefined,
-    };
-    const voice = s.createVoice(base);
-    expect(voice.waveform).toBe('astroid');
-    expect('timbre' in voice).toBe(true);
-    expect(voice.timbre).toBe(0);
-  });
-
-  test('packExtra/unpackExtra round-trip timbre', () => {
-    const voice = {
-      waveform: 'astroid',
-      timbre: 0.5,
-      id: 'v4',
-      x: 0.5,
-      y: 0.5,
-      size: 0.25,
-      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
-      effect: undefined,
-      blend: 'screen',
-      border: undefined,
-    };
-    const packed = s.packExtra(voice);
-    expect(packed).toHaveLength(2);
-
-    const result = s.unpackExtra(packed, 0);
-    expect(result.bytesRead).toBe(2);
-    expect(result.fields.timbre).toBeCloseTo(0.5);
-  });
-});
-
-describe('strategy serialization indices match existing format', () => {
-  test('sine = 0, pulse = 1, blend = 2, astroid = 3, stamp = 4', () => {
-    expect(getStrategy('sine').serializationIndex).toBe(0);
-    expect(getStrategy('pulse').serializationIndex).toBe(1);
-    expect(getStrategy('blend').serializationIndex).toBe(2);
-    expect(getStrategy('astroid').serializationIndex).toBe(3);
-    expect(getStrategy('stamp').serializationIndex).toBe(4);
-  });
-
-  test('ALL_STRATEGIES[wf] lookup by index matches getStrategy', () => {
-    expect(ALL_STRATEGIES[0]).toBe(getStrategy('sine'));
-    expect(ALL_STRATEGIES[1]).toBe(getStrategy('pulse'));
-    expect(ALL_STRATEGIES[2]).toBe(getStrategy('blend'));
-    expect(ALL_STRATEGIES[3]).toBe(getStrategy('astroid'));
-    expect(ALL_STRATEGIES[4]).toBe(getStrategy('stamp'));
-  });
-});
-
-// ---- Stamp strategy tests ----
-
-describe('stamp strategy', () => {
-  const s = getStrategy('stamp');
-
-  test('identity properties', () => {
-    expect(s.shapeName).toBe('stamp');
-    expect(s.svgTag).toBe('g');
-    expect(s.hasTimbre).toBe(false);
-    expect(s.rotationPeriod).toBe(0);
-    expect(s.serializationIndex).toBe(4);
-    expect(s.oscillatorType).toBe('sine');
+  test('hasTimbre is false', () => {
+    expect(hasTimbre('stamp')).toBe(false);
   });
 
   test('createVoice produces stamp voice with stamp field', () => {
@@ -293,48 +175,9 @@ describe('stamp strategy', () => {
       blend: 'screen',
       border: undefined,
     };
-    const voice = s.createVoice(base);
+    const voice = createVoice('stamp', base);
     expect(voice.waveform).toBe('stamp');
     expect('stamp' in voice).toBe(true);
     expect('timbre' in voice).toBe(false);
-  });
-
-  test('packExtra/unpackExtra round-trips stamp index', () => {
-    const voice = {
-      waveform: 'stamp',
-      stamp: 2,
-      id: 'st2',
-      x: 0.5,
-      y: 0.5,
-      size: 0.25,
-      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
-      effect: undefined,
-      blend: 'screen',
-      border: undefined,
-    };
-    const packed = s.packExtra(voice);
-    expect(packed).toHaveLength(1);
-
-    const result = s.unpackExtra(packed, 0);
-    expect(result.bytesRead).toBe(1);
-    expect(result.fields.stamp).toBe(2);
-  });
-
-  test('packExtra/unpackExtra round-trips stamp index 0', () => {
-    const voice = {
-      waveform: 'stamp',
-      stamp: 0,
-      id: 'st3',
-      x: 0.5,
-      y: 0.5,
-      size: 0.25,
-      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
-      effect: undefined,
-      blend: 'screen',
-      border: undefined,
-    };
-    const packed = s.packExtra(voice);
-    const result = s.unpackExtra(packed, 0);
-    expect(result.fields.stamp).toBe(0);
   });
 });

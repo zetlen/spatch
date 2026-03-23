@@ -2,7 +2,7 @@
 // No Web Audio API dependencies — just math.
 
 import { type NormalizedCoord, type WaveformType, normalizedCoord } from '../types.ts';
-import { getStrategy } from '../waveforms/index.ts';
+import { get } from '../voices/registry.ts';
 
 // ---- Chromatic scale ----
 // 3 octaves from G2 (MIDI 43) to G5 (MIDI 79): 37 semitones
@@ -129,7 +129,7 @@ export function yToPlaybackRate(y: NormalizedCoord, referencePitch: number): num
  * @returns Timbre value in [0, 1), or 0 for waveforms without timbre
  */
 export function rotationToTimbre(rotation: number, waveform: WaveformType): number {
-  const period = getStrategy(waveform).rotationPeriod;
+  const period = get(waveform).rotationPeriod;
   if (!period) return 0;
   const phase = ((rotation % period) + period) % period;
   return phase / period;

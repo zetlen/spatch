@@ -8,7 +8,11 @@ import { qel } from './dom.ts';
 import { Vibe, setVibe } from './audio/vibe.ts';
 import { getScene } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
-import { prefetchStampSamples, initStampSymbols, decodeStampSamples } from './waveforms/stamp.ts';
+import {
+  prefetchStampSamples,
+  initStampSymbols,
+  decodeStampSamples,
+} from './voices/stamp/lifecycle.ts';
 import type { SigilData } from './types.ts';
 
 prefetchStampSamples();

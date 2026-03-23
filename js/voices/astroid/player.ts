@@ -1,28 +1,12 @@
-// astroid.ts — Astroid (astroid hypocycloid) waveform strategy.
+// player.ts — Astroid Player delegate.
 //
-// Maps to a 4-pointed astroid shape visually and a 6-oscillator
-// supersaw audio graph. Timbre controls rotation (continuous 0–90° arc,
-// matching the astroid's 4-fold symmetry) and the detune/stereo spread.
-// Six sawtooth oscillators are always running: the center pair is always at
-// full gain, the inner pair fades in from timbre=0.25 to 0.5, and the outer
-// pair from timbre=0.5 to 1.0. Total gain is normalized so loudness stays
-// constant regardless of how many pairs are active.
-//
-// The astroid SVG path uses four cubic bezier segments with control-point
-// ratio κ=0.4, giving sharper, more star-like concave indentations than the
-// true mathematical astroid (κ≈0.61).
+// 6-oscillator supersaw with LP filter + saturation shaper. Timbre controls
+// detune/stereo spread and which oscillator pairs are active.
 
-import { resizeHandleEl, rotationHandleEls, svgEl } from '../dom.ts';
-import { makeSaturationCurve, safeStop } from '../audio/node-utils.ts';
-import { yToFrequency } from '../audio/mapping.ts';
-import { decodeInt, encodeInt, round3 } from '../serialize.ts';
-import { type NormalizedCoord, normalizedCoord } from '../types.ts';
-import type { Voice, VoiceBase } from '../types.ts';
-import type { AudioSharedNodes, AudioVoice, WaveformStrategy } from './types.ts';
-
-// Bezier control-point ratio. 0.4 gives sharper points than the true astroid
-// (κ≈0.61) — more like a recognisable 4-pointed star.
-const KAPPA = 0.4;
+import { makeSaturationCurve, safeStop } from '../../audio/node-utils.ts';
+import { yToFrequency } from '../../audio/mapping.ts';
+import type { Voice } from '../../types.ts';
+import type { AudioSharedNodes, AudioVoice, VoicePlayer } from '../types.ts';
 
 // Six oscillators: [outerL, innerL, centerL, centerR, innerR, outerR].
 // Each pair fades in at a different timbre threshold and reaches full gain
@@ -48,54 +32,11 @@ function oscGain(i: number, timbre: number): number {
   return (timbre - lo) / (hi - lo);
 }
 
-function astroidPath(voice: Voice): string {
-  const cx = voice.x as number;
-  const cy = voice.y as number;
-  const r = (voice.size as number) / 2;
-  const k = r * KAPPA;
-  return [
-    `M ${cx + r},${cy}`,
-    `C ${cx + k},${cy} ${cx},${cy - k} ${cx},${cy - r}`,
-    `C ${cx},${cy - k} ${cx - k},${cy} ${cx - r},${cy}`,
-    `C ${cx - k},${cy} ${cx},${cy + k} ${cx},${cy + r}`,
-    `C ${cx},${cy + k} ${cx + k},${cy} ${cx + r},${cy}`,
-    'Z',
-  ].join(' ');
-}
-
-const astroid: WaveformStrategy = {
-  waveform: 'astroid',
-  shapeName: 'astroid',
-  svgTag: 'path',
-  hasTimbre: true,
-  rotationPeriod: 90,
-  serializationIndex: 3,
+const player: VoicePlayer = {
   oscillatorType: 'sawtooth',
-  shapeAreaCoeff: (3 * Math.PI) / 8, // astroid area = (3π/8)·r²
+  shapeAreaCoeff: (3 * Math.PI) / 8,
   formantMaxQ: 8,
   gainExponent: 1.4,
-
-  createSvgElement(voice: Voice): SVGElement {
-    const el = svgEl('path');
-    el.setAttribute('d', astroidPath(voice));
-    return el;
-  },
-
-  updateSvgElement(el: SVGElement, voice: Voice): void {
-    el.setAttribute('d', astroidPath(voice));
-  },
-
-  selectionHandles(voice: Voice): SVGElement[] {
-    const r = voice.size / 2;
-    return [
-      resizeHandleEl('e', voice.x + r, voice.y),
-      resizeHandleEl('n', voice.x, voice.y - r),
-      resizeHandleEl('w', voice.x - r, voice.y),
-      resizeHandleEl('s', voice.x, voice.y + r),
-      ...rotationHandleEls(voice.x, voice.y - r),
-    ];
-  },
-
   buildAudioGraph(ctx: AudioContext, voice: Voice, shared: AudioSharedNodes): AudioVoice {
     const timbre = 'timbre' in voice ? (voice.timbre as number) : 0;
     const freq = yToFrequency(voice.y);
@@ -188,31 +129,6 @@ const astroid: WaveformStrategy = {
       },
     };
   },
-
-  createVoice(base: VoiceBase): Voice {
-    return { ...base, timbre: normalizedCoord(0), waveform: 'astroid' };
-  },
-
-  getTimbre(voice: Voice): NormalizedCoord {
-    return 'timbre' in voice ? (voice.timbre as NormalizedCoord) : normalizedCoord(0);
-  },
-
-  withTimbre(value: NormalizedCoord): Partial<Voice> {
-    return { timbre: value };
-  },
-
-  packExtra(voice: Voice): string {
-    const timbre = 'timbre' in voice ? (voice.timbre as number) : 0;
-    return encodeInt(round3(timbre) * 1000, 2);
-  },
-
-  unpackExtra(
-    str: string,
-    idx: number,
-  ): { fields: Record<string, NormalizedCoord>; bytesRead: number } {
-    const timbre = normalizedCoord(decodeInt(str, idx, 2) / 1000);
-    return { fields: { timbre }, bytesRead: 2 };
-  },
 };
 
-export default astroid;
+export default player;

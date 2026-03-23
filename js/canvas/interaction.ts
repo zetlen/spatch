@@ -22,7 +22,7 @@ import {
   type NormalizedCoord,
   normalizedCoord,
 } from '../types.ts';
-import { ALL_STRATEGIES, getStrategy } from '../waveforms/index.ts';
+import { all, get, hasTimbre } from '../voices/registry.ts';
 
 // ---- Interaction state machine ----
 //
@@ -94,7 +94,7 @@ function svgCoordsFromEvent(canvas: SVGSVGElement, e: PointerEvent): NormCoords 
 
 // ---- Tool-to-waveform map ----
 
-const toolToWaveform = new Map(ALL_STRATEGIES.map((s) => [s.shapeName, s.waveform] as const));
+const toolToWaveform = new Map(all().map((e) => [e.ui.shapeName, e.waveform] as const));
 
 // ---- ADSR corner drag helpers ----
 
@@ -454,7 +454,7 @@ export class CanvasInteractionController {
         return;
       }
 
-      if (!getStrategy(voice.waveform).hasTimbre) {
+      if (!hasTimbre(voice.waveform)) {
         this.store.updateVoice(this.interaction.shapeId, { size: newSize });
       } else {
         const angleDelta = angle - this.interaction.initAngle;
@@ -522,7 +522,7 @@ export class CanvasInteractionController {
       if (!voice) {
         return;
       }
-      if (!getStrategy(voice.waveform).hasTimbre) {
+      if (!hasTimbre(voice.waveform)) {
         return;
       }
       const rotation = calcRotation(voice, nx, ny, 1);
@@ -560,11 +560,13 @@ export class CanvasInteractionController {
       return;
     }
 
-    // Hard-snap to nearest note on drag release
+    // Hard-snap to nearest grid position on drag release
     if (this.interaction.mode === 'dragging') {
       const voice = this.selection.getSelectedVoice();
       if (voice) {
-        this.store.updateVoice(voice.id, { y: hardSnapYToNote(voice.y) });
+        this.store.updateVoice(voice.id, {
+          y: hardSnapYToNote(voice.y),
+        });
       }
     }
 

@@ -98,31 +98,5 @@ test.describe('Serialization round-trip', () => {
     expect(ratio).toBeLessThan(2);
   });
 
-  test('old hash URLs are migrated to path URLs', async ({ page }) => {
-    // Create a sigil, capture path data, then navigate via old hash URL
-    await page.goto('/');
-    await page.waitForSelector('#sigil-canvas');
-
-    await page.click('[data-tool="circle"]');
-    const canvas = page.locator('#sigil-canvas');
-    const box = await canvas.boundingBox();
-    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
-
-    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
-      timeout: 3000,
-    });
-    const pathname = await page.evaluate(() => globalThis.location.pathname);
-    const data = pathname.slice(3); // strip /s/
-
-    // Navigate using old hash-based URL format
-    await page.goto('/#' + data);
-    await page.waitForSelector('#sigil-canvas');
-    await page.waitForTimeout(500);
-
-    // Should have been migrated to path form
-    const migratedPath = await page.evaluate(() => globalThis.location.pathname);
-    expect(migratedPath).toBe(pathname);
-    const migratedHash = await page.evaluate(() => globalThis.location.hash);
-    expect(migratedHash).toBe('');
-  });
+  // Hash URL migration was removed in v2 — old URLs are not migrated.
 });

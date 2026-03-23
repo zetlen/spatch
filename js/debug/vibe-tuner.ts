@@ -15,7 +15,7 @@ import type { VibeOptions } from '../audio/vibe.ts';
 import type { AudioEngine } from '../audio/engine.ts';
 import type { SigilStore } from '../state.ts';
 import type { SigilData, WaveformType } from '../types.ts';
-import { ALL_STRATEGIES } from '../waveforms/index.ts';
+import { all } from '../voices/registry.ts';
 
 interface TunerDeps {
   audio: AudioEngine;
@@ -146,7 +146,7 @@ function readState(state: Record<string, number>, key: string): number {
 function defaultForKey(key: string): number {
   if (key.startsWith('exp:')) {
     const wf = key.slice(4) as WaveformType;
-    return ALL_STRATEGIES.find((s) => s.waveform === wf)?.gainExponent ?? 1;
+    return all().find((e) => e.waveform === wf)?.player.gainExponent ?? 1;
   }
   if (key.startsWith('oct:')) return VIBE_DEFAULTS.octaveGainCoeffs[key.slice(4)]!;
   return (VIBE_DEFAULTS as unknown as Record<string, number>)[key]!;
@@ -202,7 +202,7 @@ function createDefaultState(): Record<string, number> {
 function applyVibeToState(state: Record<string, number>, opts: Partial<VibeOptions>): void {
   const full = { ...VIBE_DEFAULTS, ...opts };
   const defaultExponents = Object.fromEntries(
-    ALL_STRATEGIES.map((s) => [s.waveform, s.gainExponent]),
+    all().map((e) => [e.waveform, e.player.gainExponent]),
   );
   const exponents = { ...defaultExponents, ...opts.exponents } as Record<WaveformType, number>;
   const octave = { ...VIBE_DEFAULTS.octaveGainCoeffs, ...opts.octaveGainCoeffs };
@@ -273,7 +273,7 @@ function isEdited(flatState: Record<string, number>, sceneVibe: Partial<VibeOpti
   const reference: Record<string, number> = {};
   const full = { ...VIBE_DEFAULTS, ...sceneVibe };
   const defaultExponents = Object.fromEntries(
-    ALL_STRATEGIES.map((s) => [s.waveform, s.gainExponent]),
+    all().map((e) => [e.waveform, e.player.gainExponent]),
   );
   const exponents = { ...defaultExponents, ...sceneVibe.exponents } as Record<WaveformType, number>;
   const octave = { ...VIBE_DEFAULTS.octaveGainCoeffs, ...sceneVibe.octaveGainCoeffs };

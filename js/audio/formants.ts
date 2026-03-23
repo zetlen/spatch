@@ -5,7 +5,7 @@
 
 import type { Fill, LinearFill, WaveformType } from '../types.ts';
 import { vibe } from './vibe.ts';
-import { getStrategy } from '../waveforms/index.ts';
+import { get } from '../voices/registry.ts';
 
 // ---- Formant filter mapping ----
 //
@@ -92,7 +92,7 @@ export function lightnessToCutoff(lightness: number): number {
  * @returns Computed Q value scaled by vibe.formantQ
  */
 export function computeFormantQ(saturation: number, waveform: WaveformType = 'pulse'): number {
-  const maxQ = getStrategy(waveform).formantMaxQ;
+  const maxQ = get(waveform).player.formantMaxQ;
   return (1 + (saturation / 100) * maxQ) * vibe.formantQ;
 }
 
