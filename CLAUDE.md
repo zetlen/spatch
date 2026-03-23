@@ -161,6 +161,8 @@ Pre-commit hooks (lefthook): auto-formats with oxfmt, fixes lint, runs tsc.
 - Deploy: `.gitea/workflows/deploy.yml` on push to `main` or
   `workflow_dispatch`. Docker-copies `dist/` into nginx container, reloads.
   Runs typecheck + lint + unit tests but not e2e. Site: `https://spatch.music`.
+- **Merge style: squash only.** The `main` branch is protected and only
+  allows squash merges. Use `merge_style: "squash"` when merging via Gitea API.
 - Bot user `tiene`: admin collaborator, whitelisted for direct push to
   protected `main`. Token in `PUSH_TOKEN` secret. Version bumps use `[skip ci]`.
 - Gotcha: changing workflow triggers won't fire on the merge that introduces
