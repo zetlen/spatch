@@ -226,8 +226,9 @@ maps to both visual and audio:
 | `effect` | pattern overlay | effect chain (chorus, tremolo, flanger, phaser) |
 | `timbre` | rotation (pulse/blend/astroid) | waveform param (periodic: 90° square/astroid, 120° triangle) |
 | `stamp` | silhouette SVG (stamp only) | sample selection (pitch via playback rate) |
+| `trigger` | tilt angle (stamp only: -5°/0°/+5°) | envelope trigger phase (A=0, D=1, R=2) |
 | `blend` | CSS `mix-blend-mode` | cross-voice FM synthesis (see below) |
-| `border` | inset stroke(s) | octave-doubled sine (white=up, black=down, single=1oct, double=2oct) |
+| `border` | inset stroke(s) (not stamps) | octave-doubled sine (white=up, black=down, single=1oct, double=2oct) |
 
 Field-level details (blend, border, fill, ADSR, play modes) are documented
 in code comments (`types.ts`, `effects.ts`, `voice-builder.ts`, `shapes.ts`,

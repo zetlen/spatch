@@ -321,6 +321,30 @@ describe('SampleSerializer', () => {
     expect(unpacked.border.double).toBe(true);
     expect(unpacked.border.thickness).toBeCloseTo(0.6, 0);
   });
+
+  test('trigger 0-2 round-trips', () => {
+    for (let t = 0; t < 3; t++) {
+      const voice = makeVoice({ stamp: 1, trigger: t, waveform: 'stamp' });
+      const unpacked = serializer.unpack(serializer.pack(voice), 'stamp');
+      expect(unpacked.trigger).toBe(t);
+    }
+  });
+
+  test('trigger defaults to 1 for value 3 (reserved)', () => {
+    const voice = makeVoice({ stamp: 1, trigger: 0, waveform: 'stamp' });
+    const packed = serializer.pack(voice);
+    const sp4Raw = (1 << 3) | (3 << 1); // stamp=1, trigger=3 (reserved)
+    const tampered = packed.slice(0, 8) + encodeInt(sp4Raw, 1) + packed.slice(9);
+    const unpacked = serializer.unpack(tampered, 'stamp');
+    expect(unpacked.trigger).toBe(1);
+  });
+
+  test('trigger + stamp index pack independently', () => {
+    const voice = makeVoice({ stamp: 5, trigger: 2, waveform: 'stamp' });
+    const unpacked = serializer.unpack(serializer.pack(voice), 'stamp');
+    expect(unpacked.stamp).toBe(5);
+    expect(unpacked.trigger).toBe(2);
+  });
 });
 
 // ---- Canonical ordering ----

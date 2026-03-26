@@ -135,6 +135,19 @@ body {
   margin: 0 2px;
 }
 
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.logo-mark {
+  --mark-height: 64px;
+  height: var(--mark-height);
+  width: auto;
+  margin: calc((var(--mark-height) - 44px) / -2) 0;
+}
+
 .logo {
   font-size: 50px;
   color: var(--text-primary);
@@ -265,6 +278,30 @@ body {
     0 20px 40px rgba(0, 0, 0, 0.4);
 }
 
+@keyframes logo-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-6px);
+  }
+  50% {
+    transform: translateY(0);
+  }
+  70% {
+    transform: translateY(-3px);
+  }
+}
+
+.logo-mark {
+  cursor: pointer;
+}
+
+.logo-mark.bounce {
+  animation: logo-bounce 0.4s cubic-bezier(0.2, 0, 0.7, 1);
+}
+
 @keyframes march {
   to {
     stroke-dashoffset: -0.032;
@@ -313,7 +350,7 @@ g.muted {
   transition: opacity 0.2s;
 }
 
-body.is-editing .credits-btn {
+body.is-editing .tutorial-btn {
   opacity: 0.3;
   pointer-events: auto;
 }
@@ -324,13 +361,13 @@ body.is-editing.has-voices .splash-btn {
   pointer-events: auto;
 }
 
-body.is-editing .credits-btn:hover,
+body.is-editing .tutorial-btn:hover,
 body.is-editing.has-voices .share-btn:hover,
 body.is-editing.has-voices .splash-btn:hover {
   opacity: 0.7;
 }
 
-.credits-btn {
+.tutorial-btn {
   top: auto;
   right: 8px;
   bottom: 8px;
@@ -923,10 +960,10 @@ body.landscape-locked #stage {
     gap: 4px;
   }
   .logo {
-    font-size: 24px;
-    transform: rotate(-90deg);
-    letter-spacing: -2px;
-    width: 34px;
+    display: none;
+  }
+  .logo-mark {
+    --mark-height: 34px;
   }
   .tool-btn,
   .action-btn {

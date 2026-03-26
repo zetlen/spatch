@@ -181,3 +181,59 @@ describe('stamp entry', () => {
     expect('timbre' in voice).toBe(false);
   });
 });
+
+describe('panels descriptor', () => {
+  test('all entries have a panels object', () => {
+    for (const entry of all()) {
+      expect(entry.panels).toBeDefined();
+      expect(typeof entry.panels.border).toBe('boolean');
+      expect(typeof entry.panels.stample).toBe('boolean');
+    }
+  });
+
+  test('oscillator voices have border but not stample', () => {
+    for (const wf of ['sine', 'pulse', 'blend', 'astroid']) {
+      const entry = get(wf);
+      expect(entry.panels.border).toBe(true);
+      expect(entry.panels.stample).toBe(false);
+    }
+  });
+
+  test('stamp voice has stample but not border', () => {
+    const entry = get('stamp');
+    expect(entry.panels.border).toBe(false);
+    expect(entry.panels.stample).toBe(true);
+  });
+});
+
+describe('stamp createVoice defaults', () => {
+  test('createVoice sets trigger to 1 (Decay)', () => {
+    const base = {
+      id: 'test',
+      x: 0.5,
+      y: 0.5,
+      size: 0.25,
+      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
+      effect: undefined,
+      blend: 'screen',
+      border: undefined,
+    };
+    const voice = createVoice('stamp', base);
+    expect(voice.trigger).toBe(1);
+  });
+
+  test('createVoice forces border to undefined', () => {
+    const base = {
+      id: 'test',
+      x: 0.5,
+      y: 0.5,
+      size: 0.25,
+      fill: { mode: 'solid', h: 0, s: 50, l: 50 },
+      effect: undefined,
+      blend: 'screen',
+      border: { color: 'white', double: false, thickness: 0.5 },
+    };
+    const voice = createVoice('stamp', base);
+    expect(voice.border).toBeUndefined();
+  });
+});

@@ -55,6 +55,7 @@ export interface AudioVoice {
   lastSize: number;
   start(time: number): void;
   onDecay?(time: number): void;
+  onRelease?(time: number): void;
   stop(time: number): void;
   updateParams(voice: Voice, now: number): void;
   syncGlobalParams(vibeParams: { warmth: number }, now: number): void;
@@ -110,6 +111,11 @@ export interface VoiceRegistryEntry {
   readonly ui: VoiceUI;
   readonly player: VoicePlayer;
   readonly serializer: VoiceSerializer;
+  /** Which optional toolbar panels this voice type uses. */
+  readonly panels: {
+    readonly border: boolean;
+    readonly stample: boolean;
+  };
   /** Create a Voice from a VoiceBase, adding waveform-specific fields. */
   createVoice(base: VoiceBase): Voice;
 }

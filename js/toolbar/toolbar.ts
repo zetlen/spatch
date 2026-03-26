@@ -9,6 +9,8 @@ import { createBlendPanel } from './blend-panel.ts';
 import { createBorderPanel } from './border-panel.ts';
 import { createFillPanel } from './fill-panel.ts';
 import { createPatternPanel } from './pattern-panel.ts';
+import { createStamplePanel } from './stample-panel.ts';
+import { get as getVoiceEntry } from '../voices/registry.ts';
 
 export class Toolbar {
   store: SigilStore;
@@ -22,6 +24,7 @@ export class Toolbar {
   private _borderPanel: ReturnType<typeof createBorderPanel>;
   private _fillPanel: ReturnType<typeof createFillPanel>;
   private _patternPanel: ReturnType<typeof createPatternPanel>;
+  private _stampsEnabled: boolean;
 
   constructor(store: SigilStore, undo: UndoManager) {
     this.store = store;
@@ -56,6 +59,26 @@ export class Toolbar {
     this.panels.register('fill', this._fillPanel, btnFill, expansionArea);
     this.panels.register('border', this._borderPanel, btnBorder, expansionArea);
     this.panels.register('pattern', this._patternPanel, btnPattern, patternArea);
+
+    // Voice-aware panels: stample picker (stamps only)
+    const stampsEnabled =
+      typeof localStorage !== 'undefined' && localStorage.getItem('spatch:stamps') === '1';
+
+    const stampleArea = document.querySelector<HTMLElement>('#stample-panel');
+    const btnStamp = document.querySelector<HTMLElement>('#btn-stamp');
+
+    if (stampsEnabled && stampleArea) {
+      const stamplePanel = createStamplePanel({ ...sharedDeps, area: stampleArea });
+
+      if (btnStamp) {
+        this.panels.register('stample', stamplePanel, btnStamp, stampleArea);
+        btnStamp.addEventListener('click', () => {
+          this.panels.toggle('stample');
+        });
+      }
+    }
+
+    this._stampsEnabled = stampsEnabled;
 
     this._bindToolButtons();
 
@@ -112,6 +135,7 @@ export class Toolbar {
       tools.classList.remove('hidden');
       props.classList.add('hidden');
       this.panels.close();
+      this._syncVoicePanels();
     }
   }
 
@@ -189,5 +213,17 @@ export class Toolbar {
     this._borderPanel.updateButton();
     this._patternPanel.update(); // has-pattern indicator needs sync even when closed
     this.panels.updateOpen();
+    this._syncVoicePanels();
+  }
+
+  /** Show/hide voice-type-specific panel buttons based on registry descriptor. */
+  private _syncVoicePanels(): void {
+    const voice = this.getSelected();
+    const panels = voice ? getVoiceEntry(voice.waveform).panels : undefined;
+
+    const btnBorder = document.querySelector<HTMLElement>('#btn-border');
+    if (btnBorder) {
+      btnBorder.classList.toggle('hidden', panels !== undefined && !panels.border);
+    }
   }
 }

@@ -291,6 +291,12 @@ export class AudioEngine {
     this.envelopeGain.gain.setValueAtTime(this.envelopeGain.gain.value, now);
     this.envelopeGain.gain.linearRampToValueAtTime(0, now + releaseTime);
 
+    // Fire onRelease hooks (e.g. release-triggered stamp samples)
+    const releaseNow = ctx.currentTime;
+    for (const av of this.activeVoices) {
+      av.onRelease?.(releaseNow);
+    }
+
     // Poll output level and clean up once inaudible, rather than guessing
     // a fixed timeout from release + reverb tail duration.
     const SILENCE_THRESHOLD = 0.001; // ~-60 dB

@@ -22,7 +22,7 @@ import {
   type NormalizedCoord,
   normalizedCoord,
 } from '../types.ts';
-import { all, get, hasTimbre } from '../voices/registry.ts';
+import { all, hasTimbre } from '../voices/registry.ts';
 
 // ---- Interaction state machine ----
 //
@@ -520,6 +520,14 @@ export class CanvasInteractionController {
     if (this.interaction.mode === 'rotating') {
       const voice = this.selection.getSelectedVoice();
       if (!voice) {
+        return;
+      }
+      if (voice.waveform === 'stamp') {
+        // Stamp rotation snaps to 3 trigger positions: A=-5°, D=0°, R=+5°
+        const rotation = calcRotation(voice, nx, ny, 1);
+        // Map rotation angle to nearest trigger: <-2.5° → A(0), -2.5°–2.5° → D(1), >2.5° → R(2)
+        const trigger = rotation <= -2.5 ? 0 : rotation >= 2.5 ? 2 : 1;
+        this.store.updateVoice(voice.id, { trigger: trigger as 0 | 1 | 2 });
         return;
       }
       if (!hasTimbre(voice.waveform)) {

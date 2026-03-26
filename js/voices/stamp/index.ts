@@ -9,11 +9,18 @@ const entry: VoiceRegistryEntry = {
   waveform: 'stamp',
   id: 4,
   rotationPeriod: 0,
+  panels: { border: false, stample: true },
   ui,
   player,
   serializer: createSampleSerializer(),
   createVoice: (base: VoiceBase) =>
-    ({ ...base, waveform: 'stamp', stamp: getDefaultStampleIndex() }) as Voice,
+    ({
+      ...base,
+      waveform: 'stamp',
+      stamp: getDefaultStampleIndex(),
+      trigger: 1,
+      border: undefined,
+    }) as Voice,
 };
 
 export default entry;

@@ -17,34 +17,26 @@ export function createSampleSerializer(): VoiceSerializer {
     gradientWidth: base.gradientWidth,
 
     pack(voice: Voice): string {
-      // Pack using the oscillator serializer, then patch SP4.
-      // SP4 is at offset solidWidth-3 (for solid) or gradientWidth-3 (for gradient)
-      // from the start: CP1(4) + [CP2(5)] + SP1(1) + MP1(2) + SP3(1) + [SP4] + SP5 + SP6
-      // SP4 position = 4 + (gradient ? 5 : 0) + 4 = 8 or 13
-
       const stampIndex = 'stamp' in voice ? (voice as { stamp: number }).stamp : 0;
-      // SP4 for sample: stamp index (3b) + trigger (2b) + spare (1b)
-      // trigger not yet implemented, so bits 2-0 are spare
-      const sp4 = (stampIndex & 0x7) << 3;
+      const trigger = 'trigger' in voice ? (voice as { trigger: number }).trigger : 1;
+      const sp4 = ((stampIndex & 0x7) << 3) | ((trigger & 0x3) << 1);
 
-      // Build using oscillator pack (which sets SP4 to timbre=0 for non-timbre voices)
-      // then overwrite SP4
       const packed = base.pack(voice);
       const sp4Offset = voice.fill.mode === 'linear' ? 13 : 8;
       return packed.slice(0, sp4Offset) + encodeInt(sp4, 1) + packed.slice(sp4Offset + 1);
     },
 
     unpack(registers: string, waveform: WaveformType): Voice {
-      // Unpack using oscillator serializer (which ignores SP4 for stamp waveform)
       const voice = base.unpack(registers, waveform);
 
-      // Read SP4 manually for stamp-specific fields
       const isGradient = registers.length === this.gradientWidth;
       const sp4Offset = isGradient ? 13 : 8;
       const sp4 = decodeInt(registers, sp4Offset, 1);
       const stampIndex = (sp4 >> 3) & 0x7;
+      const rawTrigger = (sp4 >> 1) & 0x3;
+      const trigger = rawTrigger > 2 ? 1 : rawTrigger;
 
-      return { ...voice, stamp: stampIndex } as Voice;
+      return { ...voice, stamp: stampIndex, trigger } as Voice;
     },
   };
 }

@@ -76,8 +76,15 @@ export function clampSize(size: number): NormalizedCoord {
   return normalizedCoord(Math.max(MIN_SIZE, Math.min(MAX_SIZE, size)));
 }
 
-/** Get the visual rotation for a voice (derived from timbre). */
+/** Tilt angles for stamp trigger values: A=-5°, D=0°, R=+5°. */
+const STAMP_TRIGGER_TILT = [-5, 0, 5] as const;
+
+/** Get the visual rotation for a voice (derived from timbre, or trigger for stamps). */
 export function voiceRotation(voice: Voice): number {
+  if (voice.waveform === 'stamp') {
+    const trigger = 'trigger' in voice ? (voice as { trigger: number }).trigger : 1;
+    return STAMP_TRIGGER_TILT[trigger] ?? 0;
+  }
   const entry = get(voice.waveform);
   const timbre = 'timbre' in voice ? (voice.timbre as number) : 0;
   return Math.min(1, Math.max(0, timbre)) * entry.rotationPeriod;

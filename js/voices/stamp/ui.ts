@@ -1,6 +1,6 @@
 // stamp/ui.ts — SVG rendering and selection handles for stamp voices.
 
-import { resizeHandleEl, setAttrs, svgEl } from '../../dom.ts';
+import { resizeHandleEl, rotationHandleEls, setAttrs, svgEl } from '../../dom.ts';
 import { getStample } from '../../stamples/index.ts';
 import type { Voice } from '../../types.ts';
 import type { VoiceUI } from '../types.ts';
@@ -135,6 +135,7 @@ const ui: VoiceUI = {
       resizeHandleEl('n', cx, cy - hh),
       resizeHandleEl('w', cx - hw, cy),
       resizeHandleEl('s', cx, cy + hh),
+      ...rotationHandleEls(cx, cy - hh),
     ];
   },
 };

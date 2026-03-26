@@ -14,6 +14,10 @@ function getStampIndex(voice: Voice): number {
   return 'stamp' in voice ? (voice as { stamp: number }).stamp : 0;
 }
 
+function getTrigger(voice: Voice): number {
+  return 'trigger' in voice ? (voice as { trigger: number }).trigger : 1;
+}
+
 // 1-sample silent buffer used as fallback if decode hasn't finished yet.
 let silentBuffer: AudioBuffer | undefined;
 function getSilentBuffer(ctx: AudioContext): AudioBuffer {
@@ -57,18 +61,28 @@ const player: VoicePlayer = {
       shapeId: voice.id,
       warmthShaper: undefined,
       start(time: number) {
-        // FM osc and border octave start immediately (attack phase).
-        // The sample itself fires in onDecay() so the percussive hit
-        // lands at peak envelope amplitude, not during the ramp.
         fmOsc.start(time);
         if (shared.octaveOsc) {
           try {
             shared.octaveOsc.start(time);
           } catch {}
         }
+        // Trigger=0 (Attack): fire sample immediately
+        if (getTrigger(voice) === 0) {
+          source.start(time);
+        }
       },
       onDecay(time: number) {
-        source.start(time);
+        // Trigger=1 (Decay): fire sample at peak envelope (original behavior)
+        if (getTrigger(voice) === 1) {
+          source.start(time);
+        }
+      },
+      onRelease(time: number) {
+        // Trigger=2 (Release): fire sample on note-off
+        if (getTrigger(voice) === 2) {
+          source.start(time);
+        }
       },
       stop(_time: number) {
         safeStop(source);

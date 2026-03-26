@@ -1,7 +1,5 @@
 // credits.ts -- Credits overlay toggle + audio muffling + dynamic photo credit
 
-// Icon reference for sprite scanner: #tabler-heart-search
-
 import { effect } from '@preact/signals-core';
 import type { AudioEngine } from './audio/engine.ts';
 import { qel } from './dom.ts';
@@ -15,7 +13,6 @@ interface OverlayHandle {
 }
 
 export function initCredits(audio: AudioEngine, store: SigilStore): OverlayHandle {
-  const btn = qel('#btn-credits');
   const overlay = qel('#credits-overlay');
 
   // Dynamic photo credit: updates when the scene changes
@@ -50,14 +47,6 @@ export function initCredits(audio: AudioEngine, store: SigilStore): OverlayHandl
     overlay.setAttribute('aria-hidden', 'true');
     audio.unmuffle();
   }
-
-  btn.addEventListener('click', () => {
-    if (overlay.classList.contains('hidden')) {
-      show();
-    } else {
-      hide();
-    }
-  });
 
   overlay.addEventListener('click', (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('a')) {

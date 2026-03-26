@@ -181,10 +181,12 @@ export interface AstroidVoice extends VoiceBase {
   timbre: NormalizedCoord;
 }
 
-/** Stamp voice (sample-based). The `stamp` field indexes into the STAMPLES registry. */
+/** Stamp voice (sample-based). The `stamp` field indexes into the STAMPLES registry.
+ *  `trigger` selects the envelope phase that fires the sample: 0=Attack, 1=Decay, 2=Release. */
 export interface StampVoice extends VoiceBase {
   waveform: 'stamp';
   stamp: number;
+  trigger: 0 | 1 | 2;
 }
 
 /** Discriminated union of voice types, keyed on the `waveform` field. */

@@ -26,7 +26,6 @@ import { initShare } from './share.ts';
 import { randomize, harmonize } from './harmony.ts';
 import { createHarmonizePanel } from './toolbar/harmonize-panel.ts';
 import { createStagePanel } from './toolbar/stage-panel.ts';
-import { createStamplePanel } from './toolbar/stample-panel.ts';
 import { bindLongPress } from './toolbar/expansion-panel.ts';
 import { all } from './voices/registry.ts';
 
@@ -165,29 +164,9 @@ let sceneReady: Promise<void> = Promise.resolve();
   );
 }
 
-// Stamp button: click opens stample picker panel (no delay).
-// Hidden unless stamps are enabled via localStorage flag.
-{
-  const btnStamp = qel('#btn-stamp');
-  if (stampsEnabled) {
-    const stampleArea = qel('#stample-panel');
-    const stamplePanel = createStamplePanel({
-      area: stampleArea,
-      store,
-      undo,
-      getSelectedId: () => selection.voiceId,
-      requestRender: () => {
-        needsRender = true;
-      },
-      onDismiss: () => toolbar.panels.close(),
-    });
-    toolbar.panels.register('stample', stamplePanel, btnStamp, stampleArea);
-    btnStamp.addEventListener('click', () => {
-      toolbar.panels.toggle('stample');
-    });
-  } else {
-    btnStamp.style.display = 'none';
-  }
+// Hide stamp tool button unless stamps are enabled
+if (!stampsEnabled) {
+  qel('#btn-stamp').style.display = 'none';
 }
 
 // React to scene changes (and apply the initial scene on first run):
@@ -392,6 +371,32 @@ window.addEventListener('popstate', () => {
 // ---- Credits overlay ----
 
 const credits = initCredits(audio, store);
+
+// Logo mark: bounce then show credits (or dismiss if already open)
+const logoMark = qel('.logo-mark');
+const creditsOverlay = qel('#credits-overlay');
+const shareOverlay = qel('#share-overlay');
+logoMark.addEventListener('click', () => {
+  // If credits is open, just dismiss it
+  if (!creditsOverlay.classList.contains('hidden')) {
+    credits.hide();
+    return;
+  }
+  // If another overlay is open, do nothing
+  if (!shareOverlay.classList.contains('hidden') || tutorial?.isVisible) return;
+  // Bounce then show credits
+  logoMark.classList.remove('bounce');
+  void logoMark.offsetWidth;
+  logoMark.classList.add('bounce');
+  logoMark.addEventListener(
+    'animationend',
+    () => {
+      logoMark.classList.remove('bounce');
+      credits.show();
+    },
+    { once: true },
+  );
+});
 
 // ---- Share overlay ----
 

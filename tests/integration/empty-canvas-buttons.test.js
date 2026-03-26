@@ -55,11 +55,11 @@ test.describe('Button visibility on empty canvas', () => {
     await expect(page.locator('#btn-play')).toHaveCSS('pointer-events', 'none');
   });
 
-  test('credits button remains visible on empty canvas', async ({ page }) => {
+  test('tutorial button remains visible on empty canvas', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#sigil-canvas');
 
-    // Credits should always be interactive when is-editing
-    await expect(page.locator('#btn-credits')).toHaveCSS('pointer-events', 'auto');
+    // Tutorial should always be interactive when is-editing
+    await expect(page.locator('#btn-tutorial')).toHaveCSS('pointer-events', 'auto');
   });
 });

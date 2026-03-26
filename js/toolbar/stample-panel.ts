@@ -4,23 +4,15 @@
 // sets the default stample for new stamp voices and dismisses the panel.
 // If a stamp voice is selected, also updates its stamp variant.
 
-import type { SigilStore, UndoManager } from '../state.ts';
 import { STAMPLES } from '../stamples/index.ts';
 import { setDefaultStampleIndex, getDefaultStampleIndex } from '../voices/stamp/lifecycle.ts';
-import { createExpansionPanel, type ExpansionPanel } from './expansion-panel.ts';
+import { createExpansionPanel, type ExpansionPanel, type PanelDeps } from './expansion-panel.ts';
 
-export function createStamplePanel(deps: {
-  area: HTMLElement;
-  store: SigilStore;
-  undo: UndoManager;
-  getSelectedId: () => string | undefined;
-  requestRender: () => void;
-  onDismiss: () => void;
-}): ExpansionPanel {
-  const { area, store, undo, getSelectedId, requestRender, onDismiss } = deps;
+export function createStamplePanel(deps: PanelDeps): ExpansionPanel {
+  const { store, undo, getSelectedId } = deps;
 
   return createExpansionPanel({
-    area,
+    area: deps.area,
     entries: () =>
       STAMPLES.map((stample, i) => ({
         type: 'item' as const,
@@ -43,17 +35,14 @@ export function createStamplePanel(deps: {
       const index = parseInt(key);
       setDefaultStampleIndex(index);
 
-      // If a stamp voice is selected, update its variant
       const id = getSelectedId();
       if (id) {
         const voice = store.getVoice(id);
         if (voice && voice.waveform === 'stamp') {
           undo.snapshot();
           store.updateVoice(id, { stamp: index });
-          requestRender();
         }
       }
     },
-    onDismiss,
   });
 }
