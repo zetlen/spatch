@@ -52,16 +52,24 @@ function useAttrs(voice: Voice): Record<string, string | number> {
   };
 }
 
-/** Transform a hull path's coordinates from viewBox space to canvas space.
- *  Rewrites all numeric coordinate pairs in the path `d` string so the
- *  resulting path needs no transform attribute (avoiding stroke scaling). */
-function transformHullPath(d: string, voice: Voice, viewBox: string): string {
+/** Compute scale and translation to map viewBox coordinates to canvas space. */
+function viewBoxTransform(
+  voice: Voice,
+  viewBox: string,
+): { scale: number; tx: number; ty: number } {
   const [vx, vy, vw, vh] = viewBox.split(' ').map(Number);
   const r = (voice.size as number) / 2;
   const scale = Math.min((voice.size as number) / vw!, (voice.size as number) / vh!);
   const tx = (voice.x as number) - r + ((voice.size as number) - vw! * scale) / 2 - vx! * scale;
   const ty = (voice.y as number) - r + ((voice.size as number) - vh! * scale) / 2 - vy! * scale;
-  // Replace coordinate pairs: transform each number
+  return { scale, tx, ty };
+}
+
+/** Transform a hull path's coordinates from viewBox space to canvas space.
+ *  Rewrites all numeric coordinate pairs in the path `d` string so the
+ *  resulting path needs no transform attribute (avoiding stroke scaling). */
+function transformHullPath(d: string, voice: Voice, viewBox: string): string {
+  const { scale, tx, ty } = viewBoxTransform(voice, viewBox);
   let isX = true;
   return d.replace(/-?\d+\.?\d*/g, (match) => {
     const n = parseFloat(match);
@@ -124,17 +132,13 @@ const ui: VoiceUI = {
 
   selectionHandles(voice: Voice): SVGElement[] {
     const stample = getStample(getStampIndex(voice));
-    const r = (voice.size as number) / 2;
-    const { w, h, dx, dy } = stampBounds(voice, stample);
-    const hw = w / 2;
-    const hh = h / 2;
-    const cx = (voice.x as number) + dx - r + hw;
-    const cy = (voice.y as number) + dy - r + hh;
+    const { scale, tx, ty } = viewBoxTransform(voice, stample.svg.viewBox);
+    const hp = stample.handlePoints;
     return [
-      resizeHandleEl('e', cx + hw, cy),
-      resizeHandleEl('n', cx, cy - hh),
-      resizeHandleEl('w', cx - hw, cy),
-      resizeHandleEl('s', cx, cy + hh),
+      resizeHandleEl('n', hp.n.x * scale + tx, hp.n.y * scale + ty),
+      resizeHandleEl('e', hp.e.x * scale + tx, hp.e.y * scale + ty),
+      resizeHandleEl('s', hp.s.x * scale + tx, hp.s.y * scale + ty),
+      resizeHandleEl('w', hp.w.x * scale + tx, hp.w.y * scale + ty),
     ];
   },
 };

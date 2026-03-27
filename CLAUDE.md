@@ -335,7 +335,7 @@ const stample: Stample = {
   shapeAreaCoeff: 1.2,
   gainExponent: 1.0,
   formantMaxQ: 4,
-  hull: 'M 630,575 L 670,580 ... Z',  // M, L, Z only — no curves/arcs
+  hull: 'M 630,576 C 621,839 ... Z',  // SVG path (M/L/C/Z); numbers are alternating x,y
 };
 export default stample;
 ```

@@ -47,15 +47,8 @@ if ('__audioCapture' in globalThis) {
   (globalThis as Record<string, unknown>).__testAudio = audio;
 }
 
-// Stamp voices are gated behind a localStorage flag while the UX is refined.
-// Enable in console: localStorage.setItem('spatch:stamps', '1')
-const stampsEnabled =
-  typeof localStorage !== 'undefined' && localStorage.getItem('spatch:stamps') === '1';
-
-if (stampsEnabled) {
-  prefetchStampSamples();
-  initStampSymbols(svgCanvas);
-}
+prefetchStampSamples();
+initStampSymbols(svgCanvas);
 
 // Pre-warm AudioContext on first user gesture. iOS Safari only allows audio
 // From touchend, click, doubleclick, or keydown — NOT pointerdown/mousedown.
@@ -63,7 +56,7 @@ if (stampsEnabled) {
   const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
   function onFirstGesture(): void {
     audio.warmUp();
-    if (stampsEnabled && audio.audioCtx) decodeStampSamples(audio.audioCtx);
+    if (audio.audioCtx) decodeStampSamples(audio.audioCtx);
     for (const evt of warmUpEvents) {
       document.removeEventListener(evt, onFirstGesture);
     }
@@ -162,11 +155,6 @@ let sceneReady: Promise<void> = Promise.resolve();
     },
     () => toolbar.panels.toggle('stage'),
   );
-}
-
-// Hide stamp tool button unless stamps are enabled
-if (!stampsEnabled) {
-  qel('#btn-stamp').style.display = 'none';
 }
 
 // React to scene changes (and apply the initial scene on first run):

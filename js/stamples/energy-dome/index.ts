@@ -10,8 +10,7 @@ const stample: Stample = {
   shapeAreaCoeff: 1.8,
   gainExponent: 1.0,
   formantMaxQ: 4,
-  // The dome shape IS its own hull (simple polygon)
-  hull: 'M 10,160 L 10,120 L 30,120 L 30,80 L 50,80 L 50,40 L 70,40 L 70,0 L 130,0 L 130,40 L 150,40 L 150,80 L 170,80 L 170,120 L 190,120 L 190,160 Z',
+  handles: { n: [79, 0], e: [121, 0], s: [160, 86], w: [40, 86] },
 };
 
 export default stample;

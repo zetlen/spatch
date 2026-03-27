@@ -163,15 +163,8 @@ function createRandomLinearFill(): Fill {
   };
 }
 
-/** Waveform types to pick from when randomizing.
- *  Stamps are excluded unless enabled via localStorage flag. */
-const WAVEFORMS = all()
-  .map((e) => e.waveform)
-  .filter(
-    (wf) =>
-      wf !== 'stamp' ||
-      (typeof localStorage !== 'undefined' && localStorage.getItem('spatch:stamps') === '1'),
-  );
+/** Waveform types to pick from when randomizing. */
+const WAVEFORMS = all().map((e) => e.waveform);
 
 /** Number of voices to create when randomizing. */
 const RANDOM_VOICE_COUNT = 5;

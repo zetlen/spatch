@@ -24,8 +24,6 @@ export class Toolbar {
   private _borderPanel: ReturnType<typeof createBorderPanel>;
   private _fillPanel: ReturnType<typeof createFillPanel>;
   private _patternPanel: ReturnType<typeof createPatternPanel>;
-  private _stampsEnabled: boolean;
-
   constructor(store: SigilStore, undo: UndoManager) {
     this.store = store;
     this.undo = undo;
@@ -61,24 +59,13 @@ export class Toolbar {
     this.panels.register('pattern', this._patternPanel, btnPattern, patternArea);
 
     // Voice-aware panels: stample picker (stamps only)
-    const stampsEnabled =
-      typeof localStorage !== 'undefined' && localStorage.getItem('spatch:stamps') === '1';
-
-    const stampleArea = document.querySelector<HTMLElement>('#stample-panel');
-    const btnStamp = document.querySelector<HTMLElement>('#btn-stamp');
-
-    if (stampsEnabled && stampleArea) {
-      const stamplePanel = createStamplePanel({ ...sharedDeps, area: stampleArea });
-
-      if (btnStamp) {
-        this.panels.register('stample', stamplePanel, btnStamp, stampleArea);
-        btnStamp.addEventListener('click', () => {
-          this.panels.toggle('stample');
-        });
-      }
-    }
-
-    this._stampsEnabled = stampsEnabled;
+    const stampleArea = qel<HTMLElement>('#stample-panel');
+    const btnStamp = qel<HTMLElement>('#btn-stamp');
+    const stamplePanel = createStamplePanel({ ...sharedDeps, area: stampleArea });
+    this.panels.register('stample', stamplePanel, btnStamp, stampleArea);
+    btnStamp.addEventListener('click', () => {
+      this.panels.toggle('stample');
+    });
 
     this._bindToolButtons();
 
