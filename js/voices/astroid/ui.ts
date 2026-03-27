@@ -1,6 +1,6 @@
 // astroid/ui.ts — SVG rendering and selection handles for astroid voices.
 
-import { resizeHandleEl, rotationHandleEls, svgEl } from '../../dom.ts';
+import { resizeHandleEl, svgEl } from '../../dom.ts';
 import type { Voice } from '../../types.ts';
 import type { VoiceUI } from '../types.ts';
 
@@ -44,7 +44,6 @@ const ui: VoiceUI = {
       resizeHandleEl('n', voice.x, voice.y - r),
       resizeHandleEl('w', voice.x - r, voice.y),
       resizeHandleEl('s', voice.x, voice.y + r),
-      ...rotationHandleEls(voice.x, voice.y - r),
     ];
   },
 };

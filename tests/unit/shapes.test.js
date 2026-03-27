@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { calcResize, calcRotation, hitTestADSRCorner, voiceRotation } from '../../js/shapes.ts';
+import { hitTestADSRCorner, voiceRotation } from '../../js/shapes.ts';
 
 const CANVAS_SIZE = 800;
 
@@ -42,66 +42,6 @@ describe('hitTestADSRCorner', () => {
   test('returns null for center of canvas', () => {
     const result = hitTestADSRCorner(envelope, 400, 400, CANVAS_SIZE);
     expect(result).toBeUndefined();
-  });
-});
-
-describe('calcResize', () => {
-  const voice = makeVoice({ size: 0.12 });
-
-  test('SE handle increases size with positive drag', () => {
-    const newSize = calcResize(voice, 'se', 20, 20, CANVAS_SIZE);
-    expect(newSize).toBeGreaterThan(voice.size);
-  });
-
-  test('NW handle increases size with negative drag', () => {
-    const newSize = calcResize(voice, 'nw', -20, -20, CANVAS_SIZE);
-    expect(newSize).toBeGreaterThan(voice.size);
-  });
-
-  test('E handle responds to horizontal drag only', () => {
-    const bigger = calcResize(voice, 'e', 20, 0, CANVAS_SIZE);
-    const same = calcResize(voice, 'e', 0, 20, CANVAS_SIZE);
-    expect(bigger).toBeGreaterThan(voice.size);
-    // Vertical drag should not change size for 'e' handle
-    expect(same).toBeCloseTo(voice.size, 2);
-  });
-
-  test('clamps to minimum size', () => {
-    const tiny = calcResize(voice, 'se', -1000, -1000, CANVAS_SIZE);
-    expect(tiny).toBeGreaterThan(0);
-    expect(tiny).toBeCloseTo((10 * 2) / CANVAS_SIZE, 5); // Min radius 10 → size 20/800
-  });
-
-  test('clamps to maximum size', () => {
-    const huge = calcResize(voice, 'se', 10_000, 10_000, CANVAS_SIZE);
-    expect(huge).toBeLessThanOrEqual(0.9); // Max radius 0.45*800 → size 0.9
-  });
-});
-
-describe('calcRotation', () => {
-  test('mouse directly above shape returns ~0 degrees', () => {
-    const voice = makeVoice({ x: 0.5, y: 0.5 });
-    // Directly above: mx=400, my=300
-    const deg = calcRotation(voice, 400, 300, CANVAS_SIZE);
-    expect(deg).toBeCloseTo(0, 0);
-  });
-
-  test('mouse to the right returns ~90 degrees', () => {
-    const voice = makeVoice({ x: 0.5, y: 0.5 });
-    const deg = calcRotation(voice, 500, 400, CANVAS_SIZE);
-    expect(deg).toBeCloseTo(90, 0);
-  });
-
-  test('mouse below returns ~180 degrees', () => {
-    const voice = makeVoice({ x: 0.5, y: 0.5 });
-    const deg = calcRotation(voice, 400, 500, CANVAS_SIZE);
-    expect(deg).toBeCloseTo(180, 0);
-  });
-
-  test('mouse to the left returns ~270 degrees', () => {
-    const voice = makeVoice({ x: 0.5, y: 0.5 });
-    const deg = calcRotation(voice, 300, 400, CANVAS_SIZE);
-    expect(deg).toBeCloseTo(270, 0);
   });
 });
 

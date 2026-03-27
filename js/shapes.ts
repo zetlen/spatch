@@ -2,12 +2,9 @@
 
 import {
   type ADSRCorner,
-  type Degrees,
   type Envelope,
-  type HandleType,
   type NormalizedCoord,
   type Voice,
-  degrees,
   normalizedCoord,
 } from './types.ts';
 import { get } from './voices/registry.ts';
@@ -152,54 +149,4 @@ export function hitTestADSRCorner(
   }
 
   return;
-}
-
-// Calculate new size from a resize handle drag
-export function calcResize(
-  voice: Voice,
-  handleType: HandleType,
-  localDx: number,
-  localDy: number,
-  canvasSize: number,
-): NormalizedCoord {
-  const r = (voice.size / 2) * canvasSize;
-  let newR = r;
-
-  switch (handleType) {
-    case 'nw':
-    case 'se': {
-      newR = r + ((handleType === 'se' ? 1 : -1) * (localDx + localDy)) / 2;
-      break;
-    }
-    case 'ne':
-    case 'sw': {
-      newR = r + ((handleType === 'ne' ? 1 : -1) * (localDx - localDy)) / 2;
-      break;
-    }
-    case 'n':
-    case 's': {
-      newR = r + (handleType === 's' ? 1 : -1) * localDy;
-      break;
-    }
-    case 'e':
-    case 'w': {
-      newR = r + (handleType === 'e' ? 1 : -1) * localDx;
-      break;
-    }
-  }
-
-  return clampSize((newR * 2) / canvasSize);
-}
-
-// Calculate rotation from mouse position relative to voice center
-export function calcRotation(voice: Voice, mx: number, my: number, canvasSize: number): Degrees {
-  const cx = voice.x * canvasSize;
-  const cy = voice.y * canvasSize;
-  const angle = Math.atan2(my - cy, mx - cx);
-  // Convert to degrees, offset so "up" = 0
-  let deg = (angle * 180) / Math.PI + 90;
-  if (deg < 0) {
-    deg += 360;
-  }
-  return degrees(deg);
 }

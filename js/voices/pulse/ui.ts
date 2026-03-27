@@ -1,6 +1,6 @@
 // pulse/ui.ts — SVG rendering and selection handles for pulse (square) voices.
 
-import { resizeHandleEl, rotationHandleEls, setAttrs, svgEl } from '../../dom.ts';
+import { resizeHandleEl, setAttrs, svgEl } from '../../dom.ts';
 import type { Voice } from '../../types.ts';
 import type { VoiceUI } from '../types.ts';
 
@@ -35,7 +35,6 @@ const ui: VoiceUI = {
       resizeHandleEl('ne', voice.x + r, voice.y - r),
       resizeHandleEl('se', voice.x + r, voice.y + r),
       resizeHandleEl('sw', voice.x - r, voice.y + r),
-      ...rotationHandleEls(voice.x, voice.y - r),
     ];
   },
 };

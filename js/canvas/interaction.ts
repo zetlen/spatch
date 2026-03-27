@@ -6,8 +6,6 @@
 
 import { hardSnapYToNote, rotationToTimbre, snapYToNote } from '../audio/mapping.ts';
 import {
-  calcResize,
-  calcRotation,
   clampSize,
   dragToEnvelopeValue,
   hitTestADSRCorner,
@@ -22,7 +20,7 @@ import {
   type NormalizedCoord,
   normalizedCoord,
 } from '../types.ts';
-import { all, hasTimbre } from '../voices/registry.ts';
+import { all, get, hasTimbre } from '../voices/registry.ts';
 
 // ---- Interaction state machine ----
 //
@@ -42,11 +40,14 @@ export type InteractionState =
       mode: 'resizing';
       pointerId: number;
       handle: HandleType;
-      origin: { size: number };
-      startPx: number;
-      startPy: number;
+      origin: { size: number; timbre: number; trigger: number };
+      /** Angle from voice center to the handle at drag start (radians). */
+      startAngle: number;
+      /** Distance from voice center to the pointer at drag start. */
+      startDist: number;
+      cx: number;
+      cy: number;
     }
-  | { mode: 'rotating'; pointerId: number }
   | {
       mode: 'adsr';
       pointerId: number;
@@ -362,20 +363,20 @@ export class CanvasInteractionController {
       if (handle) {
         const selVoice = this.selection.getSelectedVoice();
         if (selVoice) {
-          if (handle === 'rotate') {
-            this.undo.snapshot();
-            this.interaction = { mode: 'rotating', pointerId: e.pointerId };
-            this.canvasWrap.setPointerCapture(e.pointerId);
-            return;
-          }
+          const cx = selVoice.x as number;
+          const cy = selVoice.y as number;
+          const timbre = 'timbre' in selVoice ? (selVoice.timbre as number) : 0;
+          const trigger = 'trigger' in selVoice ? (selVoice as { trigger: number }).trigger : 1;
           this.undo.snapshot();
           this.interaction = {
-            handle,
+            cx,
+            cy,
+            handle: handle as HandleType,
             mode: 'resizing',
-            origin: { size: selVoice.size },
+            origin: { size: selVoice.size, timbre, trigger },
             pointerId: e.pointerId,
-            startPx: nx,
-            startPy: ny,
+            startAngle: Math.atan2(ny - cy, nx - cx),
+            startDist: Math.hypot(nx - cx, ny - cy),
           };
           this.canvasWrap.setPointerCapture(e.pointerId);
           return;
@@ -498,44 +499,38 @@ export class CanvasInteractionController {
       if (!voice) {
         return;
       }
-      const rotDeg = voiceRotation(voice);
-      const rotRad = (rotDeg * Math.PI) / 180;
-      const dnx = nx - this.interaction.startPx;
-      const dny = ny - this.interaction.startPy;
-      const cos = Math.cos(-rotRad);
-      const sin = Math.sin(-rotRad);
-      const localDx = dnx * cos - dny * sin;
-      const localDy = dnx * sin + dny * cos;
-      const newSize = calcResize(
-        { ...voice, size: normalizedCoord(this.interaction.origin.size) },
-        this.interaction.handle,
-        localDx,
-        localDy,
-        1,
-      );
-      this.store.updateVoice(voice.id, { size: newSize });
-      return;
-    }
 
-    if (this.interaction.mode === 'rotating') {
-      const voice = this.selection.getSelectedVoice();
-      if (!voice) {
-        return;
-      }
+      // Decompose pointer motion into radial (resize) and tangential (rotate)
+      // components relative to the voice center.
+      const { cx, cy } = this.interaction;
+      const curAngle = Math.atan2(ny - cy, nx - cx);
+      const curDist = Math.hypot(nx - cx, ny - cy);
+
+      // Radial: distance change → resize
+      const distDelta = curDist - this.interaction.startDist;
+      const newSize = clampSize(this.interaction.origin.size + distDelta * 2);
+      const updates: Record<string, unknown> = { size: newSize };
+
+      // Tangential: angle change → rotation/timbre/trigger
+      const angleDelta = curAngle - this.interaction.startAngle;
+      // Normalize to [-π, π]
+      const normAngle = Math.atan2(Math.sin(angleDelta), Math.cos(angleDelta));
+      const degDelta = (normAngle * 180) / Math.PI;
+
       if (voice.waveform === 'stamp') {
-        // Stamp rotation snaps to 3 trigger positions: A=-5°, D=0°, R=+5°
-        const rotation = calcRotation(voice, nx, ny, 1);
-        // Map rotation angle to nearest trigger: <-2.5° → A(0), -2.5°–2.5° → D(1), >2.5° → R(2)
-        const trigger = rotation <= -2.5 ? 0 : rotation >= 2.5 ? 2 : 1;
-        this.store.updateVoice(voice.id, { trigger: trigger as 0 | 1 | 2 });
-        return;
+        // Stamp: snap trigger based on accumulated angle from origin
+        const baseTilt = [-5, 0, 5][this.interaction.origin.trigger] ?? 0;
+        const newTilt = baseTilt + degDelta;
+        const trigger = newTilt <= -2.5 ? 0 : newTilt >= 2.5 ? 2 : 1;
+        updates.trigger = trigger as 0 | 1 | 2;
+      } else if (hasTimbre(voice.waveform)) {
+        const entry = get(voice.waveform);
+        const originDeg = this.interaction.origin.timbre * entry.rotationPeriod;
+        const newRotation = (((originDeg + degDelta) % 360) + 360) % 360;
+        updates.timbre = normalizedCoord(rotationToTimbre(newRotation, voice.waveform));
       }
-      if (!hasTimbre(voice.waveform)) {
-        return;
-      }
-      const rotation = calcRotation(voice, nx, ny, 1);
-      const timbre = rotationToTimbre(rotation, voice.waveform);
-      this.store.updateVoice(voice.id, { timbre: normalizedCoord(timbre) });
+
+      this.store.updateVoice(voice.id, updates);
       return;
     }
 

@@ -219,13 +219,16 @@ test.describe('Audio waveform snapshots', () => {
     const cx = box.x + box.width * 0.5;
     const cy = box.y + box.height * 0.5;
 
-    // The rotate handle is above the shape center. Get its normalized y
-    // from the SVG element's cy attribute, then convert to page pixels.
-    const rotHandle = page.locator('[data-handle="rotate"]');
-    await rotHandle.waitFor({ state: 'attached' });
-    const handleNY = await rotHandle.evaluate((el) => parseFloat(el.getAttribute('cy')));
+    // Use the north resize handle (directly above center) as the drag
+    // origin — tangential motion around the center produces rotation.
+    const nHandle = page.locator('[data-handle="n"]');
+    await nHandle.waitFor({ state: 'attached' });
+    const handleNY = await nHandle.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.y + rect.height / 2;
+    });
     const hx = cx; // handle is centered horizontally over the shape
-    const hy = box.y + box.height * handleNY;
+    const hy = handleNY;
 
     // 60° clockwise from up: pointer at (cx + r·sin(60°), cy - r·cos(60°))
     const r = cy - hy; // distance from center to handle
@@ -471,11 +474,14 @@ test.describe('Audio waveform snapshots', () => {
       const cx = box.x + box.width * 0.5;
       const cy = box.y + box.height * 0.5;
 
-      const rotHandle = page.locator('[data-handle="rotate"]');
-      await rotHandle.waitFor({ state: 'attached' });
-      const handleNY = await rotHandle.evaluate((el) => parseFloat(el.getAttribute('cy')));
+      const nHandle = page.locator('[data-handle="n"]');
+      await nHandle.waitFor({ state: 'attached' });
+      const handleNY = await nHandle.evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.y + rect.height / 2;
+      });
       const hx = cx;
-      const hy = box.y + box.height * handleNY;
+      const hy = handleNY;
 
       // 45° clockwise from up
       const r = cy - hy;

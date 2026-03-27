@@ -226,8 +226,8 @@ export interface AudioEffect {
 
 // ---- UI types ----
 
-/** Selection handle positions: cardinal/corner resize handles or rotation handle. */
-export type HandleType = 'rotate' | 'nw' | 'ne' | 'se' | 'sw' | 'n' | 'e' | 's' | 'w';
+/** Selection handle positions: cardinal and corner resize handles. */
+export type HandleType = 'nw' | 'ne' | 'se' | 'sw' | 'n' | 'e' | 's' | 'w';
 
 /** Canvas frame corner mapped to an ADSR envelope parameter. */
 export type ADSRCorner = 'attack' | 'decay' | 'sustain' | 'release';

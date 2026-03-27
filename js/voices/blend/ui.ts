@@ -1,6 +1,6 @@
 // blend/ui.ts — SVG rendering and selection handles for blend (triangle) voices.
 
-import { resizeHandleEl, rotationHandleEls, svgEl } from '../../dom.ts';
+import { resizeHandleEl, svgEl } from '../../dom.ts';
 import type { Voice } from '../../types.ts';
 import type { VoiceUI } from '../types.ts';
 
@@ -40,7 +40,6 @@ const ui: VoiceUI = {
       const py = voice.y + Math.sin(angle) * r;
       handles.push(resizeHandleEl(handleTypes[i]!, px, py));
     }
-    handles.push(...rotationHandleEls(voice.x, voice.y - r));
     return handles;
   },
 };
