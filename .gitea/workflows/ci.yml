@@ -21,7 +21,7 @@ jobs:
         browser: [webkit, chromium]
     env:
       CI: 1
-      PLAYWRIGHT_WORKERS: 2
+      PLAYWRIGHT_WORKERS: 1
     steps:
       - uses: actions/checkout@v4
       - run: mise install
