@@ -6,10 +6,11 @@
 //   CP2 (5 chars): Fill color 2 + gradient angle — angle(3) + H(9) + S(7) + L(8)
 //                  Present only for gradient fills.
 //   SP1 (1 char): Y — note index 0-36
-//   SP2 (1 char): X — pan 0-63
+//   MP1 (2 chars): X — pan 0-4095
 //   SP3 (1 char): Size 0-63
 //   SP4 (1 char): Timbre 0-63 (0 for sine)
-//   SP5 (1 char): Effect (3b) + blend (3b)
+//   SP5 (2 chars): Effect (5b) + blend (3b) + spare (4b)
+//                  TODO: Shrink back to 1 char (3b+3b) after culling patterns.
 //   SP6 (1 char): Border style (3b) + thickness (3b)
 
 import {
@@ -124,8 +125,8 @@ function unpackSP4Oscillator(val: number, waveform: WaveformType): Record<string
 
 export function createOscillatorSerializer(): VoiceSerializer {
   return {
-    solidWidth: 11,
-    gradientWidth: 16,
+    solidWidth: 12,
+    gradientWidth: 17,
 
     pack(voice: Voice): string {
       let out = '';
@@ -151,10 +152,10 @@ export function createOscillatorSerializer(): VoiceSerializer {
       // SP4: Timbre (oscillator-specific)
       out += encodeInt(packSP4Oscillator(voice), 1);
 
-      // SP5: Effect (3b) + blend (3b)
+      // SP5: Effect (5b) + blend (3b) + spare (4b) = 2 chars
       const eff = Math.max(0, EFFECT_KEYS.indexOf(voice.effect));
       const bl = Math.max(0, BLEND_MODES.indexOf(voice.blend));
-      out += encodeInt(((eff & 0x7) << 3) | (bl & 0x7), 1);
+      out += encodeInt(((eff & 0x1f) << 7) | ((bl & 0x7) << 4), 2);
 
       // SP6: Border style (3b) + thickness (3b)
       out += encodeInt(packBorder(voice.border), 1);
@@ -210,10 +211,11 @@ export function createOscillatorSerializer(): VoiceSerializer {
       const sp4 = decodeInt(registers, idx++, 1);
       const extraFields = unpackSP4Oscillator(sp4, waveform);
 
-      // SP5: Effect + blend
-      const sp5 = decodeInt(registers, idx++, 1);
-      const effect = EFFECT_KEYS[(sp5 >> 3) & 0x7];
-      const blend = BLEND_MODES[sp5 & 0x7] || DEFAULT_BLEND;
+      // SP5: Effect (5b) + blend (3b) + spare (4b) = 2 chars
+      const sp5 = decodeInt(registers, idx, 2);
+      idx += 2;
+      const effect = EFFECT_KEYS[(sp5 >> 7) & 0x1f];
+      const blend = BLEND_MODES[(sp5 >> 4) & 0x7] || DEFAULT_BLEND;
 
       // SP6: Border
       const sp6 = decodeInt(registers, idx++, 1);

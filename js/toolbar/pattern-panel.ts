@@ -1,6 +1,7 @@
 // pattern-panel.ts — Pattern dropdown panel
 
 import { PATTERN_TYPES, type PatternType } from '../types.ts';
+import { getPatternLabel, getPatternPreviewCSS } from '../patterns.ts';
 import {
   createExpansionPanel,
   getSelectedVoice,
@@ -18,9 +19,12 @@ export function createPatternPanel(deps: PanelDeps, triggerBtn: HTMLElement): Ex
         create() {
           const btn = document.createElement('button');
           btn.className = 'dropdown-item';
-          btn.title = p.charAt(0).toUpperCase() + p.slice(1);
+          btn.title = getPatternLabel(p);
           const band = document.createElement('div');
-          band.className = `pattern-band pattern-preview-${p}`;
+          band.className = 'pattern-band';
+          band.style.backgroundImage = getPatternPreviewCSS(p);
+          band.style.backgroundSize = '8px 8px';
+          band.style.imageRendering = 'pixelated';
           btn.append(band);
           return btn;
         },

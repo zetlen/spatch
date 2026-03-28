@@ -1,6 +1,10 @@
-// Effects.ts — Audio effect builders for patterns and FM synthesis for blend modes
+// Effects.ts — FM synthesis parameters for blend modes and overlap computation.
+//
+// Pattern-driven audio effects are co-located with pattern definitions
+// in patterns.ts. This file handles only cross-voice FM synthesis
+// (blend modes) and overlap geometry.
 
-import type { AudioEffect, BlendMode, PatternType } from './types.ts';
+import type { BlendMode } from './types.ts';
 
 export const DEFAULT_BLEND: BlendMode = 'screen';
 
@@ -41,132 +45,6 @@ export function computeFMDepth(overlap: number, params: FMParams, modulatorFreq:
       ? overlap * overlap * params.maxIndex
       : overlap * params.maxIndex;
   return Math.min(scaled * modulatorFreq, MAX_FM_DEVIATION);
-}
-
-export function createEffect(
-  audioCtx: AudioContext,
-  pattern: PatternType,
-): AudioEffect | undefined {
-  switch (pattern) {
-    case 'stripes': {
-      return createChorus(audioCtx);
-    }
-    case 'checker': {
-      return createTremolo(audioCtx);
-    }
-    case 'noise': {
-      return createFlanger(audioCtx);
-    }
-    case 'plaid': {
-      return createPhaser(audioCtx);
-    }
-    default: {
-      return;
-    }
-  }
-}
-
-// ---- Shared helpers ----
-
-/** Create a dry/wet parallel chain with input and output gain nodes. */
-function dryWet(
-  ctx: AudioContext,
-  dryLevel: number,
-  wetLevel: number,
-): { input: GainNode; output: GainNode; dry: GainNode; wet: GainNode } {
-  const input = new GainNode(ctx);
-  const output = new GainNode(ctx);
-  const dry = new GainNode(ctx, { gain: dryLevel });
-  const wet = new GainNode(ctx, { gain: wetLevel });
-  input.connect(dry);
-  dry.connect(output);
-  wet.connect(output);
-  return { input, output, dry, wet };
-}
-
-/** Create an LFO oscillator routed through a gain node. Returns the LFO for disposal. */
-function createLFO(
-  ctx: AudioContext,
-  freq: number,
-  depth: number,
-  target: AudioParam,
-): OscillatorNode {
-  const lfo = new OscillatorNode(ctx, { type: 'sine', frequency: freq });
-  const gain = new GainNode(ctx, { gain: depth });
-  lfo.connect(gain);
-  gain.connect(target);
-  lfo.start();
-  return lfo;
-}
-
-// ---- Pattern effects ----
-
-// Raster stripes → Chorus
-function createChorus(ctx: AudioContext): AudioEffect {
-  const { input, output, wet } = dryWet(ctx, 0.7, 0.5);
-  const delay = new DelayNode(ctx, { maxDelayTime: 0.1, delayTime: 0.025 });
-  const lfo = createLFO(ctx, 1.5, 0.002, delay.delayTime);
-
-  input.connect(delay);
-  delay.connect(wet);
-
-  return { dispose: () => lfo.stop(), input, output };
-}
-
-// Checkerboard → LFO Tremolo
-function createTremolo(ctx: AudioContext): AudioEffect {
-  const input = new GainNode(ctx);
-  const output = new GainNode(ctx);
-  const tremoloGain = new GainNode(ctx, { gain: 0.7 });
-  const lfo = createLFO(ctx, 6, 0.3, tremoloGain.gain);
-
-  input.connect(tremoloGain);
-  tremoloGain.connect(output);
-
-  return { dispose: () => lfo.stop(), input, output };
-}
-
-// Noise texture → Flanger
-function createFlanger(ctx: AudioContext): AudioEffect {
-  const { input, output, wet } = dryWet(ctx, 0.7, 0.7);
-  const delay = new DelayNode(ctx, { maxDelayTime: 0.02, delayTime: 0.005 });
-  const feedback = new GainNode(ctx, { gain: 0.6 });
-  const lfo = createLFO(ctx, 0.25, 0.004, delay.delayTime);
-
-  input.connect(delay);
-  delay.connect(feedback);
-  feedback.connect(delay);
-  delay.connect(wet);
-
-  return { dispose: () => lfo.stop(), input, output };
-}
-
-// Gradient overlay → Phaser
-function createPhaser(ctx: AudioContext): AudioEffect {
-  const { input, output, wet } = dryWet(ctx, 0.8, 0.6);
-
-  const allpassFreqs = [350, 1100, 2700, 5500];
-  const filters = allpassFreqs.map((freq) => {
-    const f = new BiquadFilterNode(ctx, { type: 'allpass', frequency: freq, Q: 0.7 });
-    return f;
-  });
-
-  const lfo = new OscillatorNode(ctx, { type: 'sine', frequency: 0.5 });
-  for (const f of filters) {
-    const lg = new GainNode(ctx, { gain: 500 });
-    lfo.connect(lg);
-    lg.connect(f.frequency);
-  }
-  lfo.start();
-
-  // Chain allpass filters
-  input.connect(filters[0]!);
-  for (let i = 0; i < filters.length - 1; i++) {
-    filters[i]!.connect(filters[i + 1]!);
-  }
-  filters.at(-1)!.connect(wet);
-
-  return { dispose: () => lfo.stop(), input, output };
 }
 
 // ---- Overlap computation ----

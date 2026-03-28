@@ -111,8 +111,8 @@ js/
   harmony.ts         Randomize + harmonize (9 scales)
   shapes.ts          Resize/rotate math, ADSR corner conversion
   colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
-  patterns.ts        SVG pattern definitions (stripes, checker, noise, gradient)
-  effects.ts         Audio effects, FM_PARAMS table, overlap computation
+  patterns.ts        8×8 bitmap pattern tiles, effect factories (visual + audio co-located)
+  effects.ts         FM_PARAMS table, blend-mode FM synthesis, overlap computation
   serialize.ts       URL routing + Base64 serialization (/s/<data>)
   share.ts           Share overlay: link, embed snippet, live preview
   credits.ts         Credits overlay + audio muffling
@@ -223,7 +223,7 @@ maps to both visual and audio:
 | `y` | vertical position | pitch (chromatic, G2–G5, magnetic snap drag, hard snap release) |
 | `size` | shape area | gain |
 | `fill` | color/gradient | formant filter (hue→vowel, sat→Q, light→brightness) |
-| `effect` | pattern overlay | effect chain (chorus, tremolo, flanger, phaser) |
+| `effect` | 8×8 bitmap pattern overlay | effect chain (chorus, tremolo, flanger, phaser, wah-wah, overdrive, bitcrush) |
 | `timbre` | rotation (pulse/blend/astroid) | waveform param (periodic: 90° square/astroid, 120° triangle) |
 | `stamp` | silhouette SVG (stamp only) | sample selection (pitch via playback rate) |
 | `trigger` | tilt angle (stamp only: -5°/0°/+5°) | envelope trigger phase (A=0, D=1, R=2) |
@@ -344,7 +344,10 @@ Import in `js/stamples/index.ts`, append to `STAMPLES` via `resolve()`.
 
 ### Add a new pattern/effect
 
-Update `patterns.ts` (visual) + `effects.ts` (audio) + button in `index.html`.
+Add an entry to `ALL_PATTERNS` in `patterns.ts` with `bytes` (8-byte bitmap)
+and `effect` (audio factory function). Add the name to `PATTERN_TYPES` in
+`types.ts`. The toolbar auto-populates from `PATTERN_TYPES`. Max 7 active
+patterns (3-bit serialization index + undefined = 8 values).
 
 ### Add a new blend mode
 

@@ -9,7 +9,7 @@ const entry: VoiceRegistryEntry = {
   waveform: 'blend',
   id: 2,
   rotationPeriod: 120,
-  panels: { border: true, stample: false },
+  panels: { border: true, pattern: true, stample: false },
   ui,
   player,
   serializer: createOscillatorSerializer(),

@@ -1,6 +1,7 @@
 // engine.ts — Web Audio engine: AudioEngine class
 
-import { computeOverlap, createEffect, FM_PARAMS, computeFMDepth } from '../effects.ts';
+import { computeOverlap, FM_PARAMS, computeFMDepth } from '../effects.ts';
+import { createEffect } from '../patterns.ts';
 import { type Envelope, type NormalizedCoord, type SigilData, type Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import {

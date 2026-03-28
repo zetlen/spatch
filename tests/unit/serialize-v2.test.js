@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { encodeInt, decodeInt } from '../../js/voices/b64.ts';
 import { createOscillatorSerializer } from '../../js/voices/serializers/oscillator.ts';
 import { createSampleSerializer } from '../../js/voices/serializers/sample.ts';
+import { PATTERN_TYPES } from '../../js/types.ts';
 
 // ---- Test helpers ----
 
@@ -144,7 +145,7 @@ describe('OscillatorSerializer', () => {
     });
 
     test('all effects survive', () => {
-      for (const effect of [undefined, 'stripes', 'checker', 'noise', 'plaid']) {
+      for (const effect of [undefined, ...PATTERN_TYPES]) {
         const voice = makeVoice({ effect });
         const unpacked = serializer.unpack(serializer.pack(voice), 'sine');
         expect(unpacked.effect).toBe(effect);

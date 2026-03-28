@@ -1,6 +1,6 @@
 // stamp/lifecycle.ts — Stamp sample lifecycle: prefetch, decode, symbol injection.
 
-import { STAMPLES, getStample } from '../../stamples/index.ts';
+import { STAMPLES } from '../../stamples/index.ts';
 import { decodeSample, fetchSample } from '../../audio/sample-loader.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';

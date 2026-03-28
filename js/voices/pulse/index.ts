@@ -9,7 +9,7 @@ const entry: VoiceRegistryEntry = {
   waveform: 'pulse',
   id: 1,
   rotationPeriod: 90,
-  panels: { border: true, stample: false },
+  panels: { border: true, pattern: true, stample: false },
   ui,
   player,
   serializer: createOscillatorSerializer(),

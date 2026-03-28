@@ -114,6 +114,7 @@ export interface VoiceRegistryEntry {
   /** Which optional toolbar panels this voice type uses. */
   readonly panels: {
     readonly border: boolean;
+    readonly pattern: boolean;
     readonly stample: boolean;
   };
   /** Create a Voice from a VoiceBase, adding waveform-specific fields. */

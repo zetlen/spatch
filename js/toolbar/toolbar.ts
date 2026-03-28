@@ -5,7 +5,6 @@ import { qel } from '../dom.ts';
 import type { SigilStore, UndoManager } from '../state.ts';
 import type { Voice } from '../types.ts';
 import { PanelManager } from './expansion-panel.ts';
-import { createBlendPanel } from './blend-panel.ts';
 import { createBorderPanel } from './border-panel.ts';
 import { createFillPanel } from './fill-panel.ts';
 import { createPatternPanel } from './pattern-panel.ts';
@@ -36,7 +35,6 @@ export class Toolbar {
 
     const expansionArea = qel('#bottom-expansion');
     const patternArea = qel('#pattern-dropdown');
-    const btnBlend = qel('#btn-blend');
     const btnFill = qel('#fill-swatch');
     const btnBorder = qel('#btn-border');
     const btnPattern = qel('#btn-pattern');
@@ -47,13 +45,11 @@ export class Toolbar {
       getSelectedId: () => this.selectedId,
     };
 
-    const blendPanel = createBlendPanel({ ...sharedDeps, area: expansionArea });
     this._fillPanel = createFillPanel({ ...sharedDeps, area: expansionArea });
     this._borderPanel = createBorderPanel({ ...sharedDeps, area: expansionArea }, btnBorder);
     this._patternPanel = createPatternPanel({ ...sharedDeps, area: patternArea }, btnPattern);
 
     // Register all panels with the manager for unified mutex
-    this.panels.register('blend', blendPanel, btnBlend, expansionArea);
     this.panels.register('fill', this._fillPanel, btnFill, expansionArea);
     this.panels.register('border', this._borderPanel, btnBorder, expansionArea);
     this.panels.register('pattern', this._patternPanel, btnPattern, patternArea);
@@ -70,10 +66,6 @@ export class Toolbar {
     this._bindToolButtons();
 
     // Bind panel toggle buttons
-    btnBlend.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.panels.toggle('blend');
-    });
     btnFill.addEventListener('click', (e) => {
       e.stopPropagation();
       this.panels.toggle('fill');
@@ -211,6 +203,10 @@ export class Toolbar {
     const btnBorder = document.querySelector<HTMLElement>('#btn-border');
     if (btnBorder) {
       btnBorder.classList.toggle('hidden', panels !== undefined && !panels.border);
+    }
+    const btnPattern = document.querySelector<HTMLElement>('#btn-pattern');
+    if (btnPattern) {
+      btnPattern.classList.toggle('hidden', panels !== undefined && !panels.pattern);
     }
   }
 }

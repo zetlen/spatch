@@ -332,15 +332,17 @@ const steps: TutorialStep[] = [
   {
     punchOut: ['#btn-pattern', '#canvas-wrap'],
     text: 'Patterns are effects.',
-    play: (['stripes', 'checker', 'noise'] as const).map((effect, i) => (ctx: StepContext) => {
-      if (i === 0) {
-        setupDemoSpatch(ctx);
-        if (ctx.demo.sq) ctx.selection.select(ctx.demo.sq);
-      }
-      if (ctx.demo.sq) ctx.store.updateVoice(ctx.demo.sq, { effect });
-      ctx.render();
-      ctx.playLatched();
-    }),
+    play: (['stripes', 'buttons', 'waffles-revenge'] as const).map(
+      (effect, i) => (ctx: StepContext) => {
+        if (i === 0) {
+          setupDemoSpatch(ctx);
+          if (ctx.demo.sq) ctx.selection.select(ctx.demo.sq);
+        }
+        if (ctx.demo.sq) ctx.store.updateVoice(ctx.demo.sq, { effect });
+        ctx.render();
+        ctx.playLatched();
+      },
+    ),
   },
 
   // Blend modes — progressive overlap

@@ -3,7 +3,7 @@ import svgRaw from './stamp.svg?raw';
 import sampleUrl from './sample.mp3';
 
 const stample: Stample = {
-  name: 'energy-dome',
+  name: 'Whip Crack',
   svgRaw,
   sampleUrl,
   referencePitch: 277,

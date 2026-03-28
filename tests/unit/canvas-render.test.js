@@ -418,30 +418,41 @@ describe('canvas render — blend mode', () => {
     }
   });
 
-  test('voice group gets mix-blend-mode style', () => {
+  test('blend mode only applies when voices overlap', () => {
     const svg = createSVG();
-    const voice = makeSineVoice({ blend: 'multiply' });
-    const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    // Two overlapping voices at the same position
+    const v1 = makeSineVoice({ id: 'v1', blend: 'multiply' });
+    const v2 = makePulseVoice({ id: 'v2', x: normalizedCoord(0.5), y: normalizedCoord(0.5) });
+    render(svg, makeState({ voices: [v1, v2] }), undefined);
 
-    const group = svg.querySelector('g[data-voice-id="v-sine-1"]');
+    const group = svg.querySelector('g[data-voice-id="v1"]');
     expect(group.style.mixBlendMode).toBe('multiply');
   });
 
-  test('blend mode updates on re-render', () => {
+  test('blend mode reverts to screen when no overlap', () => {
     const svg = createSVG();
-    const voice = makeSineVoice({ blend: 'screen' });
-    const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    // Single voice — no overlap possible
+    const voice = makeSineVoice({ blend: 'multiply' });
+    render(svg, makeState({ voices: [voice] }), undefined);
 
     const group = svg.querySelector('g[data-voice-id="v-sine-1"]');
     expect(group.style.mixBlendMode).toBe('screen');
+  });
 
-    const updatedVoice = { ...voice, blend: 'difference' };
-    const state2 = makeState({ voices: [updatedVoice] });
-    render(svg, state2, undefined);
+  test('blend mode updates on re-render when overlap changes', () => {
+    const svg = createSVG();
+    // Start overlapping
+    const v1 = makeSineVoice({ id: 'v1', blend: 'difference' });
+    const v2 = makePulseVoice({ id: 'v2', x: normalizedCoord(0.5), y: normalizedCoord(0.5) });
+    render(svg, makeState({ voices: [v1, v2] }), undefined);
 
+    const group = svg.querySelector('g[data-voice-id="v1"]');
     expect(group.style.mixBlendMode).toBe('difference');
+
+    // Move v2 far away — no overlap
+    const v2Far = { ...v2, x: normalizedCoord(0.01), y: normalizedCoord(0.01) };
+    render(svg, makeState({ voices: [v1, v2Far] }), undefined);
+    expect(group.style.mixBlendMode).toBe('screen');
   });
 });
 
@@ -673,8 +684,8 @@ describe('canvas render — pattern defs', () => {
 
     const defs = svg.querySelector('defs');
     expect(defs.querySelector('#pat-stripes')).not.toBeNull();
-    expect(defs.querySelector('#pat-checker')).not.toBeNull();
-    expect(defs.querySelector('#pat-noise')).not.toBeNull();
+    expect(defs.querySelector('#pat-bricks')).not.toBeNull();
+    expect(defs.querySelector('#pat-weave')).not.toBeNull();
   });
 });
 

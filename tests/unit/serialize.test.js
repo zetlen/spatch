@@ -203,14 +203,14 @@ describe('v2 format structure', () => {
     expect(encoded).toHaveLength(4);
   });
 
-  test('solid voice adds 12 chars (1 header + 11 registers)', () => {
+  test('solid voice adds 13 chars (1 header + 12 registers)', () => {
     const state = makeState({ voices: [makeVoice()] });
     const encoded = serializeState(state);
-    // 4 header + 12 voice = 16
-    expect(encoded).toHaveLength(16);
+    // 4 header + 13 voice = 17
+    expect(encoded).toHaveLength(17);
   });
 
-  test('gradient voice adds 17 chars (1 header + 16 registers)', () => {
+  test('gradient voice adds 18 chars (1 header + 17 registers)', () => {
     const state = makeState({
       voices: [
         makeVoice({
@@ -219,8 +219,8 @@ describe('v2 format structure', () => {
       ],
     });
     const encoded = serializeState(state);
-    // 4 header + 17 voice = 21
-    expect(encoded).toHaveLength(21);
+    // 4 header + 18 voice = 22
+    expect(encoded).toHaveLength(22);
   });
 
   test('old v1 URLs return undefined', () => {

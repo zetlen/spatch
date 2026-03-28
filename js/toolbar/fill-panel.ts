@@ -2,8 +2,9 @@
 
 import { getSwatchColor, hexToHsl, hslToHex } from '../colors.ts';
 import { qel } from '../dom.ts';
-import type { FillDraft } from '../types.ts';
+import type { BlendMode, FillDraft } from '../types.ts';
 import { fillDraftToFill, fillToFillDraft } from '../types.ts';
+import { DEFAULT_BLEND } from '../effects.ts';
 import {
   createExpansionPanel,
   getSelectedVoice,
@@ -45,9 +46,9 @@ function buildColorInput(id: string, title: string): HTMLInputElement {
 
 // Icon references for sprite scanner: #tabler-feather #tabler-mushroom #tabler-anchor
 const ANGLE_BITS = [
-  { bit: 0, icon: 'feather' },
-  { bit: 1, icon: 'mushroom' },
-  { bit: 2, icon: 'anchor' },
+  { bit: 0, icon: 'feather', label: 'Easing' },
+  { bit: 1, icon: 'mushroom', label: 'Speed' },
+  { bit: 2, icon: 'anchor', label: 'Direction' },
 ];
 
 export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
@@ -126,7 +127,7 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
         {
           type: 'item' as const,
           create() {
-            const input = buildColorInput('color-solid', 'Color');
+            const input = buildColorInput('color-solid', isLinear ? 'Start Vowel' : 'Vowel');
             bindColorInput(input, 'h', 's', 'l');
             return input;
           },
@@ -138,7 +139,7 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
             const btn = document.createElement('button');
             btn.className = 'action-btn';
             btn.id = 'grad-toggle';
-            btn.title = 'Gradient';
+            btn.title = 'Vowel Slide';
             btn.append(buildGradientIcon());
             return btn;
           },
@@ -147,7 +148,7 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
           type: 'item' as const,
           className: isLinear ? undefined : 'hidden',
           create() {
-            const input = buildColorInput('color-lin-2', 'Color 2');
+            const input = buildColorInput('color-lin-2', 'End Vowel');
             bindColorInput(input, 'h2', 's2', 'l2');
             return input;
           },
@@ -159,13 +160,13 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
             const container = document.createElement('div');
             container.id = 'angle-toggles';
             container.className = 'angle-toggles';
-            for (const { icon, bit } of ANGLE_BITS) {
+            for (const { icon, bit, label } of ANGLE_BITS) {
               const btn = createIconButton({
                 className: 'action-btn angle-toggle',
                 dataset: { angleBit: String(bit) },
                 size: 20,
                 symbol: `tabler-${icon}`,
-                title: icon.charAt(0).toUpperCase() + icon.slice(1),
+                title: label,
               });
               btn.addEventListener('click', () => {
                 const sel = getSelectedVoice(deps);
@@ -181,6 +182,19 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
             return container;
           },
         },
+        { type: 'separator' as const },
+        {
+          type: 'icon' as const,
+          symbol: 'tabler-skull',
+          title: 'Exponential FM',
+          key: 'blend:multiply',
+        },
+        {
+          type: 'icon' as const,
+          symbol: 'tabler-spiral',
+          title: 'Linear FM',
+          key: 'blend:difference',
+        },
       ];
     },
     isActive(key) {
@@ -188,9 +202,23 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
         const sel = getSelectedVoice(deps);
         return sel ? sel.fill.mode === 'linear' : fillDraft.mode === 'linear';
       }
+      if (key?.startsWith('blend:')) {
+        const blend = key.slice(6);
+        return (getSelectedVoice(deps)?.blend ?? DEFAULT_BLEND) === blend;
+      }
       return false;
     },
     onClick(key) {
+      if (key?.startsWith('blend:')) {
+        const voice = getSelectedVoice(deps);
+        if (!voice) return;
+        deps.undo.snapshot();
+        const mode = key.slice(6) as BlendMode;
+        deps.store.updateVoice(voice.id, {
+          blend: voice.blend === mode ? DEFAULT_BLEND : mode,
+        });
+        return;
+      }
       if (key !== 'grad-toggle') return;
       const sel = getSelectedVoice(deps);
       if (!sel) return;
@@ -198,9 +226,11 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
       fillDraft.mode = nowLinear ? 'linear' : 'solid';
       commitFill(sel.id, false);
       updateSwatch();
-      // Toggle visibility of gradient controls
+      // Toggle visibility of gradient controls and update labels
       area.querySelector<HTMLElement>('#color-lin-2')?.classList.toggle('hidden', !nowLinear);
       area.querySelector<HTMLElement>('#angle-toggles')?.classList.toggle('hidden', !nowLinear);
+      const solidInput = area.querySelector<HTMLInputElement>('#color-solid');
+      if (solidInput) solidInput.title = nowLinear ? 'Start Vowel' : 'Vowel';
       syncColorInputs();
     },
     onUpdate() {
@@ -209,6 +239,8 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
       const isLinear = sel ? sel.fill.mode === 'linear' : fillDraft.mode === 'linear';
       area.querySelector<HTMLElement>('#color-lin-2')?.classList.toggle('hidden', !isLinear);
       area.querySelector<HTMLElement>('#angle-toggles')?.classList.toggle('hidden', !isLinear);
+      const solidInput = area.querySelector<HTMLInputElement>('#color-solid');
+      if (solidInput) solidInput.title = isLinear ? 'Start Vowel' : 'Vowel';
     },
   });
 

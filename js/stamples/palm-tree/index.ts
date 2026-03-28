@@ -3,7 +3,7 @@ import svgRaw from './stamp.svg?raw';
 import sampleUrl from './sample.mp3';
 
 const stample: Stample = {
-  name: 'palm-tree',
+  name: 'Ocean Wave',
   svgRaw,
   sampleUrl,
   referencePitch: 277,

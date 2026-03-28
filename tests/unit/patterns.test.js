@@ -1,28 +1,26 @@
 import { describe, expect, test } from 'bun:test';
-import { getPatternOverlay } from '../../js/patterns.ts';
+import { getPatternFill, getPatternPreviewCSS } from '../../js/patterns.ts';
+import { PATTERN_TYPES } from '../../js/types.ts';
 
-describe('getPatternOverlay', () => {
-  test('stripes returns fill with url(#pat-stripes)', () => {
-    const result = getPatternOverlay('stripes');
-    expect(result.attr).toBe('fill');
-    expect(result.value).toBe('url(#pat-stripes)');
+describe('getPatternFill', () => {
+  test('every pattern type returns a fill URL', () => {
+    for (const p of PATTERN_TYPES) {
+      expect(getPatternFill(p)).toBe(`url(#pat-${p})`);
+    }
   });
+});
 
-  test('checker returns fill with url(#pat-checker)', () => {
-    const result = getPatternOverlay('checker');
-    expect(result.attr).toBe('fill');
-    expect(result.value).toBe('url(#pat-checker)');
+describe('getPatternPreviewCSS', () => {
+  test('every pattern returns a non-empty data URI', () => {
+    for (const p of PATTERN_TYPES) {
+      const css = getPatternPreviewCSS(p);
+      expect(css).toContain('data:image/svg+xml');
+    }
   });
+});
 
-  test('noise returns filter with url(#pat-noise)', () => {
-    const result = getPatternOverlay('noise');
-    expect(result.attr).toBe('filter');
-    expect(result.value).toBe('url(#pat-noise)');
-  });
-
-  test('plaid returns fill with pattern URL', () => {
-    const result = getPatternOverlay('plaid');
-    expect(result.attr).toBe('fill');
-    expect(result.value).toBe('url(#pat-plaid)');
+describe('PATTERN_TYPES', () => {
+  test('has exactly 7 entries (3-bit serialization budget)', () => {
+    expect(PATTERN_TYPES).toHaveLength(7);
   });
 });

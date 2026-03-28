@@ -5,7 +5,9 @@
 
 import { setAttrs, svgEl } from '../dom.ts';
 import { ensureLinearGradient, getSolidFillColor } from '../colors.ts';
-import { ensurePatternDefs, getPatternOverlay } from '../patterns.ts';
+import { DEFAULT_BLEND } from '../effects.ts';
+import { computeOverlap } from '../effects.ts';
+import { ensurePatternDefs, getPatternFill } from '../patterns.ts';
 import { voiceRotation } from '../shapes.ts';
 import type { SigilData, Voice } from '../types.ts';
 import { get } from '../voices/registry.ts';
@@ -132,37 +134,42 @@ function applyPatternOverlay(group: SVGGElement, voice: Voice): void {
   for (const el of existing) {
     el.remove();
   }
+
+  // Clean up any per-voice pattern def from a previous render
+  const defs = group.closest('svg')?.querySelector('defs');
+  defs?.querySelector(`#pat-v-${voice.id}`)?.remove();
+
   if (!voice.effect) {
     return;
   }
 
-  const mainShape = group.querySelector(':scope > :not([data-overlay]):not([data-border])') as
-    | SVGElement
-    | undefined;
-  if (!mainShape) {
-    return;
-  }
-
-  if (voice.effect === 'noise') {
-    // Apply noise filter directly to the main shape
-    mainShape.setAttribute('filter', 'url(#pat-noise)');
-    return;
-  }
-  mainShape.removeAttribute('filter');
-
-  // Stripes, checker, or plaid: clone shape geometry with pattern fill
-  const { value } = getPatternOverlay(voice.effect);
-  if (!value) {
-    return;
-  }
-
+  // Duplicate the shape geometry and fill it with the bitmap tile pattern.
+  // The overlay rotates with the shape, but the pattern fill must stay fixed
+  // in canvas space. For rotated voices, we clone the shared pattern def and
+  // apply an inverse patternTransform to cancel the element rotation.
   const overlay = createShapeElement(voice);
-  overlay.setAttribute('fill', value);
   overlay.dataset.overlay = 'true';
-  const transform = voiceTransform(voice);
-  if (transform) {
-    overlay.setAttribute('transform', transform);
+
+  const rotDeg = voiceRotation(voice);
+  if (rotDeg !== 0 && defs) {
+    const src = defs.querySelector(`#pat-${voice.effect}`);
+    if (src) {
+      const clone = src.cloneNode(true) as SVGPatternElement;
+      const patId = `pat-v-${voice.id}`;
+      clone.id = patId;
+      clone.setAttribute('patternTransform', `rotate(${-rotDeg}, ${voice.x}, ${voice.y})`);
+      defs.append(clone);
+      overlay.setAttribute('fill', `url(#${patId})`);
+    }
+    overlay.setAttribute('transform', `rotate(${rotDeg}, ${voice.x}, ${voice.y})`);
+  } else {
+    overlay.setAttribute('fill', getPatternFill(voice.effect));
+    const transform = voiceTransform(voice);
+    if (transform) {
+      overlay.setAttribute('transform', transform);
+    }
   }
+
   group.append(overlay);
 }
 
@@ -216,7 +223,12 @@ function applyBorders(group: SVGGElement, voice: Voice): void {
 
 // ---- Voice reconciliation ----
 
-function reconcileVoice(group: SVGGElement, voice: Voice, defs: SVGDefsElement): void {
+function reconcileVoice(
+  group: SVGGElement,
+  voice: Voice,
+  defs: SVGDefsElement,
+  hasOverlap: boolean,
+): void {
   const expectedTag = shapeTagName(voice);
 
   // Get or create the main shape element (first child that isn't an overlay/border)
@@ -236,8 +248,9 @@ function reconcileVoice(group: SVGGElement, voice: Voice, defs: SVGDefsElement):
     updateShapeElement(shapeEl, voice);
   }
 
-  // Apply blend mode on the group
-  group.style.mixBlendMode = voice.blend;
+  // Apply blend mode only when overlapping — bijection requires that blend
+  // has no visual effect when it has no audio effect.
+  group.style.mixBlendMode = hasOverlap ? voice.blend : DEFAULT_BLEND;
 
   // Apply rotation transform on the main shape (not group, since selection uses group position)
   const transform = voiceTransform(voice);
@@ -249,11 +262,6 @@ function reconcileVoice(group: SVGGElement, voice: Voice, defs: SVGDefsElement):
 
   // Apply fill
   applyFill(shapeEl, voice, defs);
-
-  // Remove noise filter if not using noise pattern
-  if (voice.effect !== 'noise') {
-    shapeEl.removeAttribute('filter');
-  }
 
   // Apply pattern overlay
   applyPatternOverlay(group, voice);
@@ -284,6 +292,26 @@ function reconcileVoices(
     }
   }
 
+  // Precompute which voices have overlap (for blend mode bijection)
+  const overlapping = new Set<string>();
+  for (let i = 0; i < voices.length; i++) {
+    for (let j = i + 1; j < voices.length; j++) {
+      if (
+        computeOverlap(
+          voices[i]!.x as number,
+          voices[i]!.y as number,
+          voices[i]!.size as number,
+          voices[j]!.x as number,
+          voices[j]!.y as number,
+          voices[j]!.size as number,
+        ) > 0
+      ) {
+        overlapping.add(voices[i]!.id);
+        overlapping.add(voices[j]!.id);
+      }
+    }
+  }
+
   // Add or update groups for each voice (new groups inserted near siblings;
   // existing groups keep their current DOM position — voice order is not data)
   let prevGroup;
@@ -302,7 +330,7 @@ function reconcileVoices(
       }
     }
 
-    reconcileVoice(group, voice, defs);
+    reconcileVoice(group, voice, defs, overlapping.has(voice.id));
     group.classList.toggle('muted', soloVoiceId !== undefined && voice.id !== soloVoiceId);
     prevGroup = group;
   }

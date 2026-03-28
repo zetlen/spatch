@@ -38,8 +38,18 @@ export function cents(n: number): Cents {
 /** Waveform discriminant: oscillator-based (sine, pulse, blend, astroid) or sample-based (stamp). */
 export type WaveformType = 'sine' | 'pulse' | 'blend' | 'astroid' | 'stamp';
 
-/** Pattern overlay type applied to a voice shape for visual texture and audio effect. */
-export const PATTERN_TYPES = ['stripes', 'checker', 'noise', 'plaid'] as const;
+/** Pattern overlay type applied to a voice shape for visual texture and audio effect.
+ *  Each pattern is an 8×8 1-bit bitmap tile inspired by Windows 95 desktop patterns.
+ *  TODO: Cull to final set and shrink serialization field to 3 bits. */
+export const PATTERN_TYPES = [
+  'stripes',
+  'bricks',
+  'buttons',
+  'rounder',
+  'waffles-revenge',
+  'weave',
+  'live-wire',
+] as const;
 export type PatternType = (typeof PATTERN_TYPES)[number];
 
 /** CSS mix-blend-mode value that maps to an overlap-driven audio effect.

@@ -3,7 +3,7 @@ import svgRaw from './stamp.svg?raw';
 import sampleUrl from './sample.mp3';
 
 const stample: Stample = {
-  name: 'champagne',
+  name: 'Glass Bell',
   svgRaw,
   sampleUrl,
   referencePitch: 550,

@@ -136,13 +136,13 @@ export function createBorderPanel(
         type: 'item',
         key: 'style:single',
         className: 'border-extra',
-        create: () => buildStyleButton(false, 'Single'),
+        create: () => buildStyleButton(false, 'Octave Distance: 1'),
       },
       {
         type: 'item',
         key: 'style:double',
         className: 'border-extra',
-        create: () => buildStyleButton(true, 'Double'),
+        create: () => buildStyleButton(true, 'Octave Distance: 2'),
       },
       { type: 'separator', className: 'border-extra' },
       {
@@ -156,7 +156,7 @@ export function createBorderPanel(
           slider.min = '1';
           slider.max = '100';
           slider.value = '1';
-          slider.title = 'Thickness';
+          slider.title = 'Octave Gain';
           slider.addEventListener('input', () => {
             const sel = getSelectedVoice(deps);
             if (!sel?.border) return;
