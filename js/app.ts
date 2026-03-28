@@ -26,7 +26,9 @@ import { initShare } from './share.ts';
 import { randomize, harmonize } from './harmony.ts';
 import { createHarmonizePanel } from './toolbar/harmonize-panel.ts';
 import { createStagePanel } from './toolbar/stage-panel.ts';
+import { createBlendPanel } from './toolbar/blend-panel.ts';
 import { bindLongPress } from './toolbar/expansion-panel.ts';
+import { BLEND_MODES } from './types.ts';
 import { all } from './voices/registry.ts';
 
 // ---- Init ----
@@ -157,6 +159,35 @@ let sceneReady: Promise<void> = Promise.resolve();
   );
 }
 
+// Blend button: short click cycles blend mode, long press opens blend picker
+{
+  const btnBlend = qel('#btn-blend');
+  const blendArea = qel('#blend-panel');
+  const blendPanel = createBlendPanel({
+    area: blendArea,
+    store,
+    undo,
+    onDismiss: () => toolbar.panels.close(),
+  });
+  toolbar.panels.register('blend', blendPanel, btnBlend, blendArea);
+  bindLongPress(
+    btnBlend,
+    () => {
+      if (!store.hasOverlap) return;
+      undo.snapshot();
+      const current = store.data.blend;
+      const idx = BLEND_MODES.indexOf(current);
+      const next = BLEND_MODES[(idx + 1) % BLEND_MODES.length]!;
+      store.updateBlend(next);
+      needsRender = true;
+    },
+    () => {
+      if (!store.hasOverlap) return;
+      toolbar.panels.toggle('blend');
+    },
+  );
+}
+
 // React to scene changes (and apply the initial scene on first run):
 // update background crossfade + vibe + prefetch.
 // Guard: store.data is a single signal, so this effect fires on ANY state
@@ -232,7 +263,7 @@ const splash = new SplashController({ store, audio, playback, overlay: splashOve
 function renderLoop(): void {
   if (needsRender || audio.isPlaying) {
     const soloId = soloActive ? selection.voiceId : undefined;
-    render(svgCanvas, store.data, selection.voiceId, soloId);
+    render(svgCanvas, store.data, store.overlappingIds, selection.voiceId, soloId);
 
     needsRender = false;
   }

@@ -254,10 +254,9 @@ test.describe('Audio waveform snapshots', () => {
     await placeShape(page, 'circle', 0.5, 0.5);
     await page.keyboard.press('Escape');
     await placeShape(page, 'triangle', 0.5, 0.5);
-    // Set multiply blend on the second voice for FM modulation
+    // Set multiply blend for FM modulation
     await page.evaluate(() => {
-      const voices = globalThis.__testStore.data.voices;
-      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
+      globalThis.__testStore.updateBlend('multiply');
     });
     const png = await captureAudio(page);
     expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-multiply-overlap.png', {
@@ -270,8 +269,7 @@ test.describe('Audio waveform snapshots', () => {
     await page.keyboard.press('Escape');
     await placeShape(page, 'triangle', 0.5, 0.5);
     await page.evaluate(() => {
-      const voices = globalThis.__testStore.data.voices;
-      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'difference' });
+      globalThis.__testStore.updateBlend('difference');
     });
     const png = await captureAudio(page);
     expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-difference-overlap.png', {
@@ -307,9 +305,7 @@ test.describe('Audio waveform snapshots', () => {
     await page.keyboard.press('Escape');
     await placeShape(page, 'triangle', 0.65, 0.5);
     await page.evaluate(() => {
-      const voices = globalThis.__testStore.data.voices;
-      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
-      globalThis.__testStore.updateVoice(voices[2].id, { blend: 'difference' });
+      globalThis.__testStore.updateBlend('multiply');
     });
     const png = await captureAudio(page);
     expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-3-voice-mixed-blend.png', {
@@ -324,9 +320,7 @@ test.describe('Audio waveform snapshots', () => {
     await page.keyboard.press('Escape');
     await placeShape(page, 'square', 0.8, 0.8);
     await page.evaluate(() => {
-      const voices = globalThis.__testStore.data.voices;
-      globalThis.__testStore.updateVoice(voices[0].id, { blend: 'multiply' });
-      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
+      globalThis.__testStore.updateBlend('multiply');
     });
     const png = await captureAudio(page);
     expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-multiply-no-overlap.png', {
@@ -342,8 +336,7 @@ test.describe('Audio waveform snapshots', () => {
     await page.keyboard.press('Escape');
     await placeShape(page, 'square', 0.9, 0.5);
     await page.evaluate(() => {
-      const voices = globalThis.__testStore.data.voices;
-      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
+      globalThis.__testStore.updateBlend('multiply');
     });
     await annotateState(page);
     await page.evaluate(() => {
@@ -388,8 +381,7 @@ test.describe('Audio waveform snapshots', () => {
     await page.keyboard.press('Escape');
     await placeShape(page, 'square', 0.5, 0.5);
     await page.evaluate(() => {
-      const voices = globalThis.__testStore.data.voices;
-      globalThis.__testStore.updateVoice(voices[1].id, { blend: 'multiply' });
+      globalThis.__testStore.updateBlend('multiply');
     });
     await annotateState(page);
     await page.evaluate(() => {
@@ -522,12 +514,67 @@ test.describe('Audio waveform snapshots', () => {
       for (let i = 0; i < 5; i++) {
         store.addVoice(waveforms[i], positions[i][0], positions[i][1]);
       }
-      for (const v of store.data.voices) {
-        store.updateVoice(v.id, { blend: 'multiply' });
-      }
+      store.updateBlend('multiply');
     });
     const png = await captureAudio(page);
     expect(Buffer.from(png, 'base64')).toMatchSnapshot('fm-5-voice-cluster.png', {
+      maxDiffPixelRatio: 0.05,
+    });
+  });
+
+  test('blend mode switching mid-playback cycles FM character', async ({ page }) => {
+    // Two overlapping voices — same setup as other FM tests to keep
+    // cross-platform divergence within tolerance. Cycles through all 4
+    // blend modes at 1s intervals so each FM character is captured.
+    await placeShape(page, 'circle', 0.5, 0.5);
+    await page.keyboard.press('Escape');
+    await placeShape(page, 'triangle', 0.5, 0.5);
+    await page.evaluate(() => {
+      globalThis.__testStore.recomputeOverlap();
+    });
+
+    await annotateState(page);
+    await page.evaluate(() => {
+      globalThis.__audioCapture.annotate('screen → multiply → exclusion → difference');
+    });
+
+    // Schedule suspend points at 1s intervals to switch blend modes
+    await page.evaluate(() => {
+      globalThis.__audioCapture.suspendAt(1.0, 'multiply');
+      globalThis.__audioCapture.suspendAt(2.0, 'exclusion');
+      globalThis.__audioCapture.suspendAt(3.0, 'difference');
+      globalThis.__audioCapture.suspendAt(4.0, 'R');
+      const { release } = globalThis.__testStore.data.envelope;
+      globalThis.__audioCapture.markEvent('0', 4.0 + release);
+    });
+
+    // Start playing (screen blend = no FM)
+    await page.keyboard.press('Space');
+    await expect(page.locator('#btn-play')).toHaveClass(/playing/);
+    await page.evaluate(() => globalThis.__audioCapture.startRendering());
+
+    // t=1s: switch to multiply
+    await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
+    await page.evaluate(() => globalThis.__testStore.updateBlend('multiply'));
+    await page.evaluate(() => globalThis.__audioCapture.resume());
+
+    // t=2s: switch to exclusion
+    await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
+    await page.evaluate(() => globalThis.__testStore.updateBlend('exclusion'));
+    await page.evaluate(() => globalThis.__audioCapture.resume());
+
+    // t=3s: switch to difference
+    await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
+    await page.evaluate(() => globalThis.__testStore.updateBlend('difference'));
+    await page.evaluate(() => globalThis.__audioCapture.resume());
+
+    // t=4s: release
+    await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
+    await page.keyboard.press('Space');
+    await page.evaluate(() => globalThis.__audioCapture.resume());
+
+    const png = await page.evaluate(() => globalThis.__audioCapture.finishCapture({ duration: 6 }));
+    expect(Buffer.from(png, 'base64')).toMatchSnapshot('blend-mode-switching.png', {
       maxDiffPixelRatio: 0.05,
     });
   });
@@ -582,10 +629,8 @@ test.describe('Audio waveform snapshots', () => {
         store.addVoice('stamp', 0.5, 0.5);
         store.updateVoice(store.data.voices.at(-1).id, { stamp: 0 });
         store.addVoice('pulse', 0.6, 0.55);
-        store.updateVoice(store.data.voices.at(-1).id, {
-          blend: 'multiply',
-          size: 0.3,
-        });
+        store.updateVoice(store.data.voices.at(-1).id, { size: 0.3 });
+        store.updateBlend('multiply');
       });
       const png = await captureAudio(page);
       expectNonSilent(png);

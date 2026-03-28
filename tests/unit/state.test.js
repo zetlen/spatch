@@ -172,34 +172,77 @@ describe('UndoManager undo / redo', () => {
   });
 });
 
-describe('SigilStore blend mode', () => {
-  test('voices default to screen blend', () => {
+describe('SigilStore global blend', () => {
+  test('default state has screen blend', () => {
     const store = new SigilStore();
-    const voice = store.addVoice('sine', 0.5, 0.5);
-    expect(voice.blend).toBe('screen');
+    expect(store.data.blend).toBe('screen');
   });
 
-  test('updateVoice can change blend mode', () => {
+  test('updateBlend sets global blend mode', () => {
     const store = new SigilStore();
-    const voice = store.addVoice('sine', 0.5, 0.5);
-    store.updateVoice(voice.id, { blend: 'multiply' });
-
-    const updated = store.getVoice(voice.id);
-    expect(updated.blend).toBe('multiply');
+    store.updateBlend('multiply');
+    expect(store.data.blend).toBe('multiply');
   });
 
-  test('blend mode persists through undo/redo', () => {
+  test('blend persists through undo/redo', () => {
     const store = new SigilStore();
+    // Add overlapping voices so blend is not auto-reset
+    store.addVoice('sine', 0.5, 0.5);
+    store.addVoice('sine', 0.5, 0.5);
     const undo = new UndoManager(store);
-    const voice = store.addVoice('sine', 0.5, 0.5);
     undo.snapshot();
-    store.updateVoice(voice.id, { blend: 'difference' });
+    store.updateBlend('difference');
 
-    expect(store.getVoice(voice.id).blend).toBe('difference');
+    expect(store.data.blend).toBe('difference');
     undo.undo();
-    expect(store.data.voices[0].blend).toBe('screen');
+    expect(store.data.blend).toBe('screen');
     undo.redo();
-    expect(store.data.voices[0].blend).toBe('difference');
+    expect(store.data.blend).toBe('difference');
+  });
+});
+
+describe('SigilStore overlap tracking', () => {
+  test('hasOverlap is false with no voices', () => {
+    const store = new SigilStore();
+    expect(store.hasOverlap).toBe(false);
+  });
+
+  test('hasOverlap is false with non-overlapping voices', () => {
+    const store = new SigilStore();
+    store.addVoice('sine', 0.1, 0.1);
+    store.addVoice('sine', 0.9, 0.9);
+    expect(store.hasOverlap).toBe(false);
+  });
+
+  test('hasOverlap is true when voices overlap', () => {
+    const store = new SigilStore();
+    store.addVoice('sine', 0.5, 0.5);
+    store.addVoice('sine', 0.5, 0.5);
+    expect(store.hasOverlap).toBe(true);
+  });
+
+  test('blend auto-resets to screen when overlap disappears', () => {
+    const store = new SigilStore();
+    const v1 = store.addVoice('sine', 0.5, 0.5);
+    store.addVoice('sine', 0.5, 0.5);
+    store.updateBlend('multiply');
+    expect(store.data.blend).toBe('multiply');
+
+    // Move voice away so no overlap, then recompute (simulates pointer release)
+    store.updateVoice(v1.id, { x: 0.0, y: 0.0 });
+    store.recomputeOverlap();
+    expect(store.hasOverlap).toBe(false);
+    expect(store.data.blend).toBe('screen');
+  });
+
+  test('hasOverlap updates when voice is removed', () => {
+    const store = new SigilStore();
+    store.addVoice('sine', 0.5, 0.5);
+    const v2 = store.addVoice('sine', 0.5, 0.5);
+    expect(store.hasOverlap).toBe(true);
+
+    store.removeVoice(v2.id);
+    expect(store.hasOverlap).toBe(false);
   });
 });
 

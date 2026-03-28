@@ -573,6 +573,11 @@ export class CanvasInteractionController {
       }
     }
 
+    // Recompute shape overlap after drag/resize commit (rasterized, not per-frame)
+    if (this.interaction.mode === 'dragging' || this.interaction.mode === 'resizing') {
+      this.store.recomputeOverlap();
+    }
+
     // Deferred touch deselect: only fires if no pinch occurred
     if (this.pendingTouchDeselect === e.pointerId) {
       this.pendingTouchDeselect = null;

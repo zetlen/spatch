@@ -139,7 +139,6 @@ function createStubAudioContext() {
 
 function makeVoice(id, waveform = 'sine', overrides = {}) {
   const base = {
-    blend: 'screen',
     border: undefined,
     effect: undefined,
     fill: { h: 200, l: 50, mode: 'solid', s: 80 },
@@ -156,8 +155,9 @@ function makeVoice(id, waveform = 'sine', overrides = {}) {
   return base;
 }
 
-function makeSigilState(voices) {
+function makeSigilState(voices, blend = 'screen') {
   return {
+    blend,
     envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
     scene: 0,
     voices,
@@ -278,46 +278,50 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
     return state;
   }
 
-  test('voices track currentBlend during play', async () => {
+  test('voices are built during play', async () => {
     const voiceA = makeVoice('a');
     await startWith([voiceA]);
 
-    const audioVoice = engine.activeVoices[0];
-    expect(audioVoice.currentBlend).toBe('screen');
+    expect(engine.activeVoices.length).toBe(1);
+    expect(engine.activeVoices[0].shapeId).toBe('a');
   });
 
-  test('blend change triggers voice rebuild', async () => {
-    const voiceA = makeVoice('a', 'sine', { blend: 'screen' });
-    await startWith([voiceA]);
+  test('global blend change triggers FM rebuild', async () => {
+    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
+    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
+    await startWith([voiceA, voiceB]);
 
-    const originalVoice = engine.activeVoices[0];
+    // No FM with screen blend
+    expect(engine._fmConnections.size).toBe(0);
 
-    // Change blend mode
-    const updated = makeVoice('a', 'sine', { blend: 'multiply' });
-    engine.update(makeSigilState([updated]));
+    // Change to multiply — should create FM connections
+    engine.update(makeSigilState([voiceA, voiceB], 'multiply'));
 
-    // Voice should have been rebuilt (different object)
-    const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(newVoice).not.toBe(originalVoice);
-    expect(newVoice.currentBlend).toBe('multiply');
+    expect(engine._fmConnections.size).toBeGreaterThan(0);
   });
 
-  test('all blend modes can be built without error', async () => {
-    const blends = ['screen', 'multiply', 'difference'];
+  test('all blend modes can be applied without error', async () => {
+    const blends = ['screen', 'multiply', 'exclusion', 'difference'];
+    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
+    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
     for (const blend of blends) {
-      const voiceA = makeVoice('a', 'sine', { blend });
-      await startWith([voiceA]);
-      expect(engine.activeVoices.length).toBe(1);
-      expect(engine.activeVoices[0].currentBlend).toBe(blend);
+      await startWith([voiceA, voiceB]);
+      engine.update(makeSigilState([voiceA, voiceB], blend));
+      expect(engine.activeVoices.length).toBe(2);
       engine.stop();
     }
   });
 
-  test('overlapping voices create FM connections', async () => {
+  test('overlapping voices create FM connections with non-screen blend', async () => {
     // Two voices at the same position — should have overlap
     const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const voiceB = makeVoice('b', 'pulse', { x: 0.5, y: 0.5, size: 0.2, blend: 'multiply' });
-    await startWith([voiceA, voiceB]);
+    const voiceB = makeVoice('b', 'pulse', { x: 0.5, y: 0.5, size: 0.2 });
+    await engine.play(makeSigilState([voiceA, voiceB], 'multiply'), {
+      attack: 0.1,
+      decay: 0.2,
+      release: 0.4,
+      sustain: 0.7,
+    });
 
     // FM connections are internal, but we can verify voices were built successfully
     expect(engine.activeVoices.length).toBe(2);
@@ -326,8 +330,13 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
   test('non-overlapping voices do not create FM connections', async () => {
     // Voices far apart — no overlap
     const voiceA = makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 });
-    const voiceB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05, blend: 'multiply' });
-    await startWith([voiceA, voiceB]);
+    const voiceB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 });
+    await engine.play(makeSigilState([voiceA, voiceB], 'multiply'), {
+      attack: 0.1,
+      decay: 0.2,
+      release: 0.4,
+      sustain: 0.7,
+    });
 
     expect(engine.activeVoices.length).toBe(2);
     // No FM connections should exist (internal map is empty)
@@ -336,8 +345,8 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
 
   test('screen blend creates no FM even when overlapping', async () => {
     // Screen is the default — no FM modulation regardless of overlap
-    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2, blend: 'screen' });
-    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2, blend: 'screen' });
+    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
+    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
     await startWith([voiceA, voiceB]);
 
     expect(engine.activeVoices.length).toBe(2);
@@ -347,16 +356,21 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
 
   test('FM connections are cleaned up when voices separate', async () => {
     const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2, blend: 'multiply' });
-    await startWith([voiceA, voiceB]);
+    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
+    await engine.play(makeSigilState([voiceA, voiceB], 'multiply'), {
+      attack: 0.1,
+      decay: 0.2,
+      release: 0.4,
+      sustain: 0.7,
+    });
 
     // Should have FM connection from overlap
     expect(engine._fmConnections.size).toBeGreaterThan(0);
 
     // Move voices apart
     const updatedA = makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 });
-    const updatedB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05, blend: 'multiply' });
-    engine.update(makeSigilState([updatedA, updatedB]));
+    const updatedB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 });
+    engine.update(makeSigilState([updatedA, updatedB], 'multiply'));
 
     // FM connections should be torn down
     expect(engine._fmConnections.size).toBe(0);
@@ -838,13 +852,9 @@ describe('AudioEngine — solo mode', () => {
 
   test('FM connections stay active when voice is soloed', async () => {
     const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', {
-      x: 0.5,
-      y: 0.5,
-      size: 0.2,
-      blend: 'multiply',
-    });
-    const state = await startWith([voiceA, voiceB]);
+    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
+    const state = makeSigilState([voiceA, voiceB], 'multiply');
+    await engine.play(state, state.envelope);
 
     engine.setSoloVoice('a');
     engine.update(state);

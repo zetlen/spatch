@@ -372,18 +372,16 @@ const steps: TutorialStep[] = [
         ctx.playLatched();
       },
       (ctx: StepContext) => {
-        if (ctx.demo.tri)
-          ctx.store.updateVoice(ctx.demo.tri, { x: ctx.nc(0.45), blend: 'multiply' });
-        if (ctx.demo.sq) ctx.store.updateVoice(ctx.demo.sq, { x: ctx.nc(0.5), blend: 'multiply' });
-        if (ctx.demo.circ)
-          ctx.store.updateVoice(ctx.demo.circ, { x: ctx.nc(0.55), blend: 'multiply' });
+        if (ctx.demo.tri) ctx.store.updateVoice(ctx.demo.tri, { x: ctx.nc(0.45) });
+        if (ctx.demo.sq) ctx.store.updateVoice(ctx.demo.sq, { x: ctx.nc(0.5) });
+        if (ctx.demo.circ) ctx.store.updateVoice(ctx.demo.circ, { x: ctx.nc(0.55) });
+        ctx.store.recomputeOverlap();
+        ctx.store.updateBlend('multiply');
         ctx.render();
         ctx.playLatched();
       },
       (ctx: StepContext) => {
-        if (ctx.demo.tri) ctx.store.updateVoice(ctx.demo.tri, { blend: 'difference' });
-        if (ctx.demo.sq) ctx.store.updateVoice(ctx.demo.sq, { blend: 'difference' });
-        if (ctx.demo.circ) ctx.store.updateVoice(ctx.demo.circ, { blend: 'difference' });
+        ctx.store.updateBlend('difference');
         ctx.render();
         ctx.playLatched();
       },

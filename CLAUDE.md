@@ -98,7 +98,7 @@ js/
   toolbar/
     expansion-panel.ts  Panel lifecycle, PanelManager, bindLongPress
     toolbar.ts       Tool buttons, panel registration
-    blend-panel.ts   Blend mode picker
+    blend-panel.ts   Global blend mode picker (long-press dropdown)
     border-panel.ts  Border settings
     fill-panel.ts    Fill color/gradient picker
     pattern-panel.ts Pattern effect picker
@@ -112,7 +112,8 @@ js/
   shapes.ts          Resize/rotate math, ADSR corner conversion
   colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
   patterns.ts        8×8 bitmap pattern tiles, effect factories (visual + audio co-located)
-  effects.ts         FM_PARAMS table, blend-mode FM synthesis, overlap computation
+  effects.ts         FM_PARAMS table, blend-mode FM synthesis, center-distance overlap
+  overlap.ts         Rasterized pixel-faithful shape overlap detection (OffscreenCanvas)
   serialize.ts       URL routing + Base64 serialization (/s/<data>)
   share.ts           Share overlay: link, embed snippet, live preview
   credits.ts         Credits overlay + audio muffling
@@ -186,8 +187,8 @@ See `docs/plans/2026-03-01-bijective-audio-visual-design.md` for full rationale.
 
 ### State & Transforms
 
-`SigilStore` is the single source of truth. Three domains — **Envelope**,
-**Scene/Vibe**, **Voices** — each projected in three directions:
+`SigilStore` is the single source of truth. Four domains — **Envelope**,
+**Scene/Vibe**, **Blend**, **Voices** — each projected in three directions:
 
 - **Interface** (two-way ↔): state ↔ DOM
 - **Serializer** (two-way ↔): state ↔ URL (`/s/<base64data>`)
@@ -200,6 +201,15 @@ The voice registry (`js/voices/registry.ts`) maps each waveform type to
 three delegates — **UI** (SVG + interaction), **Player** (audio graph),
 **Serializer** (register-based wire format). See
 `docs/plans/2026-03-23-voice-delegates-design.md` for the full design.
+
+**Global blend mode** (`SigilData.blend`): one of 4 commutative CSS
+`mix-blend-mode` values (`screen`, `multiply`, `exclusion`, `difference`)
+applied to all overlapping voice groups. Drives FM synthesis depth/character
+for overlapping pairs. Auto-resets to `screen` when no voices overlap.
+Overlap is detected via rasterized pixel test (`overlap.ts`) using
+OffscreenCanvas — runs on pointer release and voice add/remove/load, not
+during continuous drags. `SigilStore.overlappingIds` caches the result;
+`SigilStore.hasOverlap` signal gates the toolbar blend button.
 
 **Ephemeral view state** (`PlaybackController`, `SelectionManager`,
 `SplashController`) drives audio and DOM but is never serialized, no undo.
@@ -227,16 +237,17 @@ maps to both visual and audio:
 | `timbre` | rotation (pulse/blend/astroid) | waveform param (periodic: 90° square/astroid, 120° triangle) |
 | `stamp` | silhouette SVG (stamp only) | sample selection (pitch via playback rate) |
 | `trigger` | tilt angle (stamp only: -5°/0°/+5°) | envelope trigger phase (A=0, D=1, R=2) |
-| `blend` | CSS `mix-blend-mode` | cross-voice FM synthesis (see below) |
 | `border` | inset stroke(s) (not stamps) | octave-doubled sine (white=up, black=down, single=1oct, double=2oct) |
 
-Field-level details (blend, border, fill, ADSR, play modes) are documented
+Field-level details (border, fill, ADSR, play modes) are documented
 in code comments (`types.ts`, `effects.ts`, `voice-builder.ts`, `shapes.ts`,
 `playback.ts`).
 
 **Serialization policy**: v2 register-based format. Perceptually quantized
-(6-bit spatial, 3-bit envelope, 3-bit border). Version byte enables future
-evolution. v1 URLs are not migrated. **No backwards compatibility until v1.**
+(6-bit spatial, 3-bit envelope, 3-bit border). Header packs version (1 char),
+scene+blend (1 char: blend 2b | scene 4b), envelope (2 chars). Version byte
+enables future evolution. v1 URLs are not migrated. **No backwards
+compatibility until v1.**
 
 ## Code Conventions
 
@@ -276,6 +287,21 @@ Privileges revoked after any `await`. See `audio/engine.ts:_init()` and
 3. **No dead or tautological tests.** Tests for removed functionality must be
    removed/rewritten — not left to pass vacuously.
 4. **CLAUDE.md is accurate.** Re-read every section; fix stale descriptions.
+
+### Failing Tests
+
+**Never dismiss a test failure as "flaky" or "unrelated" without investigation.**
+When a test fails:
+
+1. **STOP.** Do not retry, skip, or move on.
+2. **Verify** whether the failure is caused by your changes or is pre-existing.
+   Run the test on `main` if unsure.
+3. **If the test is genuinely flaky** (passes on `main`, fails intermittently),
+   determine **why** — race condition, timing sensitivity, resource contention,
+   nondeterministic input. Fix the root cause if feasible.
+4. **If the root cause is too complex or too far afield** to fix in the current
+   PR, **open an issue** describing the flaky test, its failure mode, and any
+   hypotheses. Do not silently move on.
 
 ## Recipes
 

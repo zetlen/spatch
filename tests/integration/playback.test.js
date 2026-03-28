@@ -25,12 +25,10 @@ test.describe('Playback', () => {
     await page.mouse.down();
     await expect(playBtn).toHaveClass(/playing/);
 
-    // Wait a bit for audio to stabilize
-    await page.waitForTimeout(200);
-
-    // Check audio tap shows non-zero amplitude
-    const isPlaying = await page.evaluate(() => globalThis.__audioTap?.isPlaying());
-    expect(isPlaying).toBe(true);
+    // Poll until audio tap detects non-zero amplitude. The AudioContext must
+    // resume from suspended, build the graph, and fill the analyser buffer —
+    // a fixed wait races against headless chromium's deprioritized audio scheduling.
+    await page.waitForFunction(() => globalThis.__audioTap?.isPlaying(), null, { timeout: 3000 });
 
     // Release to stop (momentary mode)
     await page.mouse.up();

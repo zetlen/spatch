@@ -6,6 +6,7 @@ import { deserializeState, pathToState, serializeState, stateToPath } from '../.
 
 function makeState(overrides = {}) {
   return {
+    blend: 'screen',
     envelope: { attack: 0.571, decay: 0.571, release: 1.286, sustain: 0.571 },
     scene: 0,
     voices: [],
@@ -15,7 +16,6 @@ function makeState(overrides = {}) {
 
 function makeVoice(overrides = {}) {
   return {
-    blend: 'screen',
     border: undefined,
     effect: undefined,
     fill: { h: 200, l: 50, mode: 'solid', s: 80 },
@@ -51,7 +51,7 @@ describe('v2 serializeState / deserializeState round-trip', () => {
   });
 
   test('scene index survives round-trip', () => {
-    for (const scene of [0, 5, 11, 63]) {
+    for (const scene of [0, 5, 11, 15]) {
       const state = makeState({ scene });
       const decoded = deserializeState(serializeState(state));
       expect(decoded.scene).toBe(scene);
@@ -139,15 +139,20 @@ describe('v2 serializeState / deserializeState round-trip', () => {
     expect(linear.fill.h2).toBe(200);
   });
 
-  test('all blend modes survive round-trip', () => {
-    const blends = ['screen', 'multiply', 'difference'];
-    const state = makeState({
-      voices: blends.map((b, i) => makeVoice({ blend: b, x: i * 0.3 })),
-    });
+  test('all global blend modes survive round-trip', () => {
+    const blends = ['screen', 'multiply', 'exclusion', 'difference'];
+    for (const blend of blends) {
+      const state = makeState({ blend, voices: [makeVoice()] });
+      const decoded = deserializeState(serializeState(state));
+      expect(decoded.blend).toBe(blend);
+    }
+  });
 
-    const decoded = deserializeState(serializeState(state));
-    const decodedBlends = decoded.voices.map((v) => v.blend).sort();
-    expect(decodedBlends).toEqual([...blends].sort());
+  test('old v2 URLs decode blend as screen (backwards compatible)', () => {
+    const state = makeState({ voices: [makeVoice()] });
+    const encoded = serializeState(state);
+    const decoded = deserializeState(encoded);
+    expect(decoded.blend).toBe('screen');
   });
 
   test('borders survive round-trip', () => {

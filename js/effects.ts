@@ -6,8 +6,6 @@
 
 import type { BlendMode } from './types.ts';
 
-export const DEFAULT_BLEND: BlendMode = 'screen';
-
 // ---- FM synthesis parameters per blend mode ----
 //
 // When shapes overlap, the top voice's oscillator modulates the bottom voice's
@@ -17,19 +15,18 @@ export const DEFAULT_BLEND: BlendMode = 'screen';
 export interface FMParams {
   /** Maximum modulation index at full overlap. */
   maxIndex: number;
-  /** Depth scaling: 'linear' = overlap × maxIndex, 'exponential' = overlap² × maxIndex. */
-  depthCurve: 'linear' | 'exponential';
+  /** Depth scaling: 'linear' = overlap × maxIndex, 'sqrt' = √overlap × maxIndex, 'exponential' = overlap² × maxIndex. */
+  depthCurve: 'linear' | 'sqrt' | 'exponential';
   /** Self-modulation feedback amount (0–1). Modulator feeds back into its own frequency. */
   feedback: number;
-  /** LFO rate for depth modulation (Hz). 0 = no LFO. */
-  lfoRate: number;
 }
 
 /** FM parameters indexed by blend mode. */
 export const FM_PARAMS: Record<BlendMode, FMParams> = {
-  screen: { maxIndex: 0, depthCurve: 'linear', feedback: 0, lfoRate: 0 },
-  multiply: { maxIndex: 1.5, depthCurve: 'exponential', feedback: 0, lfoRate: 0 },
-  difference: { maxIndex: 1.5, depthCurve: 'linear', feedback: 0, lfoRate: 0 },
+  screen: { maxIndex: 0, depthCurve: 'linear', feedback: 0 },
+  multiply: { maxIndex: 0.8, depthCurve: 'sqrt', feedback: 0 },
+  exclusion: { maxIndex: 1.2, depthCurve: 'linear', feedback: 0 },
+  difference: { maxIndex: 1.8, depthCurve: 'linear', feedback: 0.2 },
 };
 
 /** Max frequency deviation in Hz to prevent extreme high-ratio FM from sounding harsh. */
@@ -40,10 +37,13 @@ const MAX_FM_DEVIATION = 2000;
  * depth = min(scaledIndex × modulatorFreq, MAX_DEVIATION)
  */
 export function computeFMDepth(overlap: number, params: FMParams, modulatorFreq: number): number {
-  const scaled =
+  const shaped =
     params.depthCurve === 'exponential'
-      ? overlap * overlap * params.maxIndex
-      : overlap * params.maxIndex;
+      ? overlap * overlap
+      : params.depthCurve === 'sqrt'
+        ? Math.sqrt(overlap)
+        : overlap;
+  const scaled = shaped * params.maxIndex;
   return Math.min(scaled * modulatorFreq, MAX_FM_DEVIATION);
 }
 

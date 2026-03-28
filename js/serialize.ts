@@ -2,7 +2,7 @@
 //
 // V2 wire format:
 //   [Version: 1 char (6b)]
-//   [Scene: 1 char (6b)]
+//   [Scene + blend (1 char): blend(2b) | scene(4b)]
 //   [Envelope: 2 chars (attack 3b + decay 3b, sustain 3b + release 3b)]
 //   [Voices: variable length, sorted lexicographically]
 //     Per voice:
@@ -10,9 +10,9 @@
 //       Registers: 10 chars (solid) or 15 chars (gradient)
 //         CP1 (4 chars): fill color 1 — H(9) + S(7) + L(8)
 //         CP2 (5 chars, gradient only): angle(3) + H(9) + S(7) + L(8)
-//         SP1-SP6 (6 chars): Y, X, size, waveform-specific, effect+blend, border
+//         SP1-SP6 (6 chars): Y, X, size, waveform-specific, effect, border
 
-import type { Envelope, SigilData, Voice } from './types.ts';
+import { BLEND_MODES, type Envelope, type SigilData, type Voice } from './types.ts';
 import { encodeInt, decodeInt } from './voices/b64.ts';
 import { get, getById } from './voices/registry.ts';
 
@@ -74,8 +74,9 @@ function packState(state: SigilData): string {
   // Version (1 char)
   out += encodeInt(SCHEMA_VERSION, 1);
 
-  // Scene (1 char)
-  out += encodeInt(state.scene, 1);
+  // Scene + blend (1 char): [blend(2b) | scene(4b)]
+  const blendIndex = BLEND_MODES.indexOf(state.blend);
+  out += encodeInt(((blendIndex & 0x3) << 4) | (state.scene & 0xf), 1);
 
   // Envelope (2 chars)
   out += packEnvelope(state.envelope);
@@ -103,8 +104,10 @@ function unpackState(str: string): SigilData {
     throw new Error(`Unsupported schema version: ${version}`);
   }
 
-  // Scene (1 char)
-  const scene = decodeInt(str, idx++, 1);
+  // Scene + blend (1 char): [blend(2b) | scene(4b)]
+  const sceneBlendChar = decodeInt(str, idx++, 1);
+  const blend = BLEND_MODES[(sceneBlendChar >> 4) & 0x3] ?? 'screen';
+  const scene = sceneBlendChar & 0xf;
 
   // Envelope (2 chars)
   const envelope = unpackEnvelope(str, idx);
@@ -132,7 +135,7 @@ function unpackState(str: string): SigilData {
     }
   }
 
-  return { envelope, scene, voices };
+  return { blend, envelope, scene, voices };
 }
 
 // ---- Public API ----

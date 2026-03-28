@@ -45,7 +45,6 @@ function makeSineVoice(overrides = {}) {
     size: normalizedCoord(0.2),
     fill: { mode: 'solid', h: 200, s: 80, l: 50 },
     effect: undefined,
-    blend: 'screen',
     border: undefined,
     ...overrides,
   };
@@ -60,7 +59,6 @@ function makePulseVoice(overrides = {}) {
     size: normalizedCoord(0.15),
     fill: { mode: 'solid', h: 120, s: 70, l: 45 },
     effect: undefined,
-    blend: 'screen',
     border: undefined,
     timbre: normalizedCoord(0),
     ...overrides,
@@ -76,7 +74,6 @@ function makeBlendVoice(overrides = {}) {
     size: normalizedCoord(0.18),
     fill: { mode: 'solid', h: 30, s: 90, l: 55 },
     effect: undefined,
-    blend: 'screen',
     border: undefined,
     timbre: normalizedCoord(0),
     ...overrides,
@@ -104,7 +101,7 @@ describe('canvas render — voice creation', () => {
   test('creates a circle element for sine voice', () => {
     const svg = createSVG();
     const state = makeState({ voices: [makeSineVoice()] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const voiceLayer = svg.querySelector('g[data-layer="voices"]');
     expect(voiceLayer).not.toBeNull();
@@ -122,7 +119,7 @@ describe('canvas render — voice creation', () => {
   test('creates a rect element for pulse voice', () => {
     const svg = createSVG();
     const state = makeState({ voices: [makePulseVoice()] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const voiceLayer = svg.querySelector('g[data-layer="voices"]');
     const group = voiceLayer.querySelector('g[data-voice-id="v-pulse-1"]');
@@ -137,7 +134,7 @@ describe('canvas render — voice creation', () => {
   test('creates a polygon element for blend voice', () => {
     const svg = createSVG();
     const state = makeState({ voices: [makeBlendVoice()] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const voiceLayer = svg.querySelector('g[data-layer="voices"]');
     const group = voiceLayer.querySelector('g[data-voice-id="v-blend-1"]');
@@ -156,7 +153,7 @@ describe('canvas render — voice creation', () => {
     const state = makeState({
       voices: [makeSineVoice(), makePulseVoice(), makeBlendVoice()],
     });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const voiceLayer = svg.querySelector('g[data-layer="voices"]');
     const groups = voiceLayer.querySelectorAll('g[data-voice-id]');
@@ -178,7 +175,7 @@ describe('canvas render — layer structure', () => {
   test('creates defs, voices, and selection layers', () => {
     const svg = createSVG();
     const state = makeState();
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     expect(svg.querySelector('defs')).not.toBeNull();
     expect(svg.querySelector('g[data-layer="voices"]')).not.toBeNull();
@@ -188,7 +185,7 @@ describe('canvas render — layer structure', () => {
   test('voice layer has isolation style', () => {
     const svg = createSVG();
     const state = makeState();
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const voiceLayer = svg.querySelector('g[data-layer="voices"]');
     expect(voiceLayer.style.isolation).toBe('isolate');
@@ -197,11 +194,11 @@ describe('canvas render — layer structure', () => {
   test('reuses existing layers on re-render', () => {
     const svg = createSVG();
     const state = makeState({ voices: [makeSineVoice()] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const firstVoiceLayer = svg.querySelector('g[data-layer="voices"]');
 
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const secondVoiceLayer = svg.querySelector('g[data-layer="voices"]');
     expect(secondVoiceLayer).toBe(firstVoiceLayer);
@@ -223,7 +220,7 @@ describe('canvas render — voice update', () => {
     const svg = createSVG();
     const voice = makeSineVoice();
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const voiceLayer = svg.querySelector('g[data-layer="voices"]');
     const groupsBefore = voiceLayer.querySelectorAll('g[data-voice-id]').length;
@@ -233,7 +230,7 @@ describe('canvas render — voice update', () => {
     // Update position
     const updatedVoice = { ...voice, x: normalizedCoord(0.8), y: normalizedCoord(0.3) };
     const state2 = makeState({ voices: [updatedVoice] });
-    render(svg, state2, undefined);
+    render(svg, state2, new Set(), undefined);
 
     const groupsAfter = voiceLayer.querySelectorAll('g[data-voice-id]').length;
     expect(groupsAfter).toBe(groupsBefore);
@@ -247,14 +244,14 @@ describe('canvas render — voice update', () => {
     const svg = createSVG();
     const voice = makeSineVoice();
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const circle = svg.querySelector('g[data-layer="voices"] circle');
     expect(circle.getAttribute('r')).toBe('0.1');
 
     const updatedVoice = { ...voice, size: normalizedCoord(0.4) };
     const state2 = makeState({ voices: [updatedVoice] });
-    render(svg, state2, undefined);
+    render(svg, state2, new Set(), undefined);
 
     expect(circle.getAttribute('r')).toBe('0.2'); // 0.4/2
   });
@@ -263,14 +260,14 @@ describe('canvas render — voice update', () => {
     const svg = createSVG();
     const voice = makePulseVoice();
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const rect = svg.querySelector('g[data-layer="voices"] rect');
     expect(rect.getAttribute('width')).toBe('0.15');
 
     const updatedVoice = { ...voice, size: normalizedCoord(0.3) };
     const state2 = makeState({ voices: [updatedVoice] });
-    render(svg, state2, undefined);
+    render(svg, state2, new Set(), undefined);
 
     expect(rect.getAttribute('width')).toBe('0.3');
     expect(rect.getAttribute('height')).toBe('0.3');
@@ -293,14 +290,14 @@ describe('canvas render — voice removal', () => {
     const voice1 = makeSineVoice({ id: 'v1' });
     const voice2 = makePulseVoice({ id: 'v2' });
     const state = makeState({ voices: [voice1, voice2] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const voiceLayer = svg.querySelector('g[data-layer="voices"]');
     expect(voiceLayer.querySelectorAll('g[data-voice-id]').length).toBe(2);
 
     // Remove voice1
     const state2 = makeState({ voices: [voice2] });
-    render(svg, state2, undefined);
+    render(svg, state2, new Set(), undefined);
 
     expect(voiceLayer.querySelectorAll('g[data-voice-id]').length).toBe(1);
     expect(voiceLayer.querySelector('g[data-voice-id="v1"]')).toBeNull();
@@ -310,13 +307,13 @@ describe('canvas render — voice removal', () => {
   test('removes all voice groups when all voices are removed', () => {
     const svg = createSVG();
     const state = makeState({ voices: [makeSineVoice(), makePulseVoice()] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const voiceLayer = svg.querySelector('g[data-layer="voices"]');
     expect(voiceLayer.querySelectorAll('g[data-voice-id]').length).toBe(2);
 
     const state2 = makeState({ voices: [] });
-    render(svg, state2, undefined);
+    render(svg, state2, new Set(), undefined);
 
     expect(voiceLayer.querySelectorAll('g[data-voice-id]').length).toBe(0);
   });
@@ -339,7 +336,7 @@ describe('canvas render — fill rendering', () => {
       fill: { mode: 'solid', h: 200, s: 80, l: 50 },
     });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const circle = svg.querySelector('g[data-layer="voices"] circle');
     const fill = circle.getAttribute('fill');
@@ -362,7 +359,7 @@ describe('canvas render — fill rendering', () => {
       },
     });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const defs = svg.querySelector('defs');
     const grad = defs.querySelector('#grad-v-grad');
@@ -390,7 +387,7 @@ describe('canvas render — fill rendering', () => {
       },
     });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const defs = svg.querySelector('defs');
     expect(defs.querySelector('#grad-v-switch')).not.toBeNull();
@@ -401,7 +398,7 @@ describe('canvas render — fill rendering', () => {
       fill: { mode: 'solid', h: 200, s: 80, l: 50 },
     };
     const state2 = makeState({ voices: [solidVoice] });
-    render(svg, state2, undefined);
+    render(svg, state2, new Set(), undefined);
 
     expect(defs.querySelector('#grad-v-switch')).toBeNull();
   });
@@ -421,9 +418,14 @@ describe('canvas render — blend mode', () => {
   test('blend mode only applies when voices overlap', () => {
     const svg = createSVG();
     // Two overlapping voices at the same position
-    const v1 = makeSineVoice({ id: 'v1', blend: 'multiply' });
+    const v1 = makeSineVoice({ id: 'v1' });
     const v2 = makePulseVoice({ id: 'v2', x: normalizedCoord(0.5), y: normalizedCoord(0.5) });
-    render(svg, makeState({ voices: [v1, v2] }), undefined);
+    render(
+      svg,
+      makeState({ blend: 'multiply', voices: [v1, v2] }),
+      new Set(['v1', 'v2']),
+      undefined,
+    );
 
     const group = svg.querySelector('g[data-voice-id="v1"]');
     expect(group.style.mixBlendMode).toBe('multiply');
@@ -432,8 +434,8 @@ describe('canvas render — blend mode', () => {
   test('blend mode reverts to screen when no overlap', () => {
     const svg = createSVG();
     // Single voice — no overlap possible
-    const voice = makeSineVoice({ blend: 'multiply' });
-    render(svg, makeState({ voices: [voice] }), undefined);
+    const voice = makeSineVoice();
+    render(svg, makeState({ blend: 'multiply', voices: [voice] }), new Set(), undefined);
 
     const group = svg.querySelector('g[data-voice-id="v-sine-1"]');
     expect(group.style.mixBlendMode).toBe('screen');
@@ -442,16 +444,21 @@ describe('canvas render — blend mode', () => {
   test('blend mode updates on re-render when overlap changes', () => {
     const svg = createSVG();
     // Start overlapping
-    const v1 = makeSineVoice({ id: 'v1', blend: 'difference' });
+    const v1 = makeSineVoice({ id: 'v1' });
     const v2 = makePulseVoice({ id: 'v2', x: normalizedCoord(0.5), y: normalizedCoord(0.5) });
-    render(svg, makeState({ voices: [v1, v2] }), undefined);
+    render(
+      svg,
+      makeState({ blend: 'difference', voices: [v1, v2] }),
+      new Set(['v1', 'v2']),
+      undefined,
+    );
 
     const group = svg.querySelector('g[data-voice-id="v1"]');
     expect(group.style.mixBlendMode).toBe('difference');
 
     // Move v2 far away — no overlap
     const v2Far = { ...v2, x: normalizedCoord(0.01), y: normalizedCoord(0.01) };
-    render(svg, makeState({ voices: [v1, v2Far] }), undefined);
+    render(svg, makeState({ blend: 'difference', voices: [v1, v2Far] }), new Set(), undefined);
     expect(group.style.mixBlendMode).toBe('screen');
   });
 });
@@ -471,7 +478,7 @@ describe('canvas render — selection indicators', () => {
     const svg = createSVG();
     const voice = makeSineVoice();
     const state = makeState({ voices: [voice] });
-    render(svg, state, 'v-sine-1');
+    render(svg, state, new Set(), 'v-sine-1');
 
     const selectionLayer = svg.querySelector('g[data-layer="selection"]');
     // Selection should contain at least the marching ants outlines
@@ -482,7 +489,7 @@ describe('canvas render — selection indicators', () => {
     const svg = createSVG();
     const voice = makeSineVoice();
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const selectionLayer = svg.querySelector('g[data-layer="selection"]');
     expect(selectionLayer.children.length).toBe(0);
@@ -494,12 +501,12 @@ describe('canvas render — selection indicators', () => {
     const state = makeState({ voices: [voice] });
 
     // First render with selection
-    render(svg, state, 'v-sine-1');
+    render(svg, state, new Set(), 'v-sine-1');
     const selectionLayer = svg.querySelector('g[data-layer="selection"]');
     expect(selectionLayer.children.length).toBeGreaterThan(0);
 
     // Re-render without selection
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
     expect(selectionLayer.children.length).toBe(0);
   });
 
@@ -509,7 +516,7 @@ describe('canvas render — selection indicators', () => {
     const voice2 = makePulseVoice({ id: 'v2' });
     const state = makeState({ voices: [voice1, voice2] });
 
-    render(svg, state, 'v1');
+    render(svg, state, new Set(), 'v1');
     const selectionLayer = svg.querySelector('g[data-layer="selection"]');
     const firstSelectionChildCount = selectionLayer.children.length;
     expect(firstSelectionChildCount).toBeGreaterThan(0);
@@ -520,7 +527,7 @@ describe('canvas render — selection indicators', () => {
     expect(firstOutline.tagName.toLowerCase()).toBe('circle');
 
     // Switch selection to pulse voice (rect)
-    render(svg, state, 'v2');
+    render(svg, state, new Set(), 'v2');
     const secondOutline = selectionLayer.children[0];
     expect(secondOutline.tagName.toLowerCase()).toBe('rect');
   });
@@ -529,7 +536,7 @@ describe('canvas render — selection indicators', () => {
     const svg = createSVG();
     const voice = makeSineVoice();
     const state = makeState({ voices: [voice] });
-    render(svg, state, 'non-existent-id');
+    render(svg, state, new Set(), 'non-existent-id');
 
     const selectionLayer = svg.querySelector('g[data-layer="selection"]');
     expect(selectionLayer.children.length).toBe(0);
@@ -553,7 +560,7 @@ describe('canvas render — borders', () => {
       border: { color: 'white', double: false, thickness: normalizedCoord(0.5) },
     });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const group = svg.querySelector('g[data-voice-id="v-sine-1"]');
     const borders = group.querySelectorAll('[data-border]');
@@ -568,7 +575,7 @@ describe('canvas render — borders', () => {
       border: { color: 'black', double: true, thickness: normalizedCoord(0.5) },
     });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const group = svg.querySelector('g[data-voice-id="v-sine-1"]');
     const borders = group.querySelectorAll('[data-border]');
@@ -581,7 +588,7 @@ describe('canvas render — borders', () => {
     const svg = createSVG();
     const voice = makeSineVoice({ border: undefined });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const group = svg.querySelector('g[data-voice-id="v-sine-1"]');
     const borders = group.querySelectorAll('[data-border]');
@@ -594,14 +601,14 @@ describe('canvas render — borders', () => {
       border: { color: 'white', double: false, thickness: normalizedCoord(0.5) },
     });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const group = svg.querySelector('g[data-voice-id="v-sine-1"]');
     expect(group.querySelectorAll('[data-border]').length).toBe(1);
 
     const updatedVoice = { ...voice, border: undefined };
     const state2 = makeState({ voices: [updatedVoice] });
-    render(svg, state2, undefined);
+    render(svg, state2, new Set(), undefined);
 
     expect(group.querySelectorAll('[data-border]').length).toBe(0);
   });
@@ -622,7 +629,7 @@ describe('canvas render — rotation', () => {
     const svg = createSVG();
     const voice = makeSineVoice();
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const circle = svg.querySelector('g[data-layer="voices"] circle');
     expect(circle.getAttribute('transform')).toBeNull();
@@ -632,7 +639,7 @@ describe('canvas render — rotation', () => {
     const svg = createSVG();
     const voice = makePulseVoice({ timbre: normalizedCoord(0.5) });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const rect = svg.querySelector('g[data-layer="voices"] rect');
     const transform = rect.getAttribute('transform');
@@ -645,7 +652,7 @@ describe('canvas render — rotation', () => {
     const svg = createSVG();
     const voice = makeBlendVoice({ timbre: normalizedCoord(0.5) });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const polygon = svg.querySelector('g[data-layer="voices"] polygon');
     const transform = polygon.getAttribute('transform');
@@ -658,7 +665,7 @@ describe('canvas render — rotation', () => {
     const svg = createSVG();
     const voice = makePulseVoice({ timbre: normalizedCoord(0) });
     const state = makeState({ voices: [voice] });
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const rect = svg.querySelector('g[data-layer="voices"] rect');
     // timbre 0 => rotation 0 => no transform set
@@ -680,7 +687,7 @@ describe('canvas render — pattern defs', () => {
   test('ensures pattern definitions in defs on first render', () => {
     const svg = createSVG();
     const state = makeState();
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
 
     const defs = svg.querySelector('defs');
     expect(defs.querySelector('#pat-stripes')).not.toBeNull();
@@ -706,7 +713,7 @@ describe('canvas render — solo muting', () => {
     });
 
     // Render with solo on voice 'a'
-    render(svg, state, undefined, 'a');
+    render(svg, state, new Set(), undefined, 'a');
 
     const groupA = svg.querySelector('g[data-voice-id="a"]');
     const groupB = svg.querySelector('g[data-voice-id="b"]');
@@ -720,8 +727,8 @@ describe('canvas render — solo muting', () => {
       voices: [makeSineVoice({ id: 'a' }), makePulseVoice({ id: 'b' })],
     });
 
-    render(svg, state, undefined, 'a');
-    render(svg, state, undefined, undefined);
+    render(svg, state, new Set(), undefined, 'a');
+    render(svg, state, new Set(), undefined, undefined);
 
     const groupA = svg.querySelector('g[data-voice-id="a"]');
     const groupB = svg.querySelector('g[data-voice-id="b"]');
@@ -747,7 +754,7 @@ describe('canvas render — DOM order preservation', () => {
     });
 
     // Initial render — groups in data order: a, b
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
     const voiceLayer = svg.querySelector('g[data-layer="voices"]');
     const groups = () =>
       [...voiceLayer.querySelectorAll('g[data-voice-id]')].map((g) => g.dataset.voiceId);
@@ -759,7 +766,7 @@ describe('canvas render — DOM order preservation', () => {
     expect(groups()).toEqual(['b', 'a']); // b is first in DOM now
 
     // Re-render — reconciler should NOT move groups back to data order
-    render(svg, state, undefined);
+    render(svg, state, new Set(), undefined);
     expect(groups()).toEqual(['b', 'a']); // order preserved, not reset to data order
   });
 });
@@ -773,7 +780,7 @@ describe('canvas render — resetCache', () => {
 
     const svg1 = createSVG();
     const state = makeState({ voices: [makeSineVoice()] });
-    render(svg1, state, undefined);
+    render(svg1, state, new Set(), undefined);
 
     // First SVG should have the voice
     expect(svg1.querySelector('g[data-voice-id="v-sine-1"]')).not.toBeNull();
@@ -782,7 +789,7 @@ describe('canvas render — resetCache', () => {
     resetCache();
 
     const svg2 = createSVG();
-    render(svg2, state, undefined);
+    render(svg2, state, new Set(), undefined);
 
     // Second SVG should also have the voice
     expect(svg2.querySelector('g[data-voice-id="v-sine-1"]')).not.toBeNull();

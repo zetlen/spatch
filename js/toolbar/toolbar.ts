@@ -79,6 +79,15 @@ export class Toolbar {
       this.panels.toggle('pattern');
     });
 
+    // Enable/disable blend button based on overlap
+    const btnBlend = qel<HTMLButtonElement>('#btn-blend');
+    effect(() => {
+      const has = this.store.hasOverlap;
+      const blend = this.store.data.blend;
+      btnBlend.disabled = !has;
+      btnBlend.title = has ? `FM Blend: ${blend}` : 'FM Blend (no overlap)';
+    });
+
     this._bindActionButtons();
     this._updateToolActive();
 

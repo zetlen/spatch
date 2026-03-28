@@ -131,7 +131,6 @@ export function buildVoice(
     octaveGainNode,
     effectDispose,
     currentEffect: voice.effect,
-    currentBlend: voice.blend,
     currentBorder: borderKey,
     currentFillKey: fillToKey(voice.fill),
     warmth: vibe.warmth,

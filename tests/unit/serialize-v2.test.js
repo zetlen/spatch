@@ -8,7 +8,6 @@ import { PATTERN_TYPES } from '../../js/types.ts';
 
 function makeVoice(overrides = {}) {
   return {
-    blend: 'screen',
     border: undefined,
     effect: undefined,
     fill: { h: 200, l: 50, mode: 'solid', s: 80 },
@@ -66,7 +65,6 @@ describe('OscillatorSerializer', () => {
       expect(unpacked.fill.h).toBe(200);
       expect(unpacked.fill.s).toBe(80);
       expect(unpacked.fill.l).toBe(50);
-      expect(unpacked.blend).toBe('screen');
       expect(unpacked.effect).toBeUndefined();
       expect(unpacked.border).toBeUndefined();
       // IDs are regenerated
@@ -134,14 +132,6 @@ describe('OscillatorSerializer', () => {
       expect(unpacked.fill.h2).toBe(200);
       expect(unpacked.fill.s2).toBe(70);
       expect(unpacked.fill.l2).toBe(60);
-    });
-
-    test('all blend modes survive', () => {
-      for (const blend of ['screen', 'multiply', 'difference']) {
-        const voice = makeVoice({ blend });
-        const unpacked = serializer.unpack(serializer.pack(voice), 'sine');
-        expect(unpacked.blend).toBe(blend);
-      }
     });
 
     test('all effects survive', () => {

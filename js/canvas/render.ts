@@ -5,8 +5,6 @@
 
 import { setAttrs, svgEl } from '../dom.ts';
 import { ensureLinearGradient, getSolidFillColor } from '../colors.ts';
-import { DEFAULT_BLEND } from '../effects.ts';
-import { computeOverlap } from '../effects.ts';
 import { ensurePatternDefs, getPatternFill } from '../patterns.ts';
 import { voiceRotation } from '../shapes.ts';
 import type { SigilData, Voice } from '../types.ts';
@@ -228,6 +226,7 @@ function reconcileVoice(
   voice: Voice,
   defs: SVGDefsElement,
   hasOverlap: boolean,
+  globalBlend: string,
 ): void {
   const expectedTag = shapeTagName(voice);
 
@@ -250,7 +249,7 @@ function reconcileVoice(
 
   // Apply blend mode only when overlapping — bijection requires that blend
   // has no visual effect when it has no audio effect.
-  group.style.mixBlendMode = hasOverlap ? voice.blend : DEFAULT_BLEND;
+  group.style.mixBlendMode = hasOverlap ? globalBlend : 'screen';
 
   // Apply rotation transform on the main shape (not group, since selection uses group position)
   const transform = voiceTransform(voice);
@@ -272,10 +271,12 @@ function reconcileVoice(
 
 function reconcileVoices(
   voiceLayer: SVGGElement,
-  voices: Voice[],
+  state: SigilData,
+  overlappingIds: ReadonlySet<string>,
   defs: SVGDefsElement,
   soloVoiceId: string | undefined,
 ): void {
+  const voices = state.voices;
   const voiceIds = new Set(voices.map((v) => v.id));
 
   // Remove groups for deleted voices
@@ -288,26 +289,6 @@ function reconcileVoices(
       const grad = defs.querySelector(`#grad-${id}`);
       if (grad) {
         grad.remove();
-      }
-    }
-  }
-
-  // Precompute which voices have overlap (for blend mode bijection)
-  const overlapping = new Set<string>();
-  for (let i = 0; i < voices.length; i++) {
-    for (let j = i + 1; j < voices.length; j++) {
-      if (
-        computeOverlap(
-          voices[i]!.x as number,
-          voices[i]!.y as number,
-          voices[i]!.size as number,
-          voices[j]!.x as number,
-          voices[j]!.y as number,
-          voices[j]!.size as number,
-        ) > 0
-      ) {
-        overlapping.add(voices[i]!.id);
-        overlapping.add(voices[j]!.id);
       }
     }
   }
@@ -330,7 +311,7 @@ function reconcileVoices(
       }
     }
 
-    reconcileVoice(group, voice, defs, overlapping.has(voice.id));
+    reconcileVoice(group, voice, defs, overlappingIds.has(voice.id), state.blend);
     group.classList.toggle('muted', soloVoiceId !== undefined && voice.id !== soloVoiceId);
     prevGroup = group;
   }
@@ -412,6 +393,7 @@ function renderSelection(
 export function render(
   svg: SVGSVGElement,
   state: SigilData,
+  overlappingIds: ReadonlySet<string>,
   selectedId: string | undefined,
   soloVoiceId?: string | undefined,
 ): void {
@@ -424,7 +406,7 @@ export function render(
   }
 
   // Reconcile voices
-  reconcileVoices(voiceLayer, state.voices, defs, soloVoiceId);
+  reconcileVoices(voiceLayer, state, overlappingIds, defs, soloVoiceId);
 
   // Render selection UI (rebuilt each frame — cheap for SVG)
   renderSelection(selectionLayer, state, selectedId);

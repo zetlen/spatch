@@ -57,7 +57,7 @@ export type PatternType = (typeof PATTERN_TYPES)[number];
  *  Only modes that are visually distinct for ALL color combinations are included,
  *  to preserve the bijection principle (no two states may look identical).
  *  Screen is the default — visual blending with no FM modulation. */
-export const BLEND_MODES = ['screen', 'multiply', 'difference'] as const;
+export const BLEND_MODES = ['screen', 'multiply', 'exclusion', 'difference'] as const;
 export type BlendMode = (typeof BLEND_MODES)[number];
 
 /** Fill mode discriminant for the Fill union. */
@@ -164,7 +164,6 @@ export interface VoiceBase {
   size: NormalizedCoord;
   fill: Fill;
   effect: PatternType | undefined;
-  blend: BlendMode;
   border: Border | undefined;
 }
 
@@ -218,11 +217,12 @@ export interface Envelope {
 
 // ---- Top-level state ----
 
-/** Complete sigil state: voices, envelope, and scene index. */
+/** Complete sigil state: voices, envelope, scene index, and global blend mode. */
 export interface SigilData {
   envelope: Envelope;
   voices: Voice[];
   scene: number;
+  blend: BlendMode;
 }
 
 // ---- Audio contracts ----

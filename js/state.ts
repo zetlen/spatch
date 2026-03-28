@@ -6,6 +6,7 @@
 import { type Signal, effect, signal } from '@preact/signals-core';
 
 import {
+  type BlendMode,
   type Envelope,
   type Fill,
   type NormalizedCoord,
@@ -16,7 +17,7 @@ import {
   normalizedCoord,
 } from './types.ts';
 import { createRandomFill } from './colors.ts';
-import { DEFAULT_BLEND } from './effects.ts';
+import { computeOverlappingVoices } from './overlap.ts';
 import { createVoice as registryCreateVoice } from './voices/registry.ts';
 
 let _idCounter = 0;
@@ -32,6 +33,7 @@ export function genId(prefix = 's'): string {
 /** Create a fresh empty SigilData with default envelope and no voices. */
 export function createDefaultState(): SigilData {
   return {
+    blend: 'screen',
     envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
     scene: 0,
     voices: [],
@@ -40,7 +42,6 @@ export function createDefaultState(): SigilData {
 
 function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCoord): Voice {
   const base: VoiceBase = {
-    blend: DEFAULT_BLEND,
     border: undefined as Voice['border'],
     effect: undefined as Voice['effect'],
     fill: createRandomFill(),
@@ -60,11 +61,42 @@ function createVoice(waveform: WaveformType, x: NormalizedCoord, y: NormalizedCo
  */
 export class SigilStore {
   private _data = signal<SigilData>(createDefaultState());
+  private _hasOverlap = signal(false);
 
   constructor(initial?: SigilData) {
     if (initial) {
       this._data.value = initial;
     }
+  }
+
+  get hasOverlap(): boolean {
+    return this._hasOverlap.value;
+  }
+
+  updateBlend(blend: BlendMode): void {
+    this._data.value = { ...this._data.value, blend };
+  }
+
+  /** Rasterized overlap check — call after pointer release or voice add/remove/load.
+   *  Not called during continuous drags (too expensive per frame). */
+  recomputeOverlap(): void {
+    const ids = computeOverlappingVoices(this._data.value.voices);
+    if (ids.size > 0) {
+      this._hasOverlap.value = true;
+    } else {
+      if (this._data.value.blend !== 'screen') {
+        this._data.value = { ...this._data.value, blend: 'screen' };
+      }
+      this._hasOverlap.value = false;
+    }
+    this._overlappingIds = ids;
+  }
+
+  private _overlappingIds = new Set<string>();
+
+  /** Set of voice IDs that currently overlap with at least one other voice. */
+  get overlappingIds(): ReadonlySet<string> {
+    return this._overlappingIds;
   }
 
   /** Read current state. Returns the signal's value (immutable reference). */
@@ -104,6 +136,7 @@ export class SigilStore {
       ...this._data.value,
       voices: [...this._data.value.voices, voice],
     };
+    this.recomputeOverlap();
     return voice;
   }
 
@@ -123,6 +156,7 @@ export class SigilStore {
       ...this._data.value,
       voices: [...this._data.value.voices, clone],
     };
+    this.recomputeOverlap();
     return clone;
   }
 
@@ -152,6 +186,7 @@ export class SigilStore {
       ...this._data.value,
       voices: voices.filter((s) => s.id !== id),
     };
+    this.recomputeOverlap();
   }
 
   /** Merge partial updates into a voice by ID. No-op if the ID is not found. */
@@ -196,6 +231,7 @@ export class SigilStore {
   /** Replace the entire state with the given SigilData. */
   loadState(data: SigilData): void {
     this._data.value = data;
+    this.recomputeOverlap();
   }
 }
 

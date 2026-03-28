@@ -2,9 +2,8 @@
 
 import { getSwatchColor, hexToHsl, hslToHex } from '../colors.ts';
 import { qel } from '../dom.ts';
-import type { BlendMode, FillDraft } from '../types.ts';
+import type { FillDraft } from '../types.ts';
 import { fillDraftToFill, fillToFillDraft } from '../types.ts';
-import { DEFAULT_BLEND } from '../effects.ts';
 import {
   createExpansionPanel,
   getSelectedVoice,
@@ -182,19 +181,6 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
             return container;
           },
         },
-        { type: 'separator' as const },
-        {
-          type: 'icon' as const,
-          symbol: 'tabler-skull',
-          title: 'Exponential FM',
-          key: 'blend:multiply',
-        },
-        {
-          type: 'icon' as const,
-          symbol: 'tabler-spiral',
-          title: 'Linear FM',
-          key: 'blend:difference',
-        },
       ];
     },
     isActive(key) {
@@ -202,23 +188,9 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
         const sel = getSelectedVoice(deps);
         return sel ? sel.fill.mode === 'linear' : fillDraft.mode === 'linear';
       }
-      if (key?.startsWith('blend:')) {
-        const blend = key.slice(6);
-        return (getSelectedVoice(deps)?.blend ?? DEFAULT_BLEND) === blend;
-      }
       return false;
     },
     onClick(key) {
-      if (key?.startsWith('blend:')) {
-        const voice = getSelectedVoice(deps);
-        if (!voice) return;
-        deps.undo.snapshot();
-        const mode = key.slice(6) as BlendMode;
-        deps.store.updateVoice(voice.id, {
-          blend: voice.blend === mode ? DEFAULT_BLEND : mode,
-        });
-        return;
-      }
       if (key !== 'grad-toggle') return;
       const sel = getSelectedVoice(deps);
       if (!sel) return;

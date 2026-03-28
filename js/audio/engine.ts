@@ -2,7 +2,13 @@
 
 import { computeOverlap, FM_PARAMS, computeFMDepth } from '../effects.ts';
 import { createEffect } from '../patterns.ts';
-import { type Envelope, type NormalizedCoord, type SigilData, type Voice } from '../types.ts';
+import {
+  type BlendMode,
+  type Envelope,
+  type NormalizedCoord,
+  type SigilData,
+  type Voice,
+} from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import {
   applyFormantFilter,
@@ -20,7 +26,6 @@ import {
   fillToKey,
   makeSaturationCurve,
   safeDisconnect,
-  safeStop,
 } from './voice-builder.ts';
 
 export interface PlayOptions {
@@ -31,8 +36,6 @@ export interface PlayOptions {
 interface FMConnection {
   depthGain: GainNode;
   feedbackGain: GainNode | undefined;
-  lfo: OscillatorNode | undefined;
-  lfoGain: GainNode | undefined;
 }
 
 // ---- Audio Engine ----
@@ -75,6 +78,7 @@ export class AudioEngine {
   private _appliedReverbPreDelay: number = 0;
   private _pendingIRBuffer: AudioBuffer | undefined;
   private _soloVoiceId: string | undefined;
+  private _lastBlend: BlendMode = 'screen';
 
   /** Synchronously create and unlock the AudioContext.
    *  Everything here MUST be synchronous — iOS Safari revokes user-gesture
@@ -243,7 +247,8 @@ export class AudioEngine {
     }
 
     // Sync FM connections (only created for overlapping pairs)
-    this._syncFMConnections(sigilState.voices);
+    this._syncFMConnections(sigilState.voices, sigilState.blend);
+    this._lastBlend = sigilState.blend;
 
     this._playEnvelope = envelope;
 
@@ -566,15 +571,11 @@ export class AudioEngine {
         continue;
       }
 
-      // Effect, blend, or border changed — tear down and rebuild the entire voice
+      // Effect or border changed — tear down and rebuild the entire voice
       const borderKey = voice.border
         ? `${voice.border.color}:${voice.border.double ? 1 : 0}`
         : undefined;
-      if (
-        voice.effect !== audioVoice.currentEffect ||
-        voice.blend !== audioVoice.currentBlend ||
-        borderKey !== audioVoice.currentBorder
-      ) {
+      if (voice.effect !== audioVoice.currentEffect || borderKey !== audioVoice.currentBorder) {
         this._stopVoice(audioVoice);
         this.activeVoices.splice(i, 1);
         const rebuilt = this._buildVoice(ctx, voice);
@@ -703,13 +704,16 @@ export class AudioEngine {
       this._appliedVibe = vibe;
     }
 
-    // Tear down stale FM connections when voices changed, then sync all.
-    // When only position/size changed, do an incremental sync (skip unchanged pairs).
-    if (voicesChanged) {
+    // Global blend change — full FM rebuild
+    if (sigilState.blend !== this._lastBlend) {
       this._disposeFMConnections();
-      this._syncFMConnections(sigilState.voices);
+      this._syncFMConnections(sigilState.voices, sigilState.blend);
+      this._lastBlend = sigilState.blend;
+    } else if (voicesChanged) {
+      this._disposeFMConnections();
+      this._syncFMConnections(sigilState.voices, sigilState.blend);
     } else if (movedVoiceIds.size > 0) {
-      this._syncFMConnections(sigilState.voices, movedVoiceIds);
+      this._syncFMConnections(sigilState.voices, sigilState.blend, movedVoiceIds);
     }
   }
 
@@ -774,12 +778,6 @@ export class AudioEngine {
       conn.feedbackGain.gain.value = 0;
       safeDisconnect(conn.feedbackGain);
     }
-    if (conn.lfo) {
-      safeStop(conn.lfo);
-    }
-    if (conn.lfoGain) {
-      safeDisconnect(conn.lfoGain);
-    }
   }
 
   /**
@@ -791,7 +789,11 @@ export class AudioEngine {
    * recomputed — unchanged pairs retain their existing connection and depth.
    * Pass undefined (or omit) for a full sweep (initial play, voice add/remove).
    */
-  private _syncFMConnections(voices: readonly Voice[], movedVoiceIds?: Set<string>): void {
+  private _syncFMConnections(
+    voices: readonly Voice[],
+    blend: BlendMode,
+    movedVoiceIds?: Set<string>,
+  ): void {
     const ctx = this.audioCtx;
     if (!ctx) return;
 
@@ -805,7 +807,7 @@ export class AudioEngine {
 
         // Skip FM for blend modes with no modulation (e.g. screen) —
         // check before computing overlap to avoid the sqrt
-        const params = FM_PARAMS[modulatorData.blend];
+        const params = FM_PARAMS[blend];
         if (params.maxIndex <= 0) continue;
 
         const key = `${modulatorData.id}:${carrierData.id}`;
@@ -842,7 +844,7 @@ export class AudioEngine {
 
         let conn = this._fmConnections.get(key);
         if (!conn) {
-          conn = this._createFMConnection(ctx, modulatorData, modulatorAudio, carrierAudio);
+          conn = this._createFMConnection(ctx, blend, modulatorAudio, carrierAudio);
           this._fmConnections.set(key, conn);
         }
 
@@ -851,12 +853,7 @@ export class AudioEngine {
         const modFreq = modNode.frequency.value;
         const depth = computeFMDepth(overlap, params, modFreq);
 
-        if (conn.lfoGain) {
-          conn.depthGain.gain.value = 0;
-          conn.lfoGain.gain.value = depth;
-        } else {
-          conn.depthGain.gain.value = depth;
-        }
+        conn.depthGain.gain.value = depth;
 
         if (conn.feedbackGain) {
           conn.feedbackGain.gain.value = overlap * params.feedback * modFreq * 0.5;
@@ -876,11 +873,11 @@ export class AudioEngine {
   /** Create a single FM connection: modulator oscillator → depth → carrier frequency. */
   private _createFMConnection(
     ctx: AudioContext,
-    modulatorData: Voice,
+    blend: BlendMode,
     modulatorAudio: AudioVoice,
     carrierAudio: AudioVoice,
   ): FMConnection {
-    const params = FM_PARAMS[modulatorData.blend];
+    const params = FM_PARAMS[blend];
     const depthGain = new GainNode(ctx, { gain: 0 });
     const modulatorNode = modulatorAudio.getModulatorNode();
     const carrierParams = carrierAudio.getCarrierFrequencyParams();
@@ -898,18 +895,7 @@ export class AudioEngine {
       feedbackGain.connect(modulatorNode.frequency);
     }
 
-    // LFO on depth for exclusion mode
-    let lfo: OscillatorNode | undefined;
-    let lfoGain: GainNode | undefined;
-    if (params.lfoRate > 0) {
-      lfo = new OscillatorNode(ctx, { type: 'sine', frequency: params.lfoRate });
-      lfoGain = new GainNode(ctx, { gain: 0 });
-      lfo.connect(lfoGain);
-      lfoGain.connect(depthGain.gain);
-      lfo.start();
-    }
-
-    return { depthGain, feedbackGain, lfo, lfoGain };
+    return { depthGain, feedbackGain };
   }
 
   private _buildReverb(): void {

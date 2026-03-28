@@ -1,6 +1,7 @@
 // Embed-entry.ts — Minimal press-to-play embed viewer
 
 import { render } from './canvas/render.ts';
+import { computeOverlappingVoices } from './overlap.ts';
 import { AudioEngine } from './audio/engine.ts';
 import { deserializeState, serializeState } from './serialize.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
@@ -95,7 +96,7 @@ function boot(sigil: SigilData): void {
   initStampSymbols(svgRoot);
 
   // Initial render (one-shot — state never changes in embed)
-  render(svgRoot, sigil, undefined);
+  render(svgRoot, sigil, computeOverlappingVoices(sigil.voices), undefined);
 
   // Reveal after scene assets loaded
   sceneReady

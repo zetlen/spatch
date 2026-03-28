@@ -7,7 +7,7 @@
 //
 // The registry wires these together per voice type. See registry.ts.
 
-import type { BlendMode, Voice, VoiceBase, WaveformType } from '../types.ts';
+import type { Voice, VoiceBase, WaveformType } from '../types.ts';
 
 // ---- Audio interfaces (moved from waveforms/types.ts) ----
 
@@ -24,7 +24,6 @@ export interface AudioSharedNodes {
   octaveGainNode: GainNode | undefined;
   effectDispose: (() => void) | undefined;
   currentEffect: string | undefined;
-  currentBlend: BlendMode;
   currentBorder: string | undefined;
   currentFillKey: string | undefined;
   /** Initial warmth value for the sine saturation shaper; sourced from vibe at build time. */
@@ -46,7 +45,6 @@ export interface AudioVoice {
   octaveGainNode: GainNode | undefined;
   effectDispose: (() => void) | undefined;
   currentEffect: string | undefined;
-  currentBlend: BlendMode;
   currentBorder: string | undefined;
   currentFillKey: string | undefined;
   hasSweep: boolean;

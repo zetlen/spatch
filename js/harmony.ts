@@ -231,11 +231,6 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
       updates.effect = PATTERN_TYPES[Math.floor(Math.random() * PATTERN_TYPES.length)]!;
     }
 
-    // 50% chance of a random blend mode
-    if (Math.random() < 0.5) {
-      updates.blend = BLEND_MODES[Math.floor(Math.random() * BLEND_MODES.length)]!;
-    }
-
     // Randomize stamp variant for stamp voices
     if (waveform === 'stamp') {
       (updates as Record<string, unknown>).stamp = Math.floor(Math.random() * STAMPLE_COUNT);
@@ -248,6 +243,9 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
   // undo snapshot, splitting the operation into two undo steps)
   const scale = SCALES[Math.floor(Math.random() * SCALES.length)]!;
   applyScale(store, scale);
+
+  // Random global blend — overlap tracker will auto-reset to screen if no overlap
+  store.updateBlend(BLEND_MODES[Math.floor(Math.random() * BLEND_MODES.length)]!);
 
   return scale.name;
 }

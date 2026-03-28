@@ -9,12 +9,11 @@
 //   MP1 (2 chars): X — pan 0-4095
 //   SP3 (1 char): Size 0-63
 //   SP4 (1 char): Timbre 0-63 (0 for sine)
-//   SP5 (2 chars): Effect (5b) + blend (3b) + spare (4b)
+//   SP5 (2 chars): Effect (5b) + spare (7b)
 //                  TODO: Shrink back to 1 char (3b+3b) after culling patterns.
 //   SP6 (1 char): Border style (3b) + thickness (3b)
 
 import {
-  BLEND_MODES,
   type Border,
   type Fill,
   type LinearFill,
@@ -26,7 +25,6 @@ import {
   normalizedCoord,
 } from '../../types.ts';
 import { genId } from '../../state.ts';
-import { DEFAULT_BLEND } from '../../effects.ts';
 import { encodeInt, decodeInt } from '../b64.ts';
 import type { VoiceSerializer } from '../types.ts';
 
@@ -152,10 +150,9 @@ export function createOscillatorSerializer(): VoiceSerializer {
       // SP4: Timbre (oscillator-specific)
       out += encodeInt(packSP4Oscillator(voice), 1);
 
-      // SP5: Effect (5b) + blend (3b) + spare (4b) = 2 chars
+      // SP5: Effect (5b) + spare (7b) = 2 chars
       const eff = Math.max(0, EFFECT_KEYS.indexOf(voice.effect));
-      const bl = Math.max(0, BLEND_MODES.indexOf(voice.blend));
-      out += encodeInt(((eff & 0x1f) << 7) | ((bl & 0x7) << 4), 2);
+      out += encodeInt((eff & 0x1f) << 7, 2);
 
       // SP6: Border style (3b) + thickness (3b)
       out += encodeInt(packBorder(voice.border), 1);
@@ -211,11 +208,10 @@ export function createOscillatorSerializer(): VoiceSerializer {
       const sp4 = decodeInt(registers, idx++, 1);
       const extraFields = unpackSP4Oscillator(sp4, waveform);
 
-      // SP5: Effect (5b) + blend (3b) + spare (4b) = 2 chars
+      // SP5: Effect (5b) + spare (7b) = 2 chars
       const sp5 = decodeInt(registers, idx, 2);
       idx += 2;
       const effect = EFFECT_KEYS[(sp5 >> 7) & 0x1f];
-      const blend = BLEND_MODES[(sp5 >> 4) & 0x7] || DEFAULT_BLEND;
 
       // SP6: Border
       const sp6 = decodeInt(registers, idx++, 1);
@@ -229,7 +225,6 @@ export function createOscillatorSerializer(): VoiceSerializer {
         size,
         fill,
         effect,
-        blend,
         border,
         ...extraFields,
       } as Voice;

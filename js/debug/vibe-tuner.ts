@@ -235,7 +235,7 @@ function formatState(data: SigilData): string {
     lines.push(`  ${v.id} [${v.waveform}]`);
     lines.push(`    pos:(${v.x.toFixed(2)}, ${v.y.toFixed(2)}) sz:${v.size.toFixed(2)}`);
     lines.push(`    fill:${fill}`);
-    lines.push(`    blend:${v.blend} fx:${v.effect ?? '\u2014'}${timbre}`);
+    lines.push(`    fx:${v.effect ?? '\u2014'}${timbre}`);
     lines.push(`    border:${border}`);
   }
   return lines.join('\n');
