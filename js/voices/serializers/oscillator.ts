@@ -25,6 +25,7 @@ import {
   normalizedCoord,
 } from '../../types.ts';
 import { genId } from '../../state.ts';
+import { MIN_SIZE } from '../../shapes.ts';
 import { encodeInt, decodeInt } from '../b64.ts';
 import type { VoiceSerializer } from '../types.ts';
 
@@ -201,8 +202,8 @@ export function createOscillatorSerializer(): VoiceSerializer {
       const x = normalizedCoord(decodeInt(registers, idx, 2) / X_RESOLUTION);
       idx += 2;
 
-      // SP3: Size
-      const size = normalizedCoord(decodeInt(registers, idx++, 1) / SIZE_STEPS);
+      // SP3: Size (clamped to MIN_SIZE — size 0 is unrepresentable)
+      const size = normalizedCoord(Math.max(MIN_SIZE, decodeInt(registers, idx++, 1) / SIZE_STEPS));
 
       // SP4: Timbre
       const sp4 = decodeInt(registers, idx++, 1);

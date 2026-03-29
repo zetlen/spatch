@@ -225,7 +225,7 @@ describe('OscillatorSerializer', () => {
   });
 
   describe('edge cases', () => {
-    test('all-zero voice', () => {
+    test('all-zero voice clamps size to MIN_SIZE', () => {
       const voice = makeVoice({
         fill: { h: 0, l: 0, mode: 'solid', s: 0 },
         size: 0,
@@ -237,6 +237,8 @@ describe('OscillatorSerializer', () => {
       // Y=0 → top of canvas → highest note index 36 → decoded: 1 - 36/36 = 0
       expect(unpacked.y).toBeCloseTo(0);
       expect(unpacked.fill.h).toBe(0);
+      // Size 0 is clamped to MIN_SIZE on unpack
+      expect(unpacked.size).toBeGreaterThanOrEqual(0.025);
     });
 
     test('max-value voice', () => {

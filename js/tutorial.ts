@@ -13,7 +13,7 @@
 import { harmonize, randomize } from './harmony.ts';
 import type { AudioEngine } from './audio/engine.ts';
 import type { SelectionManager, SigilStore, UndoManager } from './state.ts';
-import { normalizedCoord, type NormalizedCoord, type SigilData } from './types.ts';
+import { normalizedCoord, type NormalizedCoord, type SigilData, type Voice } from './types.ts';
 
 const LS_KEY = 'spatch-tutorial-seen';
 
@@ -263,15 +263,23 @@ interface NoteSeq {
   end(): void;
 }
 
+/** Per-voice config so NoteSeq can re-add voices after a rest. */
+interface SeqVoiceConfig {
+  waveform: 'sine' | 'pulse' | 'blend' | 'astroid';
+  x: number;
+  props?: Partial<Voice>;
+}
+
 /** Build a timed chord sequence over demo voices. */
 function noteSeq(
   ctx: StepContext,
   bpm: number,
-  voices: string[],
+  configs: Record<string, SeqVoiceConfig>,
   guard: () => boolean,
   restoreSize = 0.16,
 ): NoteSeq {
   const beat = 60_000 / bpm;
+  const voiceKeys = Object.keys(configs);
   let t = 0;
   let playing = false;
 
@@ -281,13 +289,27 @@ function noteSeq(
     });
   }
 
-  /** Set all seq voices to size 0 (silent). */
+  /** Remove all seq voices from the store. */
   function mute(): void {
-    for (const k of voices) {
+    for (const k of voiceKeys) {
       const id = ctx.demo[k];
-      if (id) ctx.store.updateVoice(id, { size: ctx.nc(0) });
+      if (id) {
+        ctx.store.removeVoice(id);
+        ctx.demo[k] = undefined;
+      }
     }
     ctx.render();
+  }
+
+  /** Ensure a voice exists in the store, re-adding it if it was removed. */
+  function ensure(key: string, y: number): void {
+    if (ctx.demo[key]) {
+      ctx.store.updateVoice(ctx.demo[key]!, { y: ctx.nc(y), size: ctx.nc(restoreSize) });
+    } else {
+      const cfg = configs[key]!;
+      ctx.addVoice(key, cfg.waveform, cfg.x, y);
+      ctx.store.updateVoice(ctx.demo[key]!, { size: ctx.nc(restoreSize), ...cfg.props });
+    }
   }
 
   const self: NoteSeq = {
@@ -295,13 +317,14 @@ function noteSeq(
       const at = t;
       const resume = !playing;
       schedule(at, () => {
-        for (let i = 0; i < voices.length; i++) {
-          const id = ctx.demo[voices[i]!];
-          if (id && midi[i] != null) {
-            ctx.store.updateVoice(id, {
-              y: ctx.nc(midiToY(midi[i]!)),
-              ...(resume ? { size: ctx.nc(restoreSize) } : {}),
-            });
+        for (let i = 0; i < voiceKeys.length; i++) {
+          if (midi[i] == null) continue;
+          const y = midiToY(midi[i]!);
+          if (resume) {
+            ensure(voiceKeys[i]!, y);
+          } else {
+            const id = ctx.demo[voiceKeys[i]!];
+            if (id) ctx.store.updateVoice(id, { y: ctx.nc(y) });
           }
         }
         ctx.render();
@@ -318,13 +341,12 @@ function noteSeq(
       const targets = midi.map(midiToY);
       schedule(at, () => {
         if (resume) {
-          for (const k of voices) {
-            const id = ctx.demo[k];
-            if (id) ctx.store.updateVoice(id, { size: ctx.nc(restoreSize) });
+          for (let i = 0; i < voiceKeys.length; i++) {
+            if (targets[i] != null) ensure(voiceKeys[i]!, targets[i]!);
           }
           ctx.playLatched();
         }
-        const starts = voices.map((k) => {
+        const starts = voiceKeys.map((k) => {
           const id = ctx.demo[k];
           const v = id ? ctx.store.getVoice(id) : undefined;
           return v ? v.y : 0.5;
@@ -334,8 +356,8 @@ function noteSeq(
         function ramp(): void {
           if (!guard() || done) return;
           const p = Math.min((performance.now() - t0) / dur, 1);
-          for (let i = 0; i < voices.length; i++) {
-            const id = ctx.demo[voices[i]!];
+          for (let i = 0; i < voiceKeys.length; i++) {
+            const id = ctx.demo[voiceKeys[i]!];
             if (id && targets[i] != null) {
               ctx.store.updateVoice(id, {
                 y: ctx.nc(ctx.lerp(starts[i]!, targets[i]!, p)),
@@ -359,16 +381,7 @@ function noteSeq(
       return self;
     },
     end() {
-      schedule(t, () => {
-        for (const k of voices) {
-          const id = ctx.demo[k];
-          if (id) {
-            ctx.store.removeVoice(id);
-            ctx.demo[k] = undefined;
-          }
-        }
-        ctx.render();
-      });
+      schedule(t, () => mute());
     },
   };
   return self;
@@ -391,28 +404,21 @@ function playJumpSequence(ctx: StepContext): void {
   ctx.store.updateEnvelope({ attack: 0, decay: 0.286, sustain: 0.714, release: 0.429 });
 
   // Bass voice (blend/triangle) — dark red, striped, double black border
+  const bassProps: Partial<Voice> = {
+    size: normalizedCoord(0.349),
+    timbre: normalizedCoord(0.492),
+    fill: { mode: 'solid', h: 0, s: 100, l: 15 },
+    effect: 'stripes',
+    border: { color: 'black', double: true, thickness: normalizedCoord(0.143) },
+  } as Partial<Voice>;
   ctx.addVoice('jb', 'blend', 0.343, midiToY(A3));
-  if (ctx.demo.jb)
-    ctx.store.updateVoice(ctx.demo.jb, {
-      size: ctx.nc(0.349),
-      timbre: ctx.nc(0.492),
-      fill: { mode: 'solid', h: 0, s: 100, l: 15 },
-      effect: 'stripes',
-      border: { color: 'black', double: true, thickness: ctx.nc(0.143) },
-    });
+  if (ctx.demo.jb) ctx.store.updateVoice(ctx.demo.jb, bassProps);
 
-  // Melody voices (3 light gray astroids, start silent — first event is a rest)
-  ctx.addVoice('j1', 'astroid', 0.393, midiToY(E4));
-  ctx.addVoice('j2', 'astroid', 0.344, midiToY(Gs4));
-  ctx.addVoice('j3', 'astroid', 0.312, midiToY(B4));
-  for (const k of ['j1', 'j2', 'j3']) {
-    if (ctx.demo[k])
-      ctx.store.updateVoice(ctx.demo[k]!, {
-        size: ctx.nc(0),
-        timbre: ctx.nc(0.476),
-        fill: { mode: 'solid', h: 0, s: 0, l: 79 },
-      });
-  }
+  // Melody voice config (3 light gray astroids — created on first chord, not upfront)
+  const melodyProps: Partial<Voice> = {
+    timbre: normalizedCoord(0.476),
+    fill: { mode: 'solid', h: 0, s: 0, l: 79 },
+  } as Partial<Voice>;
 
   ctx.selection.clear();
   ctx.render();
@@ -422,14 +428,24 @@ function playJumpSequence(ctx: StepContext): void {
   const guard = () => gen === jumpGen;
 
   // Bass line
-  noteSeq(ctx, BPM, ['jb'], guard, 0.349)
+  noteSeq(ctx, BPM, { jb: { waveform: 'blend', x: 0.343, props: bassProps } }, guard, 0.349)
     .chord([A3], WHOLE + WHOLE + WHOLE + EIGHTH)
     .chord([D3], QUARTER)
     .chord([E3], HALF + EIGHTH)
     .end();
 
   // Melody line
-  noteSeq(ctx, BPM, ['j1', 'j2', 'j3'], guard, 0.73)
+  noteSeq(
+    ctx,
+    BPM,
+    {
+      j1: { waveform: 'astroid', x: 0.393, props: melodyProps },
+      j2: { waveform: 'astroid', x: 0.344, props: melodyProps },
+      j3: { waveform: 'astroid', x: 0.312, props: melodyProps },
+    },
+    guard,
+    0.73,
+  )
     .rest(QUARTER)
     .chord([E4, Gs4, B4], EIGHTH)
     .rest(QUARTER)

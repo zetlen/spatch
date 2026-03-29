@@ -66,7 +66,7 @@ export function dragToEnvelopeValue(cornerName: ADSRCorner, dragDistance: number
 
 // ---- Shape geometry ----
 
-const MIN_SIZE = 0.025;
+export const MIN_SIZE = 0.025;
 const MAX_SIZE = 0.9;
 
 export function clampSize(size: number): NormalizedCoord {

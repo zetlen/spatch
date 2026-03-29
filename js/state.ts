@@ -18,6 +18,7 @@ import {
 } from './types.ts';
 import { createRandomFill } from './colors.ts';
 import { computeOverlappingVoices } from './overlap.ts';
+import { MIN_SIZE } from './shapes.ts';
 import { createVoice as registryCreateVoice } from './voices/registry.ts';
 
 let _idCounter = 0;
@@ -196,9 +197,13 @@ export class SigilStore {
     if (idx === -1) {
       return;
     }
+    const clamped =
+      updates.size != null && (updates.size as number) < MIN_SIZE
+        ? { ...updates, size: normalizedCoord(MIN_SIZE) }
+        : updates;
     this._data.value = {
       ...this._data.value,
-      voices: voices.map((v) => (v.id === id ? ({ ...v, ...updates } as Voice) : v)),
+      voices: voices.map((v) => (v.id === id ? ({ ...v, ...clamped } as Voice) : v)),
     };
   }
 
