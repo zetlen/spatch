@@ -63,6 +63,7 @@ export function buildVoice(
 
   // Wire: gain -> F1 -> mixer -> brightness -> [effect] -> panner -> master
   //       gain -> F2 -> mixer
+  //       [border osc -> borderGain -> gain]  (sibling of primary, same chain)
   // FM synthesis for blend modes is handled at the engine level (cross-voice routing).
   gain.connect(formantF1);
   gain.connect(formantF2);
@@ -102,17 +103,12 @@ export function buildVoice(
     });
 
     octaveGainNode = new GainNode(ctx, {
-      gain: vibe.borderOctaveGain(
-        voice.waveform,
-        voice.size,
-        voice.border.thickness,
-        voice.border.color,
-        voice.border.double,
-      ),
+      gain: vibe.borderOctaveGain(voice.border.thickness, voice.border.color, voice.border.double),
     });
     octaveOsc.connect(octaveGainNode);
-    // Connect to formantMixer to avoid double gain application (#81)
-    octaveGainNode.connect(formantMixer);
+    // Connect to voice gain so border traverses the same chain as the primary
+    // oscillator: gain → F1/F2 → mixer → brightness → effect → panner → master.
+    octaveGainNode.connect(gain);
   }
 
   const borderKey = voice.border

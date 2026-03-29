@@ -109,53 +109,46 @@ describe('vibe.voiceGain — convergence at medium size', () => {
 
 describe('vibe.borderOctaveGain', () => {
   test('returns 0 for zero thickness', () => {
-    expect(vibe.borderOctaveGain('sine', 0.5, 0, 'white', false)).toBe(0);
+    expect(vibe.borderOctaveGain(0, 'white', false)).toBe(0);
   });
 
-  test('scales with shape size (larger shape = louder)', () => {
-    const small = vibe.borderOctaveGain('sine', 0.2, 0.5, 'white', false);
-    const large = vibe.borderOctaveGain('sine', 0.6, 0.5, 'white', false);
-    expect(large).toBeGreaterThan(small);
+  test('returns relative gain independent of voice size/waveform', () => {
+    // borderOctaveGain is now a relative gain — voice gain is applied by the
+    // shared gain node, not baked into the border gain value.
+    const gain = vibe.borderOctaveGain(0.5, 'white', false);
+    expect(gain).toBeGreaterThan(0);
+    expect(gain).toBeLessThan(1);
   });
 
   test('scales with thickness', () => {
-    const thin = vibe.borderOctaveGain('sine', 0.5, 0.2, 'white', false);
-    const thick = vibe.borderOctaveGain('sine', 0.5, 0.8, 'white', false);
+    const thin = vibe.borderOctaveGain(0.2, 'white', false);
+    const thick = vibe.borderOctaveGain(0.8, 'white', false);
     expect(thick).toBeGreaterThan(thin);
   });
 
   test('octave up (white) is quieter than octave down (black)', () => {
-    const up = vibe.borderOctaveGain('sine', 0.5, 0.5, 'white', false);
-    const down = vibe.borderOctaveGain('sine', 0.5, 0.5, 'black', false);
+    const up = vibe.borderOctaveGain(0.5, 'white', false);
+    const down = vibe.borderOctaveGain(0.5, 'black', false);
     expect(down).toBeGreaterThan(up);
   });
 
   test('double octave up is quieter than single octave up', () => {
-    const single = vibe.borderOctaveGain('sine', 0.5, 0.5, 'white', false);
-    const double = vibe.borderOctaveGain('sine', 0.5, 0.5, 'white', true);
+    const single = vibe.borderOctaveGain(0.5, 'white', false);
+    const double = vibe.borderOctaveGain(0.5, 'white', true);
     expect(double).toBeLessThan(single);
   });
 
   test('double octave down is louder than single octave down', () => {
-    const single = vibe.borderOctaveGain('sine', 0.5, 0.5, 'black', false);
-    const double = vibe.borderOctaveGain('sine', 0.5, 0.5, 'black', true);
+    const single = vibe.borderOctaveGain(0.5, 'black', false);
+    const double = vibe.borderOctaveGain(0.5, 'black', true);
     expect(double).toBeGreaterThan(single);
   });
 
-  test('different waveforms at small size produce different gains', () => {
-    // At size=0.5 voiceGain converges, so use size=0.3 where curves diverge
-    const sine = vibe.borderOctaveGain('sine', 0.3, 0.5, 'white', false);
-    const pulse = vibe.borderOctaveGain('pulse', 0.3, 0.5, 'white', false);
-    expect(sine).not.toBeCloseTo(pulse, 2);
-  });
-
   test('always returns non-negative', () => {
-    for (const wf of ['sine', 'pulse', 'blend']) {
-      for (const color of ['white', 'black']) {
-        for (const dbl of [false, true]) {
-          const g = vibe.borderOctaveGain(wf, 0.5, 0.5, color, dbl);
-          expect(g).toBeGreaterThanOrEqual(0);
-        }
+    for (const color of ['white', 'black']) {
+      for (const dbl of [false, true]) {
+        const g = vibe.borderOctaveGain(0.5, color, dbl);
+        expect(g).toBeGreaterThanOrEqual(0);
       }
     }
   });

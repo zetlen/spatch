@@ -483,24 +483,31 @@ describe('AudioEngine — border / octave doubling', () => {
     expect(sameVoice).toBe(originalVoice);
   });
 
-  test('octave gain updates when shape size changes', async () => {
+  test('octave gain is relative — tracks thickness, not size', async () => {
     const voice = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.5 },
+      border: { color: 'white', double: false, thickness: 0.3 },
       size: 0.3,
     });
     await startWith([voice]);
 
     const audioVoice = engine.activeVoices[0];
-    const initialGain = audioVoice.octaveGainNode.gain.value;
+    const initialOctaveGain = audioVoice.octaveGainNode.gain.value;
 
-    // Increase size
-    const updated = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.5 },
+    // Increase size — octaveGainNode stays the same (voice gain handles size)
+    const sizeChanged = makeVoice('a', 'sine', {
+      border: { color: 'white', double: false, thickness: 0.3 },
       size: 0.7,
     });
-    engine.update(makeSigilState([updated]));
+    engine.update(makeSigilState([sizeChanged]));
+    expect(audioVoice.octaveGainNode.gain.value).toBeCloseTo(initialOctaveGain);
 
-    expect(audioVoice.octaveGainNode.gain.value).toBeGreaterThan(initialGain);
+    // Increase thickness — octaveGainNode increases
+    const thickerBorder = makeVoice('a', 'sine', {
+      border: { color: 'white', double: false, thickness: 0.8 },
+      size: 0.7,
+    });
+    engine.update(makeSigilState([thickerBorder]));
+    expect(audioVoice.octaveGainNode.gain.value).toBeGreaterThan(initialOctaveGain);
   });
 
   test('border works with all waveform types', async () => {

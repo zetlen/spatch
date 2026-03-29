@@ -222,18 +222,14 @@ export class Vibe {
     return (x * 2 - 1) * this.stereoWidth;
   }
 
-  /** Border octave oscillator gain, derived from voice gain, thickness, and octave direction. */
-  borderOctaveGain(
-    waveform: WaveformType,
-    size: number,
-    thickness: number,
-    color: BorderColor,
-    double: boolean,
-  ): number {
+  /** Border octave oscillator relative gain (thickness × direction coefficient).
+   *  The voice-level gain is applied by the shared gain node that the border
+   *  flows through, so this only encodes border-specific scaling. */
+  borderOctaveGain(thickness: number, color: BorderColor, double: boolean): number {
     if (thickness === 0) return 0;
     const key = `${color === 'white' ? 'up' : 'down'}-${double ? 2 : 1}`;
     const coeff = this.OCTAVE_GAIN_COEFF[key] ?? 1;
-    return this.voiceGain(waveform, size) * Math.sqrt(thickness) * coeff;
+    return Math.sqrt(thickness) * coeff;
   }
 }
 

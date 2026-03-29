@@ -2,13 +2,7 @@
 
 import { computeOverlap, FM_PARAMS, computeFMDepth } from '../effects.ts';
 import { createEffect } from '../patterns.ts';
-import {
-  type BlendMode,
-  type Envelope,
-  type NormalizedCoord,
-  type SigilData,
-  type Voice,
-} from '../types.ts';
+import { type BlendMode, type Envelope, type SigilData, type Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import {
   applyFormantFilter,
@@ -239,7 +233,6 @@ export class AudioEngine {
       const audioVoice = this._buildVoice(ctx, voice);
       if (soloActive && voice.id !== this._soloVoiceId) {
         audioVoice.gain.gain.setValueAtTime(0, now);
-        if (audioVoice.octaveGainNode) audioVoice.octaveGainNode.gain.setValueAtTime(0, now);
       }
       audioVoice.start(now);
       audioVoice.onDecay?.(decayTime);
@@ -529,7 +522,6 @@ export class AudioEngine {
         const audioVoice = this._buildVoice(ctx, voice);
         if (soloActive && voice.id !== this._soloVoiceId) {
           audioVoice.gain.gain.setValueAtTime(0, now);
-          if (audioVoice.octaveGainNode) audioVoice.octaveGainNode.gain.setValueAtTime(0, now);
         }
         audioVoice.start(now);
         // Schedule diphthong sweep for new linear-fill voices added mid-playback
@@ -581,7 +573,6 @@ export class AudioEngine {
         const rebuilt = this._buildVoice(ctx, voice);
         if (soloActive && voice.id !== this._soloVoiceId) {
           rebuilt.gain.gain.setValueAtTime(0, now);
-          if (rebuilt.octaveGainNode) rebuilt.octaveGainNode.gain.setValueAtTime(0, now);
         }
         rebuilt.start(now);
         this.activeVoices.push(rebuilt);
@@ -596,20 +587,6 @@ export class AudioEngine {
         isMuted ? 0 : vibe.voiceGain(voice.waveform, voice.size),
         now,
       );
-      if (audioVoice.octaveGainNode) {
-        audioVoice.octaveGainNode.gain.setValueAtTime(
-          isMuted
-            ? 0
-            : vibe.borderOctaveGain(
-                voice.waveform,
-                voice.size,
-                voice.border?.thickness ?? (0 as NormalizedCoord),
-                voice.border?.color ?? 'white',
-                voice.border?.double ?? false,
-              ),
-          now,
-        );
-      }
       audioVoice.panner.pan.setValueAtTime(vibe.xToPan(voice.x), now);
 
       // Detect position/size changes for incremental FM sync
@@ -679,16 +656,12 @@ export class AudioEngine {
         audioVoice.octaveOsc.frequency.setValueAtTime(octaveFreq, now);
       }
 
-      // Update octave oscillator gain if border is present
-      if (audioVoice.octaveGainNode && voice.border) {
+      // Update border octave gain (relative to voice gain via shared gain node)
+      if (audioVoice.octaveGainNode) {
         audioVoice.octaveGainNode.gain.setValueAtTime(
-          vibe.borderOctaveGain(
-            voice.waveform,
-            voice.size,
-            voice.border.thickness,
-            voice.border.color,
-            voice.border.double,
-          ),
+          voice.border
+            ? vibe.borderOctaveGain(voice.border.thickness, voice.border.color, voice.border.double)
+            : 0,
           now,
         );
       }
