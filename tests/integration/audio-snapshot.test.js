@@ -461,29 +461,14 @@ test.describe('Audio waveform snapshots', () => {
 
       await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
 
-      const canvasWrap = page.locator('#canvas-wrap');
-      const box = await canvasWrap.boundingBox();
-      const cx = box.x + box.width * 0.5;
-      const cy = box.y + box.height * 0.5;
-
-      const nHandle = page.locator('[data-handle="n"]');
-      await nHandle.waitFor({ state: 'attached' });
-      const handleNY = await nHandle.evaluate((el) => {
-        const rect = el.getBoundingClientRect();
-        return rect.y + rect.height / 2;
+      // Set timbre programmatically instead of via mouse drag to eliminate
+      // layout-dependent coordinate math that caused CI flakiness (#328).
+      // 45° / 360° = 0.125 normalized timbre.
+      await page.evaluate(() => {
+        const store = globalThis.__testStore;
+        const voices = store.data.voices;
+        store.updateVoice(voices[0].id, { timbre: 0.125 });
       });
-      const hx = cx;
-      const hy = handleNY;
-
-      // 45° clockwise from up
-      const r = cy - hy;
-      const targetX = cx + r * Math.sin((45 * Math.PI) / 180);
-      const targetY = cy - r * Math.cos((45 * Math.PI) / 180);
-
-      await page.mouse.move(hx, hy);
-      await page.mouse.down();
-      await page.mouse.move(targetX, targetY, { steps: 5 });
-      await page.mouse.up();
 
       await page.evaluate(() => globalThis.__audioCapture.resume());
 

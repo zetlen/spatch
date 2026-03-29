@@ -30,6 +30,7 @@ export default defineConfig({
     'max-lines-per-function': ['error', { max: 160, skipBlankLines: true, skipComments: true }],
     'max-params': ['error', { max: 4 }],
     'max-statements': 'off',
+    'no-unused-vars': 'error',
     'no-await-in-loop': 'off',
     'no-continue': 'off',
     'no-magic-numbers': 'off',
