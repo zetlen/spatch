@@ -211,6 +211,10 @@ export class PlaybackController {
       this.gestureActive = false;
       this.playBtn.setPointerCapture(e.pointerId);
 
+      // Compute zone geometry eagerly so radialZone() works even if the
+      // overlay timer is delayed by a busy main thread (first-load IR fetch).
+      this.computeOverlayGeometry();
+
       // Start audio immediately (momentary)
       this.start();
 
@@ -240,13 +244,11 @@ export class PlaybackController {
         this.overlayTimerId = undefined;
       }
 
-      if (!this.gestureActive) {
-        // Quick tap — momentary stop
-        this.stop();
-        this.gesturePointerId = undefined;
-        return;
-      }
-
+      // Always check the radial zone from the release position — don't gate
+      // on gestureActive (the overlay timer). The timer can be delayed by a
+      // busy main thread (first-load IR fetch), but the drag distance is
+      // reliable. If the pointer is still near the button center, treat it
+      // as a momentary tap regardless of hold duration.
       const info = this.lastZoneInfo || this.radialZone(e.clientX, e.clientY);
 
       if (info.zone === 'latch') {
@@ -266,7 +268,9 @@ export class PlaybackController {
         this.stop();
       }
 
-      this.hideRadialOverlay();
+      if (this.gestureActive) {
+        this.hideRadialOverlay();
+      }
       this.gestureActive = false;
       this.gesturePointerId = undefined;
     });
@@ -412,22 +416,24 @@ export class PlaybackController {
     return { zone: 'loop', ms };
   }
 
-  private showRadialOverlay(): void {
+  /** Compute radial zone geometry from the button's current position.
+   *  Called eagerly on pointerdown so radialZone() works before the overlay appears. */
+  private computeOverlayGeometry(): void {
     const r = this.playBtn.getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    this.overlayCenterX = cx;
-    this.overlayCenterY = cy;
+    this.overlayCenterX = r.left + r.width / 2;
+    this.overlayCenterY = r.top + r.height / 2;
 
-    // Cap at vmin/2 so the overlay circle fits within the viewport
     const vmin = Math.min(window.innerWidth, window.innerHeight);
     const maxDist = vmin / 2;
     this.overlayMaxDist = maxDist;
+    this.overlayInnerRadius = r.width / 2;
+    this.overlayLatchStart = maxDist * (1 - PlaybackController.LATCH_MARGIN);
+  }
 
-    const innerR = r.width / 2;
-    const latchStart = maxDist * (1 - PlaybackController.LATCH_MARGIN);
-    this.overlayInnerRadius = innerR;
-    this.overlayLatchStart = latchStart;
+  private showRadialOverlay(): void {
+    const cx = this.overlayCenterX;
+    const cy = this.overlayCenterY;
+    const latchStart = this.overlayLatchStart;
 
     // Reset floating zone icon (hidden until loop/latch zone entered)
     if (this.pointerZoneIcon) {

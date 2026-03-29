@@ -25,7 +25,7 @@ export function updateCanvasBorderRadius(
   inset: number = 0,
 ): void {
   const tl = ((envelope.decay / 2) * MAX_RADIUS_PCT).toFixed(2);
-  const tr = (envelope.sustain * MAX_RADIUS_PCT).toFixed(2);
+  const tr = ((1 - envelope.sustain) * MAX_RADIUS_PCT).toFixed(2);
   const br = ((envelope.release / 3) * MAX_RADIUS_PCT).toFixed(2);
   const bl = ((envelope.attack / 2) * MAX_RADIUS_PCT).toFixed(2);
 
@@ -56,7 +56,7 @@ export function dragToEnvelopeValue(cornerName: ADSRCorner, dragDistance: number
       return Math.max(0.01, Math.min(2, normalizedDist * 2));
     }
     case 'sustain': {
-      return Math.max(0, Math.min(1, normalizedDist));
+      return Math.max(0, Math.min(1, 1 - normalizedDist));
     }
     case 'release': {
       return Math.max(0.01, Math.min(3, normalizedDist * 3));
@@ -102,7 +102,7 @@ export function isInClippedCorner(
   const maxR = canvasSize * 0.15; // Matches MAX_RADIUS_RATIO in envelope.ts
   const corners = [
     { cornerX: 0, cornerY: 0, r: (envelope.decay / 2) * maxR }, // Top-left
-    { cornerX: canvasSize, cornerY: 0, r: envelope.sustain * maxR }, // Top-right
+    { cornerX: canvasSize, cornerY: 0, r: (1 - envelope.sustain) * maxR }, // Top-right
     { cornerX: canvasSize, cornerY: canvasSize, r: (envelope.release / 3) * maxR }, // Bottom-right
     { cornerX: 0, cornerY: canvasSize, r: (envelope.attack / 2) * maxR }, // Bottom-left
   ];

@@ -16,10 +16,10 @@ describe('dragToEnvelopeValue', () => {
     expect(dragToEnvelopeValue('decay', MAX_RADIUS)).toBeCloseTo(2);
   });
 
-  test('sustain: clamps to [0, 1.0]', () => {
-    expect(dragToEnvelopeValue('sustain', 0)).toBe(0);
-    expect(dragToEnvelopeValue('sustain', MAX_RADIUS)).toBeCloseTo(1);
-    expect(dragToEnvelopeValue('sustain', MAX_RADIUS * 2)).toBe(1);
+  test('sustain: inverted — dist=0 → 1 (pointed=loud), dist=maxR → 0 (rounded=soft)', () => {
+    expect(dragToEnvelopeValue('sustain', 0)).toBe(1);
+    expect(dragToEnvelopeValue('sustain', MAX_RADIUS)).toBeCloseTo(0);
+    expect(dragToEnvelopeValue('sustain', MAX_RADIUS * 2)).toBe(0);
   });
 
   test('release: clamps to [0.01, 3.0]', () => {

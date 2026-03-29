@@ -82,7 +82,12 @@ export interface StepContext {
   clearVoices(): void;
 
   /** Add a demo voice and store its ID in `demo[key]`. */
-  addVoice(key: string, waveform: 'sine' | 'pulse' | 'blend', x: number, y: number): string;
+  addVoice(
+    key: string,
+    waveform: 'sine' | 'pulse' | 'blend' | 'astroid',
+    x: number,
+    y: number,
+  ): string;
 
   /** Randomize the spatch (delegates to harmony.ts). */
   randomize(): void;
@@ -115,6 +120,12 @@ export interface TutorialStep {
    * All receive a StepContext with auto-cancelling helpers.
    */
   play?: ((ctx: StepContext) => void) | ((ctx: StepContext) => void)[];
+
+  /**
+   * Custom text renderer. If provided, called instead of setting textContent.
+   * Receives the text element (already emptied) and the step context.
+   */
+  renderText?: (el: HTMLElement, ctx: StepContext) => void;
 }
 
 export interface TutorialDeps {
@@ -181,10 +192,11 @@ function setupDemoSpatch(ctx: StepContext): void {
 }
 
 /** Isolate a single large shape centered on canvas. */
-function isolateShape(ctx: StepContext, shape: 'sine' | 'pulse' | 'blend'): void {
+function isolateShape(ctx: StepContext, shape: 'sine' | 'pulse' | 'blend' | 'astroid'): void {
   ctx.clearVoices();
   ctx.store.updateScene(CHICLET_SCENE);
-  const key = shape === 'blend' ? 'tri' : shape === 'pulse' ? 'sq' : 'circ';
+  const key =
+    shape === 'blend' ? 'tri' : shape === 'pulse' ? 'sq' : shape === 'astroid' ? 'ast' : 'circ';
   ctx.addVoice(key, shape, 0.5, 0.5);
   ctx.store.updateVoice(ctx.demo[key]!, { size: ctx.nc(0.25) });
   if (shape !== 'sine') {
@@ -216,6 +228,235 @@ function setupGradientSquare(
   });
   ctx.selection.clear();
   ctx.render();
+}
+
+// ---- Note sequencer (tutorial-only) ----
+
+const EIGHTH = 0.5;
+const QUARTER = 1;
+const DOTTED_QUARTER = 1.5;
+const HALF = 2;
+const WHOLE = 4;
+
+// MIDI note names used by the Jump sequence
+const D3 = 50,
+  E3 = 52,
+  A3 = 57,
+  B3 = 59,
+  Cs4 = 61,
+  D4 = 62,
+  E4 = 64,
+  Fs4 = 66,
+  Gs4 = 68,
+  A4 = 69,
+  B4 = 71,
+  Cs5 = 73;
+
+function midiToY(midi: number): number {
+  return 1 - (midi - 43) / 36;
+}
+
+interface NoteSeq {
+  chord(midi: number[], beats: number): NoteSeq;
+  glide(midi: number[], beats: number): NoteSeq;
+  rest(beats: number): NoteSeq;
+  end(): void;
+}
+
+/** Build a timed chord sequence over demo voices. */
+function noteSeq(
+  ctx: StepContext,
+  bpm: number,
+  voices: string[],
+  guard: () => boolean,
+  restoreSize = 0.16,
+): NoteSeq {
+  const beat = 60_000 / bpm;
+  let t = 0;
+  let playing = false;
+
+  function schedule(ms: number, fn: () => void): void {
+    ctx.after(ms, () => {
+      if (guard()) fn();
+    });
+  }
+
+  /** Set all seq voices to size 0 (silent). */
+  function mute(): void {
+    for (const k of voices) {
+      const id = ctx.demo[k];
+      if (id) ctx.store.updateVoice(id, { size: ctx.nc(0) });
+    }
+    ctx.render();
+  }
+
+  const self: NoteSeq = {
+    chord(midi, beats) {
+      const at = t;
+      const resume = !playing;
+      schedule(at, () => {
+        for (let i = 0; i < voices.length; i++) {
+          const id = ctx.demo[voices[i]!];
+          if (id && midi[i] != null) {
+            ctx.store.updateVoice(id, {
+              y: ctx.nc(midiToY(midi[i]!)),
+              ...(resume ? { size: ctx.nc(restoreSize) } : {}),
+            });
+          }
+        }
+        ctx.render();
+        if (resume) ctx.playLatched();
+      });
+      t += beat * beats;
+      playing = true;
+      return self;
+    },
+    glide(midi, beats) {
+      const at = t;
+      const dur = beat * beats;
+      const resume = !playing;
+      const targets = midi.map(midiToY);
+      schedule(at, () => {
+        if (resume) {
+          for (const k of voices) {
+            const id = ctx.demo[k];
+            if (id) ctx.store.updateVoice(id, { size: ctx.nc(restoreSize) });
+          }
+          ctx.playLatched();
+        }
+        const starts = voices.map((k) => {
+          const id = ctx.demo[k];
+          const v = id ? ctx.store.getVoice(id) : undefined;
+          return v ? v.y : 0.5;
+        });
+        const t0 = performance.now();
+        let done = false;
+        function ramp(): void {
+          if (!guard() || done) return;
+          const p = Math.min((performance.now() - t0) / dur, 1);
+          for (let i = 0; i < voices.length; i++) {
+            const id = ctx.demo[voices[i]!];
+            if (id && targets[i] != null) {
+              ctx.store.updateVoice(id, {
+                y: ctx.nc(ctx.lerp(starts[i]!, targets[i]!, p)),
+              });
+            }
+          }
+          ctx.render();
+          if (p < 1) requestAnimationFrame(ramp);
+          else done = true;
+        }
+        requestAnimationFrame(ramp);
+      });
+      t += dur;
+      playing = true;
+      return self;
+    },
+    rest(beats) {
+      schedule(t, () => mute());
+      t += beat * beats;
+      playing = false;
+      return self;
+    },
+    end() {
+      schedule(t, () => {
+        for (const k of voices) {
+          const id = ctx.demo[k];
+          if (id) {
+            ctx.store.removeVoice(id);
+            ctx.demo[k] = undefined;
+          }
+        }
+        ctx.render();
+      });
+    },
+  };
+  return self;
+}
+
+// ---- Jump easter egg ----
+
+let jumpGen = 0;
+
+/** Sequence the supersaw intro from Van Halen's "Jump". */
+function playJumpSequence(ctx: StepContext): void {
+  const gen = ++jumpGen;
+  ctx.stop();
+  ctx.clearVoices();
+  ctx.store.updateScene(CHICLET_SCENE);
+
+  const overlay = document.querySelector<HTMLElement>('.tutorial-overlay');
+  overlay?.classList.add('tutorial-locked');
+
+  ctx.store.updateEnvelope({ attack: 0, decay: 0.286, sustain: 0.714, release: 0.429 });
+
+  // Bass voice (blend/triangle) — dark red, striped, double black border
+  ctx.addVoice('jb', 'blend', 0.343, midiToY(A3));
+  if (ctx.demo.jb)
+    ctx.store.updateVoice(ctx.demo.jb, {
+      size: ctx.nc(0.349),
+      timbre: ctx.nc(0.492),
+      fill: { mode: 'solid', h: 0, s: 100, l: 15 },
+      effect: 'stripes',
+      border: { color: 'black', double: true, thickness: ctx.nc(0.143) },
+    });
+
+  // Melody voices (3 light gray astroids, start silent — first event is a rest)
+  ctx.addVoice('j1', 'astroid', 0.393, midiToY(E4));
+  ctx.addVoice('j2', 'astroid', 0.344, midiToY(Gs4));
+  ctx.addVoice('j3', 'astroid', 0.312, midiToY(B4));
+  for (const k of ['j1', 'j2', 'j3']) {
+    if (ctx.demo[k])
+      ctx.store.updateVoice(ctx.demo[k]!, {
+        size: ctx.nc(0),
+        timbre: ctx.nc(0.476),
+        fill: { mode: 'solid', h: 0, s: 0, l: 79 },
+      });
+  }
+
+  ctx.selection.clear();
+  ctx.render();
+
+  const BPM = 100;
+  const TOTAL_BEATS = 16;
+  const guard = () => gen === jumpGen;
+
+  // Bass line
+  noteSeq(ctx, BPM, ['jb'], guard, 0.349)
+    .chord([A3], WHOLE + WHOLE + WHOLE + EIGHTH)
+    .chord([D3], QUARTER)
+    .chord([E3], HALF + EIGHTH)
+    .end();
+
+  // Melody line
+  noteSeq(ctx, BPM, ['j1', 'j2', 'j3'], guard, 0.73)
+    .rest(QUARTER)
+    .chord([E4, Gs4, B4], EIGHTH)
+    .rest(QUARTER)
+    .chord([E4, A4, Cs5], EIGHTH)
+    .rest(QUARTER)
+    .chord([D4, Fs4, A4], EIGHTH)
+    .rest(QUARTER)
+    .chord([D4, Fs4, A4], EIGHTH)
+    .rest(EIGHTH)
+    .chord([E4, Gs4, B4], EIGHTH)
+    .rest(EIGHTH)
+    .chord([E4, Gs4, B4], DOTTED_QUARTER)
+    .chord([E4, A4, Cs5], EIGHTH)
+    .rest(QUARTER)
+    .chord([Cs4, E4, A4], EIGHTH)
+    .rest(EIGHTH)
+    .chord([A3, D4, Fs4], QUARTER)
+    .chord([A3, Cs4, E4], QUARTER)
+    .chord([A3, B3, E4], HALF + EIGHTH)
+    .end();
+
+  // Master stop + unlock
+  ctx.after((60_000 / BPM) * TOTAL_BEATS, () => {
+    if (gen !== jumpGen) return;
+    ctx.stop();
+    overlay?.classList.remove('tutorial-locked');
+  });
 }
 
 // ---- Step definitions ----
@@ -289,6 +530,33 @@ const steps: TutorialStep[] = [
     play(ctx) {
       isolateShape(ctx, 'sine');
       ctx.playFor(2000);
+    },
+  },
+
+  // Astroid — isolate, continuous spin spreads the supersaw
+  {
+    punchOut: ['[data-tool="astroid"]', '#canvas-wrap'],
+    text: 'Spin an astroid to spread a supersaw. Might as well jump!',
+    play(ctx) {
+      isolateShape(ctx, 'astroid');
+      ctx.playLatched();
+      ctx.loop(3000, (t) => {
+        if (ctx.demo.ast) {
+          ctx.store.updateVoice(ctx.demo.ast, { timbre: ctx.nc(ctx.sine01(t) * 0.5) });
+        }
+      });
+    },
+    renderText(el, ctx) {
+      el.append('Spin an astroid to spread a supersaw. Might as well ');
+      const link = document.createElement('span');
+      link.textContent = 'jump!';
+      link.className = 'tutorial-jump-link';
+      link.dataset.tutorialInteractive = '';
+      link.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        playJumpSequence(ctx);
+      });
+      el.append(link);
     },
   },
 
@@ -746,7 +1014,7 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
     function addVoice(
       key: string,
-      waveform: 'sine' | 'pulse' | 'blend',
+      waveform: 'sine' | 'pulse' | 'blend' | 'astroid',
       x: number,
       y: number,
     ): string {
@@ -787,6 +1055,10 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
     selection.clear();
     requestRender();
   }
+
+  window.addEventListener('beforeunload', () => {
+    if (savedState) store.loadState(savedState);
+  });
 
   // ---- Step lifecycle ----
 
@@ -832,6 +1104,7 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
     cleanupStep();
     audio.stop();
     restoreState();
+    overlay.classList.remove('tutorial-locked');
     overlay.classList.add('hidden');
     introEl.classList.add('hidden');
   }
@@ -917,11 +1190,12 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
   function showStep(index: number): void {
     const step = steps[index]!;
+    const ctx = createStepContext();
 
     // Run the current substep's play function
     const fns = getPlayFns(step);
     if (fns.length > 0 && currentSubstep < fns.length) {
-      fns[currentSubstep]!(createStepContext());
+      fns[currentSubstep]!(ctx);
     }
 
     requestAnimationFrame(() => {
@@ -941,7 +1215,12 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
       dim.style.clipPath = punchOutClip(punchRects, 6);
       const textRect = step.textAnchor?.() || punchRects[0]!;
       positionText(textRect);
-      textEl.textContent = step.text;
+      if (step.renderText) {
+        textEl.textContent = '';
+        step.renderText(textEl, ctx);
+      } else {
+        textEl.textContent = step.text;
+      }
       updateDots();
     });
   }
@@ -1010,10 +1289,12 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (overlay.classList.contains('tutorial-locked')) return;
     hide();
   });
 
   dotsEl.addEventListener('click', (e) => {
+    if (overlay.classList.contains('tutorial-locked')) return;
     const dot = (e.target as HTMLElement).closest<HTMLElement>('.tutorial-dot');
     if (!dot) return;
     e.stopPropagation();
@@ -1050,10 +1331,13 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
   function isNavClick(e: Event): boolean {
     const t = e.target as Node;
-    return closeBtn.contains(t) || dotsEl.contains(t);
+    if (closeBtn.contains(t) || dotsEl.contains(t)) return true;
+    const el = t instanceof Element ? t : t.parentElement;
+    return !!el?.closest('[data-tutorial-interactive]');
   }
 
   overlay.addEventListener('pointerdown', (e) => {
+    if (overlay.classList.contains('tutorial-locked')) return;
     if (isNavClick(e)) return;
     if (!introEl.classList.contains('hidden')) return;
     depressTarget();
@@ -1061,6 +1345,7 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
   overlay.addEventListener('pointerup', (e) => {
     releaseTarget();
+    if (overlay.classList.contains('tutorial-locked')) return;
     if (isNavClick(e)) return;
     if (!introEl.classList.contains('hidden')) return;
     advance();
@@ -1071,7 +1356,11 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
   });
 
   document.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && !overlay.classList.contains('hidden')) {
+    if (
+      e.key === 'Escape' &&
+      !overlay.classList.contains('hidden') &&
+      !overlay.classList.contains('tutorial-locked')
+    ) {
       hide();
     }
   });

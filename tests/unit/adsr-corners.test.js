@@ -72,15 +72,15 @@ describe('ADSR drag to envelope value', () => {
     expect(value).toBe(0.01);
   });
 
-  test('sustain: clamped between 0 and 1', () => {
-    const zero = dragToEnvelopeValue('sustain', 0);
-    expect(zero).toBe(0);
+  test('sustain: inverted — dist=0 → 1 (pointed=loud), dist=maxR → 0 (rounded=soft)', () => {
+    const pointed = dragToEnvelopeValue('sustain', 0);
+    expect(pointed).toBe(1);
 
     const mid = dragToEnvelopeValue('sustain', MAX_RADIUS * 0.5);
     expect(mid).toBeCloseTo(0.5);
 
-    const maxed = dragToEnvelopeValue('sustain', MAX_RADIUS * 5);
-    expect(maxed).toBe(1);
+    const rounded = dragToEnvelopeValue('sustain', MAX_RADIUS * 5);
+    expect(rounded).toBe(0);
   });
 
   test('release: max drag = 3.0', () => {
@@ -121,7 +121,7 @@ describe('ADSR drag simulation (pointer event flow)', () => {
     expect(newAttack).toBeGreaterThan(defaultEnvelope.attack);
   });
 
-  test('dragging sustain corner outward increases sustain', () => {
+  test('dragging sustain corner inward decreases sustain (more rounded = softer)', () => {
     // Start: touch near sustain corner (top-right)
     const startX = CANVAS_SIZE - 5;
     const startY = 5;
@@ -135,7 +135,7 @@ describe('ADSR drag simulation (pointer event flow)', () => {
     const dragDistance = Math.hypot(CANVAS_SIZE - dragEndX, Number(dragEndY)) / CANVAS_SIZE;
 
     const newSustain = dragToEnvelopeValue('sustain', dragDistance);
-    expect(newSustain).toBeGreaterThan(defaultEnvelope.sustain);
+    expect(newSustain).toBeLessThan(defaultEnvelope.sustain);
   });
 
   test('minimal drag keeps values near minimum', () => {

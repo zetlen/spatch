@@ -126,7 +126,7 @@ function envelopeValueToDist(corner: ADSRCorner, val: number): number {
       return (val / 2) * maxR;
     }
     case 'sustain': {
-      return val * maxR;
+      return (1 - val) * maxR;
     }
     case 'release': {
       return (val / 3) * maxR;
@@ -435,6 +435,14 @@ export class CanvasInteractionController {
 
   private handlePointerMove(e: PointerEvent): void {
     this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Guard: if no buttons are pressed but we're mid-interaction, the pointerup
+    // was lost (mouse released outside captured element, browser dropped capture).
+    // Abort the interaction to prevent the corner from jumping to the cursor.
+    if (e.buttons === 0 && this.interaction.mode !== 'idle') {
+      this.interaction = IDLE;
+      return;
+    }
 
     // Pinch-rotate: compute from two stored positions
     if (this.interaction.mode === 'pinch-rotate') {
