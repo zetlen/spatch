@@ -205,8 +205,9 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
       size: normalizedCoord(0.1 + Math.random() * 0.35),
     };
 
-    // 35% chance of a gradient fill (diphthong sweep)
-    if (Math.random() < 0.35) {
+    // 35% chance of a gradient fill (diphthong sweep).
+    // Stamps skip gradients — they have no geometric surface for a gradient.
+    if (waveform !== 'stamp' && Math.random() < 0.35) {
       updates.fill = createRandomLinearFill();
     }
 

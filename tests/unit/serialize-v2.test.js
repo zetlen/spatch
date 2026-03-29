@@ -289,7 +289,7 @@ describe('SampleSerializer', () => {
     expect(serializer.gradientWidth).toBe(oscSerializer.gradientWidth);
   });
 
-  test('gradient fill round-trips', () => {
+  test('gradient fill is coerced to solid on unpack', () => {
     const voice = makeVoice({
       fill: { gradAngle: 180, h: 50, h2: 300, l: 30, l2: 70, mode: 'linear', s: 90, s2: 40 },
       stamp: 3,
@@ -297,8 +297,8 @@ describe('SampleSerializer', () => {
     });
     const unpacked = serializer.unpack(serializer.pack(voice), 'stamp');
 
-    expect(unpacked.fill.mode).toBe('linear');
-    expect(unpacked.fill.gradAngle).toBe(180);
+    // Stamps don't support gradients — unpack coerces to solid, keeping start color
+    expect(unpacked.fill.mode).toBe('solid');
     expect(unpacked.stamp).toBe(3);
   });
 

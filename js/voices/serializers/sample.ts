@@ -36,7 +36,13 @@ export function createSampleSerializer(): VoiceSerializer {
       const rawTrigger = (sp4 >> 1) & 0x3;
       const trigger = rawTrigger > 2 ? 1 : rawTrigger;
 
-      return { ...voice, stamp: stampIndex, trigger } as Voice;
+      // Stamps don't support gradients — coerce to solid if deserialized as one
+      const fill =
+        voice.fill.mode === 'linear'
+          ? { mode: 'solid' as const, h: voice.fill.h, s: voice.fill.s, l: voice.fill.l }
+          : voice.fill;
+
+      return { ...voice, fill, stamp: stampIndex, trigger } as Voice;
     },
   };
 }

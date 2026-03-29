@@ -193,7 +193,7 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
     onClick(key) {
       if (key !== 'grad-toggle') return;
       const sel = getSelectedVoice(deps);
-      if (!sel) return;
+      if (!sel || sel.waveform === 'stamp') return;
       const nowLinear = fillDraft.mode !== 'linear';
       fillDraft.mode = nowLinear ? 'linear' : 'solid';
       commitFill(sel.id, false);
@@ -208,7 +208,9 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
     onUpdate() {
       syncColorInputs();
       const sel = getSelectedVoice(deps);
-      const isLinear = sel ? sel.fill.mode === 'linear' : fillDraft.mode === 'linear';
+      const isStamp = sel?.waveform === 'stamp';
+      const isLinear = !isStamp && (sel ? sel.fill.mode === 'linear' : fillDraft.mode === 'linear');
+      area.querySelector<HTMLElement>('#grad-toggle')?.classList.toggle('hidden', isStamp);
       area.querySelector<HTMLElement>('#color-lin-2')?.classList.toggle('hidden', !isLinear);
       area.querySelector<HTMLElement>('#angle-toggles')?.classList.toggle('hidden', !isLinear);
       const solidInput = area.querySelector<HTMLInputElement>('#color-solid');
