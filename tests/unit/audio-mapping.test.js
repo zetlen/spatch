@@ -73,7 +73,7 @@ describe('yToFrequency', () => {
 });
 
 describe('vibe.xToPan', () => {
-  const vibe = new Vibe(); // default stereoWidth = 1.0
+  const vibe = new Vibe(); // Default stereoWidth = 1.0
 
   test('x=0 pans full left (-1)', () => {
     expect(vibe.xToPan(0)).toBe(-1);
@@ -372,7 +372,7 @@ describe('applyFormantFilter', () => {
     const f1 = createMockBiquad();
     const f2 = createMockBiquad();
     const b = createMockBiquad();
-    // gradAngle 0 is non-reversed → formants match color 1
+    // GradAngle 0 is non-reversed → formants match color 1
     const fill = { mode: 'linear', h: 0, s: 80, l: 30, h2: 120, s2: 80, l2: 70, gradAngle: 0 };
     applyFormantFilter(f1, f2, b, fill, 'pulse');
 
@@ -395,7 +395,7 @@ describe('applyFormantFilter', () => {
     const f1 = createMockBiquad();
     const f2 = createMockBiquad();
     const b = createMockBiquad();
-    // gradAngle 180 is reversed → formants match color 2
+    // GradAngle 180 is reversed → formants match color 2
     const fill = { mode: 'linear', h: 0, s: 80, l: 30, h2: 120, s2: 80, l2: 70, gradAngle: 180 };
     applyFormantFilter(f1, f2, b, fill, 'pulse');
 
@@ -418,24 +418,24 @@ describe('applyFormantFilter', () => {
 describe('yToPlaybackRate', () => {
   test('returns 1.0 when y maps to the reference pitch', () => {
     // Find the Y that produces a frequency closest to 440 Hz
-    // yToFrequency maps Y=0 to highest, Y=1 to lowest
+    // YToFrequency maps Y=0 to highest, Y=1 to lowest
     const freq = yToFrequency(0.5);
     const rate = yToPlaybackRate(0.5, freq);
-    expect(rate).toBeCloseTo(1.0);
+    expect(rate).toBeCloseTo(1);
   });
 
   test('rate > 1 for y above reference (higher pitch)', () => {
     const refPitch = yToFrequency(0.5);
     // Y=0.3 is higher pitch than Y=0.5
     const rate = yToPlaybackRate(0.3, refPitch);
-    expect(rate).toBeGreaterThan(1.0);
+    expect(rate).toBeGreaterThan(1);
   });
 
   test('rate < 1 for y below reference (lower pitch)', () => {
     const refPitch = yToFrequency(0.5);
     // Y=0.7 is lower pitch than Y=0.5
     const rate = yToPlaybackRate(0.7, refPitch);
-    expect(rate).toBeLessThan(1.0);
+    expect(rate).toBeLessThan(1);
   });
 
   test('rate equals yToFrequency / referencePitch', () => {

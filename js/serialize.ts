@@ -1,4 +1,4 @@
-// serialize.ts — URL encode/decode sigil state with register-based v2 format.
+// Serialize.ts — URL encode/decode sigil state with register-based v2 format.
 //
 // V2 wire format:
 //   [Version: 1 char (6b)]
@@ -26,10 +26,10 @@ const SCHEMA_VERSION = 2;
 // Sustain: 8 steps over 0-1.0
 // Release: 8 steps over 0-3.0s
 
-const ENV_ATTACK_SCALE = 3.5; // val * 3.5 → 0-7
+const ENV_ATTACK_SCALE = 3.5; // Val * 3.5 → 0-7
 const ENV_DECAY_SCALE = 3.5;
-const ENV_SUSTAIN_SCALE = 7; // val * 7 → 0-7
-const ENV_RELEASE_SCALE = 7 / 3; // val * (7/3) → 0-7
+const ENV_SUSTAIN_SCALE = 7; // Val * 7 → 0-7
+const ENV_RELEASE_SCALE = 7 / 3; // Val * (7/3) → 0-7
 
 function packEnvelope(env: Envelope): string {
   const a = Math.round(env.attack * ENV_ATTACK_SCALE) & 0x7;
@@ -121,10 +121,14 @@ function unpackState(str: string): SigilData {
       idx += 1;
 
       const entry = getById(typeId);
-      if (!entry) break;
+      if (!entry) {
+        break;
+      }
 
       const width = isGradient ? entry.serializer.gradientWidth : entry.serializer.solidWidth;
-      if (idx + width > str.length) break;
+      if (idx + width > str.length) {
+        break;
+      }
 
       const registers = str.slice(idx, idx + width);
       idx += width;
@@ -145,7 +149,9 @@ export function serializeState(state: SigilData): string {
 }
 
 export function deserializeState(hash: string): SigilData | undefined {
-  if (!hash) return undefined;
+  if (!hash) {
+    return undefined;
+  }
   try {
     return unpackState(hash);
   } catch (error) {
@@ -155,16 +161,22 @@ export function deserializeState(hash: string): SigilData | undefined {
 }
 
 export function stateToPath(state: SigilData): string {
-  if (state.voices.length === 0) return '/';
+  if (state.voices.length === 0) {
+    return '/';
+  }
   return '/s/' + serializeState(state);
 }
 
 const B64_VALID = /^[A-Za-z0-9\-_]+$/;
 
 export function pathToState(pathname: string): SigilData | undefined {
-  if (!pathname.startsWith('/s/')) return undefined;
+  if (!pathname.startsWith('/s/')) {
+    return undefined;
+  }
   const data = pathname.slice(3);
-  if (!data || !B64_VALID.test(data)) return undefined;
+  if (!data || !B64_VALID.test(data)) {
+    return undefined;
+  }
   return deserializeState(data);
 }
 
@@ -176,7 +188,9 @@ export function resetDirty(): void {
 
 export function saveToURL(state: SigilData): void {
   const path = stateToPath(state);
-  if (path === globalThis.location.pathname) return;
+  if (path === globalThis.location.pathname) {
+    return;
+  }
   if (dirty) {
     history.replaceState(null, '', path);
   } else {

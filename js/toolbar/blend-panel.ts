@@ -1,4 +1,4 @@
-// blend-panel.ts — Long-press blend mode picker
+// Blend-panel.ts — Long-press blend mode picker
 // Icon references for sprite scanner:
 // #tabler-blender #tabler-layers-union #tabler-layers-intersect
 // #tabler-layers-intersect-2 #tabler-layers-difference

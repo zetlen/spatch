@@ -113,8 +113,8 @@ describe('vibe.borderOctaveGain', () => {
   });
 
   test('returns relative gain independent of voice size/waveform', () => {
-    // borderOctaveGain is now a relative gain — voice gain is applied by the
-    // shared gain node, not baked into the border gain value.
+    // BorderOctaveGain is now a relative gain — voice gain is applied by the
+    // Shared gain node, not baked into the border gain value.
     const gain = vibe.borderOctaveGain(0.5, 'white', false);
     expect(gain).toBeGreaterThan(0);
     expect(gain).toBeLessThan(1);
@@ -171,9 +171,9 @@ describe('Vibe — new parameters', () => {
   });
 
   test('partial overrides merge with defaults', () => {
-    const v = new Vibe({ reverbMix: 0.6, warmth: 2.0 });
+    const v = new Vibe({ reverbMix: 0.6, warmth: 2 });
     expect(v.reverbMix).toBe(0.6);
-    expect(v.warmth).toBe(2.0);
+    expect(v.warmth).toBe(2);
     expect(v.ir).toBe(VIBE_DEFAULTS.ir);
     expect(v.compThreshold).toBe(VIBE_DEFAULTS.compThreshold);
   });
@@ -196,15 +196,15 @@ describe('Vibe — new parameters', () => {
   test('stereoWidth scales pan', () => {
     const narrow = new Vibe({ stereoWidth: 0.5 });
     expect(narrow.stereoWidth).toBe(0.5);
-    const full = new Vibe({ stereoWidth: 1.0 });
-    expect(full.stereoWidth).toBe(1.0);
+    const full = new Vibe({ stereoWidth: 1 });
+    expect(full.stereoWidth).toBe(1);
   });
 });
 
 describe('vibeSignal reactivity', () => {
   test('setVibe updates vibeSignal.value', () => {
     const before = vibeSignal.value;
-    const custom = new Vibe({ warmth: 3.0 });
+    const custom = new Vibe({ warmth: 3 });
     setVibe(custom);
     expect(vibeSignal.value).toBe(custom);
     expect(vibeSignal.value).not.toBe(before);
@@ -227,15 +227,15 @@ describe('vibeSignal reactivity', () => {
     });
     // Effect runs once on creation with current value
     expect(seen.length).toBe(1);
-    setVibe(new Vibe({ warmth: 4.0 }));
+    setVibe(new Vibe({ warmth: 4 }));
     expect(seen.length).toBe(2);
-    expect(seen[1]).toBe(4.0);
-    setVibe(new Vibe({ warmth: 1.0 }));
+    expect(seen[1]).toBe(4);
+    setVibe(new Vibe({ warmth: 1 }));
     expect(seen.length).toBe(3);
-    expect(seen[2]).toBe(1.0);
+    expect(seen[2]).toBe(1);
     dispose();
     // After dispose, no more notifications
-    setVibe(new Vibe({ warmth: 2.0 }));
+    setVibe(new Vibe({ warmth: 2 }));
     expect(seen.length).toBe(3);
     // Restore default
     setVibe(new Vibe());
@@ -248,7 +248,7 @@ describe('scene vibe presets produce distinct Vibe instances', () => {
     { name: 'chiclet', opts: { reverbMix: 0.7, eqHighGain: 3, warmth: 1.8, stereoWidth: 1.2 } },
     { name: 'structure-b', opts: { reverbMix: 0.8, eqLowGain: 2, warmth: 2.5, stereoWidth: 1.6 } },
     { name: 'tartu', opts: { reverbMix: 0.75, eqHighGain: 3, warmth: 1.1, formantQ: 1.4 } },
-    { name: 'knockdown', opts: { reverbMix: 0.6, compRatio: 4, warmth: 2.0, stereoWidth: 0.8 } },
+    { name: 'knockdown', opts: { reverbMix: 0.6, compRatio: 4, warmth: 2, stereoWidth: 0.8 } },
   ];
 
   test('each scene vibe differs from defaults', () => {

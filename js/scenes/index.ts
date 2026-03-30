@@ -47,7 +47,9 @@ export function initStageLayers(app: HTMLElement): void {
   activeLayer = layers[0];
   inactiveLayer = layers[1];
   // Active layer starts visible, inactive starts hidden
-  if (inactiveLayer) inactiveLayer.classList.add('fade-out');
+  if (inactiveLayer) {
+    inactiveLayer.classList.add('fade-out');
+  }
 }
 
 export async function applyScene(app: HTMLElement, index: number): Promise<void> {

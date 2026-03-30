@@ -1,7 +1,7 @@
-// sample.ts — Shared serializer for sample-based voices (stamp).
+// Sample.ts — Shared serializer for sample-based voices (stamp).
 //
 // Same register layout as oscillator serializer, except SP4 encodes
-// stamp index (3b) + trigger position (2b) + spare (1b) instead of timbre.
+// Stamp index (3b) + trigger position (2b) + spare (1b) instead of timbre.
 
 import type { Voice, WaveformType } from '../../types.ts';
 import { encodeInt, decodeInt } from '../b64.ts';

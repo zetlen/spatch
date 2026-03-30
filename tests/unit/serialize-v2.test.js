@@ -40,7 +40,7 @@ describe('b64 encode/decode', () => {
 
   test('multi-char encoding round-trips', () => {
     // 24 bits = 4 chars max = 16777215
-    const val = 16777215;
+    const val = 16_777_215;
     expect(decodeInt(encodeInt(val, 4), 0, 4)).toBe(val);
   });
 
@@ -326,7 +326,7 @@ describe('SampleSerializer', () => {
   test('trigger defaults to 1 for value 3 (reserved)', () => {
     const voice = makeVoice({ stamp: 1, trigger: 0, waveform: 'stamp' });
     const packed = serializer.pack(voice);
-    const sp4Raw = (1 << 3) | (3 << 1); // stamp=1, trigger=3 (reserved)
+    const sp4Raw = (1 << 3) | (3 << 1); // Stamp=1, trigger=3 (reserved)
     const tampered = packed.slice(0, 8) + encodeInt(sp4Raw, 1) + packed.slice(9);
     const unpacked = serializer.unpack(tampered, 'stamp');
     expect(unpacked.trigger).toBe(1);

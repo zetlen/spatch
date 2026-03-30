@@ -1,4 +1,4 @@
-// expansion-panel.ts — Shared lifecycle and mutex for toolbar expansion panels
+// Expansion-panel.ts — Shared lifecycle and mutex for toolbar expansion panels
 
 import type { SigilStore, UndoManager } from '../state.ts';
 import type { Voice } from '../types.ts';
@@ -55,7 +55,9 @@ export function createExpansionPanel(config: {
   // Guard on isOpen so shared area elements don't cross-dispatch.
   if (onClick) {
     area.addEventListener('click', (e) => {
-      if (!isOpen) return;
+      if (!isOpen) {
+        return;
+      }
       const target = (e.target as HTMLElement).closest<HTMLElement>('[data-panel-key]');
       if (target?.dataset.panelKey) {
         onClick(target.dataset.panelKey);
@@ -81,9 +83,13 @@ export function createExpansionPanel(config: {
         area.append(btn);
       } else {
         const el = entry.create();
-        if (entry.key) el.dataset.panelKey = entry.key;
+        if (entry.key) {
+          el.dataset.panelKey = entry.key;
+        }
         if (entry.className) {
-          for (const cls of entry.className.split(' ')) el.classList.add(cls);
+          for (const cls of entry.className.split(' ')) {
+            el.classList.add(cls);
+          }
         }
         area.append(el);
       }
@@ -135,7 +141,9 @@ export function bindLongPress(
   let didLongPress = false;
 
   btn.addEventListener('pointerdown', (e: PointerEvent) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0) {
+      return;
+    }
     didLongPress = false;
     btn.setPointerCapture(e.pointerId);
     timer = setTimeout(() => {
@@ -149,7 +157,9 @@ export function bindLongPress(
     if (timer !== undefined) {
       clearTimeout(timer);
       timer = undefined;
-      if (!didLongPress) onShortClick();
+      if (!didLongPress) {
+        onShortClick();
+      }
     }
   });
 
@@ -172,9 +182,13 @@ export class PanelManager {
 
   constructor() {
     document.addEventListener('click', (e) => {
-      if (!this._open) return;
+      if (!this._open) {
+        return;
+      }
       const entry = this._panels.get(this._open);
-      if (!entry) return;
+      if (!entry) {
+        return;
+      }
       const target = e.target as Node;
       if (!entry.trigger.contains(target) && !entry.area.contains(target)) {
         this.close();
@@ -187,7 +201,9 @@ export class PanelManager {
   }
 
   toggle(name: string, guard?: () => boolean): void {
-    if (guard && !guard()) return;
+    if (guard && !guard()) {
+      return;
+    }
     if (this._open === name) {
       this.close();
     } else {
@@ -202,7 +218,9 @@ export class PanelManager {
   }
 
   close(): void {
-    if (!this._open) return;
+    if (!this._open) {
+      return;
+    }
     const entry = this._panels.get(this._open);
     entry?.panel.close();
     this._open = undefined;

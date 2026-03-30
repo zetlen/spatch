@@ -15,7 +15,7 @@ const scene: Scene = {
     eqLowGain: 2,
     eqMidFreq: 900,
     eqMidGain: -4,
-    eqMidQ: 2.0,
+    eqMidQ: 2,
     eqHighGain: 2,
     warmth: 1.6,
     formantMix: 0.4,

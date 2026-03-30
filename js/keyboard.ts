@@ -1,8 +1,8 @@
-// keyboard.ts — Global keyboard shortcut handler.
+// Keyboard.ts — Global keyboard shortcut handler.
 //
 // Owns the clipboard variable and the document 'keydown' listener.
 // Handles delete, copy/paste/duplicate, undo/redo, escape, tool switch,
-// and space-bar play toggle.
+// And space-bar play toggle.
 
 import type { SelectionManager, SigilStore, UndoManager } from './state.ts';
 import type { PlaybackController } from './playback.ts';

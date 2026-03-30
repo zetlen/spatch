@@ -1,8 +1,8 @@
 // Vibe — perceptual gain tuning constants and methods
 //
 // Encapsulates the math that maps visual shape properties to audio gain,
-// ensuring all waveform types converge to similar perceived loudness at
-// medium sizes while preserving distinct character at small/large sizes.
+// Ensuring all waveform types converge to similar perceived loudness at
+// Medium sizes while preserving distinct character at small/large sizes.
 
 import { signal } from '@preact/signals-core';
 import type { BorderColor, WaveformType } from '../types.ts';
@@ -54,8 +54,8 @@ export const VIBE_DEFAULTS = {
   refMult: 1.1,
 
   ir: undefined as string | undefined,
-  reverbMix: 0.0,
-  reverbPreDelay: 0.0,
+  reverbMix: 0,
+  reverbPreDelay: 0,
 
   compThreshold: -10,
   compKnee: 18,
@@ -67,19 +67,19 @@ export const VIBE_DEFAULTS = {
   eqLowGain: 0,
   eqMidFreq: 1000,
   eqMidGain: 0,
-  eqMidQ: 1.0,
+  eqMidQ: 1,
   eqHighFreq: 4000,
   eqHighGain: 0,
 
   warmth: 1.5,
   formantMix: 0.7,
-  formantQ: 1.0,
+  formantQ: 1,
   brightnessQ: Math.SQRT1_2,
   octaveGainCoeffs: { 'up-1': 0.5, 'up-2': 0.35, 'down-1': 1.5, 'down-2': 2 } as Record<
     string,
     number
   >,
-  stereoWidth: 1.0,
+  stereoWidth: 1,
 
   saturation: 0,
   excite: 0,
@@ -144,7 +144,9 @@ export class Vibe {
     const mergedCoeffs: Record<string, number> = { ...VIBE_DEFAULTS.octaveGainCoeffs };
     if (opts?.octaveGainCoeffs) {
       for (const [k, v] of Object.entries(opts.octaveGainCoeffs)) {
-        if (v !== undefined) mergedCoeffs[k] = v;
+        if (v !== undefined) {
+          mergedCoeffs[k] = v;
+        }
       }
     }
     this.OCTAVE_GAIN_COEFF = mergedCoeffs;
@@ -203,7 +205,7 @@ export class Vibe {
   areaToGain(waveform: WaveformType, size: number): number {
     const area = this.shapeAreaFraction(waveform, size);
     const normalized = area / this.norm;
-    const curved = Math.pow(normalized, this.GAIN_EXPONENT[waveform]);
+    const curved = normalized ** this.GAIN_EXPONENT[waveform];
     return Math.min(this.GAIN_MAX, this.GAIN_MIN + (this.GAIN_MAX - this.GAIN_MIN) * curved);
   }
 
@@ -226,7 +228,9 @@ export class Vibe {
    *  The voice-level gain is applied by the shared gain node that the border
    *  flows through, so this only encodes border-specific scaling. */
   borderOctaveGain(thickness: number, color: BorderColor, double: boolean): number {
-    if (thickness === 0) return 0;
+    if (thickness === 0) {
+      return 0;
+    }
     const key = `${color === 'white' ? 'up' : 'down'}-${double ? 2 : 1}`;
     const coeff = this.OCTAVE_GAIN_COEFF[key] ?? 1;
     return Math.sqrt(thickness) * coeff;

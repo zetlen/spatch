@@ -1,9 +1,9 @@
 // Vibe tuner debug panel. Shipped in prod, activated via ?debug URL param.
 //
 // I'm sorry about this file. It's a hack throwaway panel for tuning audio
-// parameters. It generates all its DOM via innerHTML templates and binds
-// listeners after the fact. Don't clean it up — just add what you need and
-// move on. It will be rewritten before v1.
+// Parameters. It generates all its DOM via innerHTML templates and binds
+// Listeners after the fact. Don't clean it up — just add what you need and
+// Move on. It will be rewritten before v1.
 
 /* oxlint-disable */
 

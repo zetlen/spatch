@@ -8,7 +8,7 @@ const stample: Stample = {
   sampleUrl,
   referencePitch: 277,
   shapeAreaCoeff: 1.2,
-  gainExponent: 1.0,
+  gainExponent: 1,
   formantMaxQ: 4,
 };
 

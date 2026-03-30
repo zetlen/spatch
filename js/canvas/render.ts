@@ -1,4 +1,4 @@
-// render.ts — SVG DOM reconciler
+// Render.ts — SVG DOM reconciler
 //
 // Creates, updates, and removes SVG elements to match SigilData.
 // Elements are keyed by voice ID for efficient reconciliation.
@@ -143,8 +143,8 @@ function applyPatternOverlay(group: SVGGElement, voice: Voice): void {
 
   // Duplicate the shape geometry and fill it with the bitmap tile pattern.
   // The overlay rotates with the shape, but the pattern fill must stay fixed
-  // in canvas space. For rotated voices, we clone the shared pattern def and
-  // apply an inverse patternTransform to cancel the element rotation.
+  // In canvas space. For rotated voices, we clone the shared pattern def and
+  // Apply an inverse patternTransform to cancel the element rotation.
   const overlay = createShapeElement(voice);
   overlay.dataset.overlay = 'true';
 
@@ -248,7 +248,7 @@ function reconcileVoice(
   }
 
   // Apply blend mode only when overlapping — bijection requires that blend
-  // has no visual effect when it has no audio effect.
+  // Has no visual effect when it has no audio effect.
   group.style.mixBlendMode = hasOverlap ? globalBlend : 'screen';
 
   // Apply rotation transform on the main shape (not group, since selection uses group position)
@@ -294,7 +294,7 @@ function reconcileVoices(
   }
 
   // Add or update groups for each voice (new groups inserted near siblings;
-  // existing groups keep their current DOM position — voice order is not data)
+  // Existing groups keep their current DOM position — voice order is not data)
   let prevGroup;
   for (const voice of voices) {
     let group = voiceLayer.querySelector<SVGGElement>(`g[data-voice-id="${voice.id}"]`);
@@ -338,7 +338,9 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
     'stroke-dasharray': dashArray,
     'stroke-width': strokeWidth,
   });
-  if (groupTransform) shadow.setAttribute('transform', groupTransform);
+  if (groupTransform) {
+    shadow.setAttribute('transform', groupTransform);
+  }
   selectionLayer.append(shadow);
 
   // White marching ants outline
@@ -350,14 +352,20 @@ function renderVoiceSelection(selectionLayer: SVGGElement, voice: Voice, isTouch
     'stroke-width': strokeWidth,
   });
   ants.style.animation = 'march 0.7s linear infinite';
-  if (groupTransform) ants.setAttribute('transform', groupTransform);
+  if (groupTransform) {
+    ants.setAttribute('transform', groupTransform);
+  }
   selectionLayer.append(ants);
 
-  if (isTouch) return; // Touch: just the marching ants
+  if (isTouch) {
+    return;
+  } // Touch: just the marching ants
 
   // Resize + rotation handles — fully owned by the UI delegate
   for (const handle of ui.selectionHandles(voice)) {
-    if (groupTransform) handle.setAttribute('transform', groupTransform);
+    if (groupTransform) {
+      handle.setAttribute('transform', groupTransform);
+    }
     selectionLayer.append(handle);
   }
 }

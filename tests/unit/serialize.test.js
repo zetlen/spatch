@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { deserializeState, pathToState, serializeState, stateToPath } from '../../js/serialize.ts';
 
-// v2 quantization: envelope uses 3-bit (8 steps), spatial uses 6-bit (64 steps).
+// V2 quantization: envelope uses 3-bit (8 steps), spatial uses 6-bit (64 steps).
 // Tolerances must account for this coarser resolution.
 
 function makeState(overrides = {}) {
@@ -105,7 +105,7 @@ describe('v2 serializeState / deserializeState round-trip', () => {
     });
 
     const decoded = deserializeState(serializeState(state));
-    expect(decoded.voices.map((v) => v.waveform).sort()).toEqual([
+    expect(decoded.voices.map((v) => v.waveform).toSorted()).toEqual([
       'astroid',
       'blend',
       'pulse',
@@ -229,7 +229,7 @@ describe('v2 format structure', () => {
   });
 
   test('old v1 URLs return undefined', () => {
-    // v1 URLs start with envelope chars, not version byte
+    // V1 URLs start with envelope chars, not version byte
     const v1Data = 'AKHPGMAKBDgAGAG8OEIhDnJPDgAJJGFOEIhDnJP';
     expect(deserializeState(v1Data)).toBeUndefined();
   });

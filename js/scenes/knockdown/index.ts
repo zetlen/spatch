@@ -18,7 +18,7 @@ const scene: Scene = {
     compThreshold: -8,
     compRatio: 4,
     compAttack: 0.002,
-    warmth: 2.0,
+    warmth: 2,
     stereoWidth: 0.8,
   },
 };

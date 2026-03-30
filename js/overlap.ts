@@ -1,9 +1,9 @@
-// overlap.ts — Rasterized shape-vs-shape overlap detection.
+// Overlap.ts — Rasterized shape-vs-shape overlap detection.
 //
 // Draws voice shapes onto a small OffscreenCanvas and checks for pixel
-// intersection. Pixel-faithful for all shape types including rotated
-// triangles, astroids, and stamp hulls. Runs on pointer release and
-// after voice add/remove/load — not during continuous drags.
+// Intersection. Pixel-faithful for all shape types including rotated
+// Triangles, astroids, and stamp hulls. Runs on pointer release and
+// After voice add/remove/load — not during continuous drags.
 
 import type { Voice } from './types.ts';
 import { voiceRotation } from './shapes.ts';
@@ -38,9 +38,10 @@ function drawShape(ctx: OffscreenCanvasRenderingContext2D, voice: Voice): void {
   ctx.beginPath();
 
   switch (voice.waveform) {
-    case 'sine':
+    case 'sine': {
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       break;
+    }
 
     case 'pulse': {
       // Rotated rectangle: size × size centered on (cx, cy)
@@ -61,8 +62,11 @@ function drawShape(ctx: OffscreenCanvasRenderingContext2D, voice: Voice): void {
         const angle = -Math.PI / 2 + (i * 2 * Math.PI) / 3;
         const px = r * Math.cos(angle);
         const py = r * Math.sin(angle);
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+        if (i === 0) {
+          ctx.moveTo(px, py);
+        } else {
+          ctx.lineTo(px, py);
+        }
       }
       ctx.closePath();
       ctx.restore();
@@ -130,15 +134,17 @@ function drawSvgPath(
   ctx.beginPath();
   for (const cmd of cmds) {
     switch (cmd) {
-      case 'M':
+      case 'M': {
         ctx.moveTo(nums[i]! * scale + tx, nums[i + 1]! * scale + ty);
         i += 2;
         break;
-      case 'L':
+      }
+      case 'L': {
         ctx.lineTo(nums[i]! * scale + tx, nums[i + 1]! * scale + ty);
         i += 2;
         break;
-      case 'C':
+      }
+      case 'C': {
         ctx.bezierCurveTo(
           nums[i]! * scale + tx,
           nums[i + 1]! * scale + ty,
@@ -149,9 +155,11 @@ function drawSvgPath(
         );
         i += 6;
         break;
-      case 'Z':
+      }
+      case 'Z': {
         ctx.closePath();
         break;
+      }
     }
   }
 }
@@ -163,24 +171,19 @@ const HAS_OFFSCREEN_CANVAS = typeof OffscreenCanvas !== 'undefined';
 
 /** Center-distance fallback for non-browser environments (tests). */
 function shapesOverlapFallback(a: Voice, b: Voice): boolean {
-  return (
-    computeOverlap(
-      a.x as number,
-      a.y as number,
-      a.size as number,
-      b.x as number,
-      b.y as number,
-      b.size as number,
-    ) > 0
-  );
+  return computeOverlap(a, b) > 0;
 }
 
 /** Check if two voices' shapes visually overlap using rasterized pixel test. */
 function shapesOverlap(a: Voice, b: Voice): boolean {
-  if (!HAS_OFFSCREEN_CANVAS) return shapesOverlapFallback(a, b);
+  if (!HAS_OFFSCREEN_CANVAS) {
+    return shapesOverlapFallback(a, b);
+  }
   // Bounding box pre-filter (circle-based, generous)
   const dist = Math.hypot((a.x as number) - (b.x as number), (a.y as number) - (b.y as number));
-  if (dist > ((a.size as number) + (b.size as number)) / 2) return false;
+  if (dist > ((a.size as number) + (b.size as number)) / 2) {
+    return false;
+  }
 
   // Compute the bounding box intersection in normalized coordinates
   const ar = (a.size as number) / 2;
@@ -189,7 +192,9 @@ function shapesOverlap(a: Voice, b: Voice): boolean {
   const maxX = Math.min((a.x as number) + ar, (b.x as number) + br);
   const minY = Math.max((a.y as number) - ar, (b.y as number) - br);
   const maxY = Math.min((a.y as number) + ar, (b.y as number) + br);
-  if (minX >= maxX || minY >= maxY) return false;
+  if (minX >= maxX || minY >= maxY) {
+    return false;
+  }
 
   // Pad slightly to avoid edge-of-pixel misses
   const pad = Math.max(maxX - minX, maxY - minY) * 0.05;
@@ -219,7 +224,9 @@ function shapesOverlap(a: Voice, b: Voice): boolean {
   // Check if any pixel has alpha > 0
   const data = ctx.getImageData(0, 0, RES, RES).data;
   for (let i = 3; i < data.length; i += 4) {
-    if (data[i]! > 0) return true;
+    if (data[i]! > 0) {
+      return true;
+    }
   }
   return false;
 }

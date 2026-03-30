@@ -50,7 +50,9 @@ async function annotateState(page) {
  * @param {number} duration     — total capture length (must exceed sustain + release + reverb)
  */
 async function captureAudio(page, { sustainTime = 1, duration = 4, adsr = false } = {}) {
-  if (adsr) await markADSR(page);
+  if (adsr) {
+    await markADSR(page);
+  }
   await annotateState(page);
 
   // Mark the release point and ADSR release marker
@@ -116,7 +118,7 @@ test.describe('Audio waveform snapshots', () => {
 
   test('square voice at axis-aligned rotation (timbre=0)', async ({ page }) => {
     // At 0° rotation (and 90°, 180°, 270°) the pulse timbre maps to 0,
-    // which should still produce audible audio — not collapse to silence.
+    // Which should still produce audible audio — not collapse to silence.
     await placeShape(page, 'square');
     await page.evaluate(() => {
       const voices = globalThis.__testStore.data.voices;
@@ -150,7 +152,7 @@ test.describe('Audio waveform snapshots', () => {
   test('two overlapping voices', async ({ page }) => {
     // Two shapes at same position triggers FM synthesis from overlap
     await placeShape(page, 'circle', 0.5, 0.5);
-    await page.keyboard.press('Escape'); // deselect so tool buttons reappear
+    await page.keyboard.press('Escape'); // Deselect so tool buttons reappear
     await placeShape(page, 'triangle', 0.5, 0.5);
     const png = await captureAudio(page);
     expect(Buffer.from(png, 'base64')).toMatchSnapshot('two-voices-overlap.png', {
@@ -161,10 +163,10 @@ test.describe('Audio waveform snapshots', () => {
   test('slow envelope with ADSR markers', async ({ page }) => {
     await page.evaluate(() => {
       globalThis.__testStore.updateEnvelope({
-        attack: 1.0,
-        decay: 1.0,
+        attack: 1,
+        decay: 1,
         sustain: 0.3,
-        release: 1.0,
+        release: 1,
       });
     });
     await placeShape(page, 'circle');
@@ -178,7 +180,7 @@ test.describe('Audio waveform snapshots', () => {
   test('two voices at different pitches', async ({ page }) => {
     // Spread voices vertically — different pitches, no overlap
     await placeShape(page, 'circle', 0.3, 0.3);
-    await page.keyboard.press('Escape'); // deselect so tool buttons reappear
+    await page.keyboard.press('Escape'); // Deselect so tool buttons reappear
     await placeShape(page, 'triangle', 0.7, 0.7);
     const png = await captureAudio(page);
     expect(Buffer.from(png, 'base64')).toMatchSnapshot('two-voices-spread.png', {
@@ -188,9 +190,9 @@ test.describe('Audio waveform snapshots', () => {
 
   test('triangle rotation 0° → 60° mid-playback', async ({ page }) => {
     // Place triangle (timbre=0, pure saw), start playing, then at t=1s
-    // perform a real rotation gesture. The OfflineAudioContext suspends at
-    // that time so the engine's update() schedules param changes at the
-    // correct point in the timeline — like fake timers for audio.
+    // Perform a real rotation gesture. The OfflineAudioContext suspends at
+    // That time so the engine's update() schedules param changes at the
+    // Correct point in the timeline — like fake timers for audio.
     await placeShape(page, 'triangle');
     await annotateState(page);
     await page.evaluate(() => {
@@ -203,7 +205,7 @@ test.describe('Audio waveform snapshots', () => {
 
     // Register a breakpoint at t=1s and start rendering
     await page.evaluate(() => {
-      globalThis.__audioCapture.suspendAt(1.0, 'rotate');
+      globalThis.__audioCapture.suspendAt(1, 'rotate');
       globalThis.__audioCapture.startRendering();
     });
 
@@ -212,26 +214,26 @@ test.describe('Audio waveform snapshots', () => {
 
     // Perform the real rotation gesture via pointerdown on the canvas-wrap
     // (which owns pointer capture for rotation). The shape is at (0.5, 0.5)
-    // in normalized SVG coords. We compute pixel positions from the canvas
-    // bounding box — SVG element boundingBox() is unreliable in Playwright.
+    // In normalized SVG coords. We compute pixel positions from the canvas
+    // Bounding box — SVG element boundingBox() is unreliable in Playwright.
     const canvasWrap = page.locator('#canvas-wrap');
     const box = await canvasWrap.boundingBox();
     const cx = box.x + box.width * 0.5;
     const cy = box.y + box.height * 0.5;
 
     // Use the north resize handle (directly above center) as the drag
-    // origin — tangential motion around the center produces rotation.
+    // Origin — tangential motion around the center produces rotation.
     const nHandle = page.locator('[data-handle="n"]');
     await nHandle.waitFor({ state: 'attached' });
     const handleNY = await nHandle.evaluate((el) => {
       const rect = el.getBoundingClientRect();
       return rect.y + rect.height / 2;
     });
-    const hx = cx; // handle is centered horizontally over the shape
+    const hx = cx; // Handle is centered horizontally over the shape
     const hy = handleNY;
 
     // 60° clockwise from up: pointer at (cx + r·sin(60°), cy - r·cos(60°))
-    const r = cy - hy; // distance from center to handle
+    const r = cy - hy; // Distance from center to handle
     const targetX = cx + r * Math.sin((60 * Math.PI) / 180);
     const targetY = cy - r * Math.cos((60 * Math.PI) / 180);
 
@@ -291,7 +293,7 @@ test.describe('Audio waveform snapshots', () => {
 
   // ---- FM interaction tests ----
   // These exercise the FM connection lifecycle during mid-playback state
-  // changes: creation, teardown, and multi-voice pairwise interactions.
+  // Changes: creation, teardown, and multi-voice pairwise interactions.
   // The audio snapshot captures the full timeline so any regression in
   // FM depth, timing, or connection management shows as a pixel diff.
 
@@ -315,7 +317,7 @@ test.describe('Audio waveform snapshots', () => {
 
   test('non-overlapping voices with multiply blend produce no FM', async ({ page }) => {
     // Two voices far apart, both multiply blend. Distance exceeds combined
-    // radius so overlap = 0 and no FM connections should be created.
+    // Radius so overlap = 0 and no FM connections should be created.
     await placeShape(page, 'circle', 0.2, 0.2);
     await page.keyboard.press('Escape');
     await placeShape(page, 'square', 0.8, 0.8);
@@ -330,7 +332,7 @@ test.describe('Audio waveform snapshots', () => {
 
   test('voice moved into overlap mid-playback activates FM', async ({ page }) => {
     // Two voices start far apart (no overlap). At t=1s the second voice moves
-    // to overlap the first. The waveform should transition from clean to
+    // To overlap the first. The waveform should transition from clean to
     // FM-modulated at the move marker.
     await placeShape(page, 'circle', 0.5, 0.5);
     await page.keyboard.press('Escape');
@@ -347,10 +349,10 @@ test.describe('Audio waveform snapshots', () => {
     await expect(page.locator('#btn-play')).toHaveClass(/playing/);
 
     await page.evaluate(() => {
-      globalThis.__audioCapture.suspendAt(1.0, 'move');
+      globalThis.__audioCapture.suspendAt(1, 'move');
       const { release } = globalThis.__testStore.data.envelope;
-      globalThis.__audioCapture.suspendAt(2.0, 'R');
-      globalThis.__audioCapture.markEvent('0', 2.0 + release);
+      globalThis.__audioCapture.suspendAt(2, 'R');
+      globalThis.__audioCapture.markEvent('0', 2 + release);
       globalThis.__audioCapture.startRendering();
     });
 
@@ -376,7 +378,7 @@ test.describe('Audio waveform snapshots', () => {
   test('voice moved out of overlap mid-playback deactivates FM', async ({ page }) => {
     // Two voices start fully overlapping with multiply blend (active FM).
     // At t=1s the second voice moves far away. The waveform should
-    // transition from FM-modulated to clean at the move marker.
+    // Transition from FM-modulated to clean at the move marker.
     await placeShape(page, 'circle', 0.5, 0.5);
     await page.keyboard.press('Escape');
     await placeShape(page, 'square', 0.5, 0.5);
@@ -392,10 +394,10 @@ test.describe('Audio waveform snapshots', () => {
     await expect(page.locator('#btn-play')).toHaveClass(/playing/);
 
     await page.evaluate(() => {
-      globalThis.__audioCapture.suspendAt(1.0, 'move');
+      globalThis.__audioCapture.suspendAt(1, 'move');
       const { release } = globalThis.__testStore.data.envelope;
-      globalThis.__audioCapture.suspendAt(2.0, 'R');
-      globalThis.__audioCapture.markEvent('0', 2.0 + release);
+      globalThis.__audioCapture.suspendAt(2, 'R');
+      globalThis.__audioCapture.markEvent('0', 2 + release);
       globalThis.__audioCapture.startRendering();
     });
 
@@ -455,14 +457,14 @@ test.describe('Audio waveform snapshots', () => {
       await expect(page.locator('#btn-play')).toHaveClass(/playing/);
 
       await page.evaluate(() => {
-        globalThis.__audioCapture.suspendAt(1.0, 'rotate');
+        globalThis.__audioCapture.suspendAt(1, 'rotate');
         globalThis.__audioCapture.startRendering();
       });
 
       await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
 
       // Set timbre programmatically instead of via mouse drag to eliminate
-      // layout-dependent coordinate math that caused CI flakiness (#328).
+      // Layout-dependent coordinate math that caused CI flakiness (#328).
       // 45° / 360° = 0.125 normalized timbre.
       await page.evaluate(() => {
         const store = globalThis.__testStore;
@@ -483,9 +485,9 @@ test.describe('Audio waveform snapshots', () => {
 
   test('5 voices with multiply blend in a diagonal cluster', async ({ page }) => {
     // 5 overlapping voices along a diagonal: each adjacent pair overlaps ~55%,
-    // next-nearest pairs overlap ~10%, far pairs don't overlap.
+    // Next-nearest pairs overlap ~10%, far pairs don't overlap.
     // This produces 7 active FM connections out of 10 total pairs — a stress
-    // test for the pairwise FM loop at larger voice counts.
+    // Test for the pairwise FM loop at larger voice counts.
     await page.evaluate(() => {
       const store = globalThis.__testStore;
       const waveforms = ['sine', 'pulse', 'blend', 'sine', 'pulse'];
@@ -509,8 +511,8 @@ test.describe('Audio waveform snapshots', () => {
 
   test('blend mode switching mid-playback cycles FM character', async ({ page }) => {
     // Two overlapping voices — same setup as other FM tests to keep
-    // cross-platform divergence within tolerance. Cycles through all 4
-    // blend modes at 1s intervals so each FM character is captured.
+    // Cross-platform divergence within tolerance. Cycles through all 4
+    // Blend modes at 1s intervals so each FM character is captured.
     await placeShape(page, 'circle', 0.5, 0.5);
     await page.keyboard.press('Escape');
     await placeShape(page, 'triangle', 0.5, 0.5);
@@ -525,12 +527,12 @@ test.describe('Audio waveform snapshots', () => {
 
     // Schedule suspend points at 1s intervals to switch blend modes
     await page.evaluate(() => {
-      globalThis.__audioCapture.suspendAt(1.0, 'multiply');
-      globalThis.__audioCapture.suspendAt(2.0, 'exclusion');
-      globalThis.__audioCapture.suspendAt(3.0, 'difference');
-      globalThis.__audioCapture.suspendAt(4.0, 'R');
+      globalThis.__audioCapture.suspendAt(1, 'multiply');
+      globalThis.__audioCapture.suspendAt(2, 'exclusion');
+      globalThis.__audioCapture.suspendAt(3, 'difference');
+      globalThis.__audioCapture.suspendAt(4, 'R');
       const { release } = globalThis.__testStore.data.envelope;
-      globalThis.__audioCapture.markEvent('0', 4.0 + release);
+      globalThis.__audioCapture.markEvent('0', 4 + release);
     });
 
     // Start playing (screen blend = no FM)
@@ -538,22 +540,22 @@ test.describe('Audio waveform snapshots', () => {
     await expect(page.locator('#btn-play')).toHaveClass(/playing/);
     await page.evaluate(() => globalThis.__audioCapture.startRendering());
 
-    // t=1s: switch to multiply
+    // T=1s: switch to multiply
     await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
     await page.evaluate(() => globalThis.__testStore.updateBlend('multiply'));
     await page.evaluate(() => globalThis.__audioCapture.resume());
 
-    // t=2s: switch to exclusion
+    // T=2s: switch to exclusion
     await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
     await page.evaluate(() => globalThis.__testStore.updateBlend('exclusion'));
     await page.evaluate(() => globalThis.__audioCapture.resume());
 
-    // t=3s: switch to difference
+    // T=3s: switch to difference
     await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
     await page.evaluate(() => globalThis.__testStore.updateBlend('difference'));
     await page.evaluate(() => globalThis.__audioCapture.resume());
 
-    // t=4s: release
+    // T=4s: release
     await page.waitForFunction(() => globalThis.__audioCapture.isSuspended);
     await page.keyboard.press('Space');
     await page.evaluate(() => globalThis.__audioCapture.resume());
@@ -566,15 +568,15 @@ test.describe('Audio waveform snapshots', () => {
 
   // Stamp audio tests verify non-silence rather than pixel-exact snapshots.
   // Sample decoding (decodeAudioData) varies across platforms — the same MP3
-  // decoded on macOS vs the CI Docker image produces different PCM, making
-  // snapshot comparisons brittle. Oscillator tests don't have this problem
-  // because the math is deterministic.
+  // Decoded on macOS vs the CI Docker image produces different PCM, making
+  // Snapshot comparisons brittle. Oscillator tests don't have this problem
+  // Because the math is deterministic.
   test.describe('stamp voices', () => {
     /** Assert captured audio PNG has non-trivial content (not all-black). */
     function expectNonSilent(pngBase64) {
       const buf = Buffer.from(pngBase64, 'base64');
       // A silent capture is ~5KB (axes + labels only). Real audio is 30KB+.
-      expect(buf.length).toBeGreaterThan(15000);
+      expect(buf.length).toBeGreaterThan(15_000);
     }
 
     test('single palm-tree stamp produces audio', async ({ page }) => {

@@ -1,7 +1,7 @@
-// player.ts — Astroid Player delegate.
+// Player.ts — Astroid Player delegate.
 //
 // 6-oscillator supersaw with LP filter + saturation shaper. Timbre controls
-// detune/stereo spread and which oscillator pairs are active.
+// Detune/stereo spread and which oscillator pairs are active.
 
 import { makeSaturationCurve, safeStop } from '../../audio/node-utils.ts';
 import { yToFrequency } from '../../audio/mapping.ts';
@@ -10,10 +10,10 @@ import type { AudioSharedNodes, AudioVoice, VoicePlayer } from '../types.ts';
 
 // Six oscillators: [outerL, innerL, centerL, centerR, innerR, outerR].
 // Each pair fades in at a different timbre threshold and reaches full gain
-// at fullAt. The center pair is always active.
+// At fullAt. The center pair is always active.
 const OSC_COUNT = 6;
 const FADE_IN_AT = [0.5, 0.25, 0, 0, 0.25, 0.5];
-const FULL_AT = [1.0, 0.5, 0, 0, 0.5, 1.0];
+const FULL_AT = [1, 0.5, 0, 0, 0.5, 1];
 
 // Detune and pan for each osc: [outerL, innerL, centerL, centerR, innerR, outerR].
 // BASE values are always present (center pair always has spread so timbre=0 sounds fat).
@@ -27,8 +27,12 @@ const PAN_SCALE = [-0.8, -0.5, 0, 0, 0.5, 0.8];
 function oscGain(i: number, timbre: number): number {
   const lo = FADE_IN_AT[i]!;
   const hi = FULL_AT[i]!;
-  if (timbre < lo) return 0;
-  if (timbre >= hi) return 1;
+  if (timbre < lo) {
+    return 0;
+  }
+  if (timbre >= hi) {
+    return 1;
+  }
   return (timbre - lo) / (hi - lo);
 }
 
@@ -37,34 +41,34 @@ const player: VoicePlayer = {
   shapeAreaCoeff: (3 * Math.PI) / 8,
   formantMaxQ: 8,
   gainExponent: 1.4,
-  buildAudioGraph(ctx: AudioContext, voice: Voice, shared: AudioSharedNodes): AudioVoice {
-    const timbre = 'timbre' in voice ? (voice.timbre as number) : 0;
-    const freq = yToFrequency(voice.y);
+  buildAudioGraph(ctx: AudioContext, initVoice: Voice, shared: AudioSharedNodes): AudioVoice {
+    const initTimbre = 'timbre' in initVoice ? (initVoice.timbre as number) : 0;
+    const initFreq = yToFrequency(initVoice.y);
 
     const oscs = Array.from(
       { length: OSC_COUNT },
       (_, i) =>
         new OscillatorNode(ctx, {
           type: 'sawtooth',
-          frequency: freq,
-          detune: DETUNE_BASE[i]! + DETUNE_SCALE[i]! * timbre,
+          frequency: initFreq,
+          detune: DETUNE_BASE[i]! + DETUNE_SCALE[i]! * initTimbre,
         }),
     );
     const panners = Array.from(
       { length: OSC_COUNT },
-      (_, i) => new StereoPannerNode(ctx, { pan: PAN_BASE[i]! + PAN_SCALE[i]! * timbre }),
+      (_, i) => new StereoPannerNode(ctx, { pan: PAN_BASE[i]! + PAN_SCALE[i]! * initTimbre }),
     );
-    const gains = Array.from({ length: OSC_COUNT }, (_, i) => oscGain(i, timbre));
-    const total = gains.reduce((a, b) => a + b, 0) || 1;
+    const initGains = Array.from({ length: OSC_COUNT }, (_, i) => oscGain(i, initTimbre));
+    const initTotal = initGains.reduce((a, b) => a + b, 0) || 1;
     const gainNodes = Array.from(
       { length: OSC_COUNT },
-      (_, i) => new GainNode(ctx, { gain: gains[i]! / total }),
+      (_, i) => new GainNode(ctx, { gain: initGains[i]! / initTotal }),
     );
 
     // OB-Xa brass coloring: 2-pole LP at 5.5 kHz cuts harsh saw harmonics
-    // without killing brightness, and a soft tanh shaper adds Marshall warmth.
-    // sumNode attenuates the combined oscillators before the shaper to prevent
-    // clipping artifacts (6 oscs summed can exceed ±1 without the reduction).
+    // Without killing brightness, and a soft tanh shaper adds Marshall warmth.
+    // SumNode attenuates the combined oscillators before the shaper to prevent
+    // Clipping artifacts (6 oscs summed can exceed ±1 without the reduction).
     const sumNode = new GainNode(ctx, { gain: 0.3 });
     const lpFilter = new BiquadFilterNode(ctx, {
       type: 'lowpass',
@@ -88,11 +92,11 @@ const player: VoicePlayer = {
     return {
       ...shared,
       hasSweep: false,
-      lastX: voice.x as number,
-      lastY: voice.y as number,
-      lastSize: voice.size as number,
+      lastX: initVoice.x as number,
+      lastY: initVoice.y as number,
+      lastSize: initVoice.size as number,
       outputNode: shared.panner,
-      shapeId: voice.id,
+      shapeId: initVoice.id,
       warmthShaper: undefined,
       start(time: number) {
         oscs.forEach((osc) => osc.start(time));
@@ -104,7 +108,9 @@ const player: VoicePlayer = {
       },
       stop(_time: number) {
         oscs.forEach((osc) => safeStop(osc));
-        if (shared.octaveOsc) safeStop(shared.octaveOsc);
+        if (shared.octaveOsc) {
+          safeStop(shared.octaveOsc);
+        }
       },
       updateParams(voice: Voice, now: number) {
         const timbre = 'timbre' in voice ? (voice.timbre as number) : 0;
@@ -120,11 +126,13 @@ const player: VoicePlayer = {
       },
       syncGlobalParams() {},
       getModulatorNode(): OscillatorNode {
-        return oscs[2]!; // center-left osc as modulator
+        return oscs[2]!; // Center-left osc as modulator
       },
       getCarrierFrequencyParams(): AudioParam[] {
         const params: AudioParam[] = oscs.map((o) => o.frequency);
-        if (shared.octaveOsc) params.push(shared.octaveOsc.frequency);
+        if (shared.octaveOsc) {
+          params.push(shared.octaveOsc.frequency);
+        }
         return params;
       },
     };

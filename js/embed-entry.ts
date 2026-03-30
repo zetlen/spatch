@@ -80,7 +80,9 @@ function boot(sigil: SigilData): void {
     const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
     function onFirstGesture(): void {
       audio.warmUp();
-      if (audio.audioCtx) decodeStampSamples(audio.audioCtx);
+      if (audio.audioCtx) {
+        decodeStampSamples(audio.audioCtx);
+      }
       for (const evt of warmUpEvents) {
         document.removeEventListener(evt, onFirstGesture);
       }
@@ -127,8 +129,12 @@ function boot(sigil: SigilData): void {
       releaseTimer = undefined;
       return;
     }
-    if (playing) return;
-    if (sigil.voices.length === 0) return;
+    if (playing) {
+      return;
+    }
+    if (sigil.voices.length === 0) {
+      return;
+    }
 
     playing = true;
     playStartTime = Date.now();
@@ -145,7 +151,9 @@ function boot(sigil: SigilData): void {
   }
 
   function stopPlay(): void {
-    if (!playing) return;
+    if (!playing) {
+      return;
+    }
 
     const elapsed = Date.now() - playStartTime;
     const remaining = MIN_PLAY_MS - elapsed;

@@ -63,7 +63,7 @@ describe('decodeSample', () => {
     const loader = createSampleLoader(stubFetch(buf));
     await loader.fetchSample('decode.m4a');
 
-    const decoded = { duration: 1, length: 44100 };
+    const decoded = { duration: 1, length: 44_100 };
     const ctx = { decodeAudioData: () => Promise.resolve(decoded) };
 
     const result = await loader.decodeSample(ctx, 'decode.m4a');
@@ -78,7 +78,7 @@ describe('decodeSample', () => {
     const buf = new ArrayBuffer(16);
     const loader = createSampleLoader(stubFetch(buf));
 
-    const decoded = { duration: 1, length: 44100 };
+    const decoded = { duration: 1, length: 44_100 };
     const ctx = { decodeAudioData: () => Promise.resolve(decoded) };
 
     const result = await loader.decodeSample(ctx, 'autofetch.m4a');

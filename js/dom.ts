@@ -1,4 +1,4 @@
-// dom.ts — Shared DOM helpers (HTML + SVG)
+// Dom.ts — Shared DOM helpers (HTML + SVG)
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 

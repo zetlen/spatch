@@ -2,6 +2,7 @@ import { resolve } from 'path';
 import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { type HtmlTagDescriptor, type Plugin, defineConfig } from 'vite';
+import type { NextHandleFunction } from 'connect';
 import svgSpritePlugin from './scripts/vite-plugin-svg-sprite';
 
 // ---------------------------------------------------------------------------
@@ -63,24 +64,25 @@ function spatchPlugin(): Plugin {
 // SPA fallback plugin — redirect unmatched paths to entry points
 // ---------------------------------------------------------------------------
 
+const spaRewrite: NextHandleFunction = (req, _res, next) => {
+  // Rewrite known app routes to their HTML entry points.
+  // Everything else (assets, Vite internals) passes through untouched.
+  if (req.url?.startsWith('/embed/')) {
+    req.url = '/embed.html';
+  } else if (req.url?.startsWith('/s/')) {
+    req.url = '/index.html';
+  }
+  next();
+};
+
 function spaFallbackPlugin(): Plugin {
-  const rewrite: import('connect').NextHandleFunction = (req, _res, next) => {
-    // Rewrite known app routes to their HTML entry points.
-    // Everything else (assets, Vite internals) passes through untouched.
-    if (req.url?.startsWith('/embed/')) {
-      req.url = '/embed.html';
-    } else if (req.url?.startsWith('/s/')) {
-      req.url = '/index.html';
-    }
-    next();
-  };
   return {
     name: 'spa-fallback',
     configureServer(server) {
-      server.middlewares.use(rewrite);
+      server.middlewares.use(spaRewrite);
     },
     configurePreviewServer(server) {
-      server.middlewares.use(rewrite);
+      server.middlewares.use(spaRewrite);
     },
   };
 }

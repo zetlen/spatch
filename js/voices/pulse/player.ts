@@ -1,4 +1,4 @@
-// player.ts — Pulse (square) Player delegate.
+// Player.ts — Pulse (square) Player delegate.
 //
 // Sawtooth oscillator + PWM waveshaper for variable pulse width.
 
@@ -12,13 +12,13 @@ const player: VoicePlayer = {
   shapeAreaCoeff: 4,
   formantMaxQ: 8,
   gainExponent: 1.6,
-  buildAudioGraph(ctx: AudioContext, voice: Voice, shared: AudioSharedNodes): AudioVoice {
-    const timbre = 'timbre' in voice ? voice.timbre : 0;
-    const freq = yToFrequency(voice.y);
+  buildAudioGraph(ctx: AudioContext, initVoice: Voice, shared: AudioSharedNodes): AudioVoice {
+    const initTimbre = 'timbre' in initVoice ? initVoice.timbre : 0;
+    const initFreq = yToFrequency(initVoice.y);
 
-    const osc = new OscillatorNode(ctx, { type: 'sawtooth', frequency: freq });
+    const osc = new OscillatorNode(ctx, { type: 'sawtooth', frequency: initFreq });
     const pwmOffset = new ConstantSourceNode(ctx, {
-      offset: timbreToPWMOffset(timbre),
+      offset: timbreToPWMOffset(initTimbre),
     });
     const ws = createPWMWaveshaper(ctx);
 
@@ -31,11 +31,11 @@ const player: VoicePlayer = {
     return {
       ...shared,
       hasSweep: false,
-      lastX: voice.x as number,
-      lastY: voice.y as number,
-      lastSize: voice.size as number,
+      lastX: initVoice.x as number,
+      lastY: initVoice.y as number,
+      lastSize: initVoice.size as number,
       outputNode: shared.panner,
-      shapeId: voice.id,
+      shapeId: initVoice.id,
       warmthShaper: undefined,
       start(time: number) {
         try {

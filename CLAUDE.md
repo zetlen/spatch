@@ -40,9 +40,8 @@ nginx.conf           nginx: SPA fallback, security headers, cache headers
 tsconfig.json        TypeScript config
 bunfig.toml          Bun config
 .oxfmtrc.json        oxfmt config
-oxlint.config.mjs    oxlint config
+.oxlintrc.json       oxlint config (auto-detected)
 vite.d.ts            Vite asset import declarations
-.mise.toml           mise tool versions (Bun, Node)
 README.md            Developer instructions
 LICENSE              GPLv3
 public/

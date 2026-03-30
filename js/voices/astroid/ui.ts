@@ -1,4 +1,4 @@
-// astroid/ui.ts — SVG rendering and selection handles for astroid voices.
+// Astroid/ui.ts — SVG rendering and selection handles for astroid voices.
 
 import { resizeHandleEl, svgEl } from '../../dom.ts';
 import type { Voice } from '../../types.ts';

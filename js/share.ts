@@ -1,4 +1,4 @@
-// share.ts — Share overlay: link, embed snippet generation, and live embed preview
+// Share.ts — Share overlay: link, embed snippet generation, and live embed preview
 //
 // Icon references for sprite scanner: #tabler-users-plus #tabler-copy #tabler-x
 
@@ -53,7 +53,9 @@ export function initShare(audio: AudioEngine, store: SigilStore): OverlayHandle 
   }
 
   function show(): void {
-    if (store.data.voices.length === 0) return;
+    if (store.data.voices.length === 0) {
+      return;
+    }
     handle.onShow?.();
     currentHash = serializeState(store.data);
 
@@ -64,7 +66,9 @@ export function initShare(audio: AudioEngine, store: SigilStore): OverlayHandle 
   }
 
   function hide(): void {
-    if (overlay.classList.contains('hidden')) return;
+    if (overlay.classList.contains('hidden')) {
+      return;
+    }
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
     audio.unmuffle();
@@ -81,7 +85,9 @@ export function initShare(audio: AudioEngine, store: SigilStore): OverlayHandle 
   closeBtn.addEventListener('click', hide);
 
   overlay.addEventListener('click', (e: MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.share-content, .share-close')) return;
+    if ((e.target as HTMLElement).closest('.share-content, .share-close')) {
+      return;
+    }
     hide();
   });
 

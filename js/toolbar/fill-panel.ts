@@ -1,9 +1,8 @@
-// fill-panel.ts — Fill color/gradient expansion panel
+// Fill-panel.ts — Fill color/gradient expansion panel
 
 import { getSwatchColor, hexToHsl, hslToHex } from '../colors.ts';
 import { qel } from '../dom.ts';
-import type { FillDraft } from '../types.ts';
-import { fillDraftToFill, fillToFillDraft } from '../types.ts';
+import { fillDraftToFill, fillToFillDraft, type FillDraft } from '../types.ts';
 import {
   createExpansionPanel,
   getSelectedVoice,
@@ -57,18 +56,20 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
   const { area, store, undo } = deps;
 
   let fillDraft: FillDraft = {
-    gradAngle: 0,
-    h: 200,
-    h2: 180,
-    l: 50,
-    l2: 45,
     mode: 'solid',
+    h: 200,
     s: 80,
+    l: 50,
+    h2: 180,
     s2: 80,
+    l2: 45,
+    gradAngle: 0,
   };
 
   function commitFill(id: string, withUndo: boolean): void {
-    if (withUndo) undo.snapshot();
+    if (withUndo) {
+      undo.snapshot();
+    }
     store.updateFill(id, fillDraftToFill(fillDraft));
   }
 
@@ -76,13 +77,17 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
     const sel = getSelectedVoice(deps);
     if (sel) {
       const colorEl = qel('#fill-swatch').querySelector<HTMLElement>('.swatch-color');
-      if (colorEl) colorEl.style.background = getSwatchColor(sel.fill);
+      if (colorEl) {
+        colorEl.style.background = getSwatchColor(sel.fill);
+      }
     }
   }
 
   function syncToSelected(): void {
     const sel = getSelectedVoice(deps);
-    if (!sel) return;
+    if (!sel) {
+      return;
+    }
     fillDraft = fillToFillDraft(sel.fill);
     updateSwatch();
   }
@@ -95,7 +100,9 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
   ): void {
     input.addEventListener('input', () => {
       const sel = getSelectedVoice(deps);
-      if (!sel) return;
+      if (!sel) {
+        return;
+      }
       const [h, s, l] = hexToHsl(input.value);
       fillDraft[hKey] = h;
       fillDraft[sKey] = s;
@@ -108,8 +115,12 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
   function syncColorInputs() {
     const solid = area.querySelector<HTMLInputElement>('#color-solid');
     const lin2 = area.querySelector<HTMLInputElement>('#color-lin-2');
-    if (solid) solid.value = hslToHex(fillDraft.h, fillDraft.s, fillDraft.l);
-    if (lin2) lin2.value = hslToHex(fillDraft.h2, fillDraft.s2, fillDraft.l2);
+    if (solid) {
+      solid.value = hslToHex(fillDraft.h, fillDraft.s, fillDraft.l);
+    }
+    if (lin2) {
+      lin2.value = hslToHex(fillDraft.h2, fillDraft.s2, fillDraft.l2);
+    }
     const bits = Math.round(fillDraft.gradAngle / 45) & 7;
     area.querySelectorAll<HTMLElement>('.angle-toggle').forEach((btn) => {
       const bit = parseInt(btn.dataset.angleBit!);
@@ -168,11 +179,13 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
                 title: label,
               });
               btn.addEventListener('click', () => {
-                const sel = getSelectedVoice(deps);
-                if (!sel) return;
+                const selected = getSelectedVoice(deps);
+                if (!selected) {
+                  return;
+                }
                 const currentBits = Math.round(fillDraft.gradAngle / 45) & 7;
                 fillDraft.gradAngle = (currentBits ^ (1 << bit)) * 45;
-                commitFill(sel.id, false);
+                commitFill(selected.id, false);
                 updateSwatch();
                 syncColorInputs();
               });
@@ -191,9 +204,13 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
       return false;
     },
     onClick(key) {
-      if (key !== 'grad-toggle') return;
+      if (key !== 'grad-toggle') {
+        return;
+      }
       const sel = getSelectedVoice(deps);
-      if (!sel || sel.waveform === 'stamp') return;
+      if (!sel || sel.waveform === 'stamp') {
+        return;
+      }
       const nowLinear = fillDraft.mode !== 'linear';
       fillDraft.mode = nowLinear ? 'linear' : 'solid';
       commitFill(sel.id, false);
@@ -202,7 +219,9 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
       area.querySelector<HTMLElement>('#color-lin-2')?.classList.toggle('hidden', !nowLinear);
       area.querySelector<HTMLElement>('#angle-toggles')?.classList.toggle('hidden', !nowLinear);
       const solidInput = area.querySelector<HTMLInputElement>('#color-solid');
-      if (solidInput) solidInput.title = nowLinear ? 'Start Vowel' : 'Vowel';
+      if (solidInput) {
+        solidInput.title = nowLinear ? 'Start Vowel' : 'Vowel';
+      }
       syncColorInputs();
     },
     onUpdate() {
@@ -214,7 +233,9 @@ export function createFillPanel(deps: PanelDeps): ExpansionPanel & {
       area.querySelector<HTMLElement>('#color-lin-2')?.classList.toggle('hidden', !isLinear);
       area.querySelector<HTMLElement>('#angle-toggles')?.classList.toggle('hidden', !isLinear);
       const solidInput = area.querySelector<HTMLInputElement>('#color-solid');
-      if (solidInput) solidInput.title = isLinear ? 'Start Vowel' : 'Vowel';
+      if (solidInput) {
+        solidInput.title = isLinear ? 'Start Vowel' : 'Vowel';
+      }
     },
   });
 

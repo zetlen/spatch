@@ -1,0 +1,87 @@
+{
+  "categories": {
+    "correctness": "error",
+    "perf": "error",
+    "style": "error",
+    "suspicious": "error"
+  },
+  "ignorePatterns": ["dist", "*.md"],
+  "overrides": [
+    {
+      "files": ["tests/**"],
+      "rules": {
+        "max-lines-per-function": "off"
+      }
+    },
+    {
+      "files": ["js/tutorial.ts"],
+      "rules": {
+        "max-lines": "off",
+        "max-lines-per-function": "off"
+      }
+    },
+    {
+      "files": ["js/audio/engine.ts"],
+      "rules": {
+        "max-lines": "off",
+        "max-lines-per-function": [
+          "error",
+          { "max": 170, "skipBlankLines": true, "skipComments": true }
+        ]
+      }
+    },
+    {
+      "files": ["js/toolbar/fill-panel.ts"],
+      "rules": {
+        "max-lines-per-function": [
+          "error",
+          { "max": 190, "skipBlankLines": true, "skipComments": true }
+        ]
+      }
+    }
+  ],
+  "rules": {
+    "capitalized-comments": "off",
+    "complexity": "off",
+    "func-names": "off",
+    "func-style": "off",
+    "id-length": "off",
+    "init-declarations": "off",
+    "jsdoc/check-property-names": "error",
+    "jsdoc/check-tag-names": "error",
+    "jsdoc/require-param": "error",
+    "jsdoc/require-param-description": "error",
+    "jsdoc/require-returns": "error",
+    "jsdoc/require-returns-description": "error",
+    "max-depth": ["error", { "max": 8 }],
+    "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": [
+      "error",
+      { "max": 160, "skipBlankLines": true, "skipComments": true }
+    ],
+    "max-params": ["error", { "max": 5 }],
+    "max-statements": "off",
+    "no-await-in-loop": "off",
+    "no-continue": "off",
+    "no-magic-numbers": "off",
+    "no-nested-ternary": "off",
+    "no-ternary": "off",
+    "no-unused-vars": "error",
+    "no-use-before-define": ["error", { "functions": false }],
+    "prefer-object-spread": "off",
+    "unicorn/prefer-spread": "off",
+    "prefer-destructuring": "off",
+    "prefer-for-of": "off",
+    "prefer-template": "off",
+    "prefer-ternary": "off",
+    "sort-imports": "off",
+    "sort-keys": "off",
+    "typescript/no-inferrable-types": "off",
+    "typescript/parameter-properties": "off",
+    "unicorn/number-literal-case": "off",
+    "unicorn/no-nested-ternary": "off",
+    "unicorn/no-null": "off",
+    "unicorn/no-zero-fractions": "off",
+    "unicorn/numeric-separators-style": "off"
+  }
+}

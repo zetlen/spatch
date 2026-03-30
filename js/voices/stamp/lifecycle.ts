@@ -1,4 +1,4 @@
-// stamp/lifecycle.ts — Stamp sample lifecycle: prefetch, decode, symbol injection.
+// Stamp/lifecycle.ts — Stamp sample lifecycle: prefetch, decode, symbol injection.
 
 import { STAMPLES } from '../../stamples/index.ts';
 import { decodeSample, fetchSample } from '../../audio/sample-loader.ts';
@@ -51,7 +51,9 @@ export function initStampSymbols(svg: SVGSVGElement): void {
   }
 
   for (let i = 0; i < STAMPLES.length; i++) {
-    if (defs.querySelector(`#${symbolId(i)}`)) continue;
+    if (defs.querySelector(`#${symbolId(i)}`)) {
+      continue;
+    }
     const stample = STAMPLES[i]!;
     const symbol = document.createElementNS(SVG_NS, 'symbol');
     symbol.id = symbolId(i);
@@ -60,8 +62,12 @@ export function initStampSymbols(svg: SVGSVGElement): void {
     // Parse SVG content and strip fill/style so shapes inherit the voice color
     const wrapper = `<svg xmlns="${SVG_NS}">${stample.svg.content}</svg>`;
     const doc = new DOMParser().parseFromString(wrapper, 'image/svg+xml');
-    for (const el of doc.querySelectorAll('[fill]')) el.removeAttribute('fill');
-    for (const el of doc.querySelectorAll('[style]')) el.removeAttribute('style');
+    for (const el of doc.querySelectorAll('[fill]')) {
+      el.removeAttribute('fill');
+    }
+    for (const el of doc.querySelectorAll('[style]')) {
+      el.removeAttribute('style');
+    }
     const parsed = doc.documentElement;
     while (parsed.firstChild) {
       symbol.appendChild(parsed.firstChild);

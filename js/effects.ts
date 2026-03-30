@@ -1,7 +1,7 @@
 // Effects.ts — FM synthesis parameters for blend modes and overlap computation.
 //
 // Pattern-driven audio effects are co-located with pattern definitions
-// in patterns.ts. This file handles only cross-voice FM synthesis
+// In patterns.ts. This file handles only cross-voice FM synthesis
 // (blend modes) and overlap geometry.
 
 import type { BlendMode } from './types.ts';
@@ -9,7 +9,7 @@ import type { BlendMode } from './types.ts';
 // ---- FM synthesis parameters per blend mode ----
 //
 // When shapes overlap, the top voice's oscillator modulates the bottom voice's
-// frequency. The blend mode of the top voice determines the FM character.
+// Frequency. The blend mode of the top voice determines the FM character.
 
 /** FM behavior parameters for a blend mode. */
 export interface FMParams {
@@ -51,17 +51,13 @@ export function computeFMDepth(overlap: number, params: FMParams, modulatorFreq:
 
 /** Compute overlap between two voices as 0–1 based on center distance and sizes. */
 export function computeOverlap(
-  x1: number,
-  y1: number,
-  size1: number,
-  x2: number,
-  y2: number,
-  size2: number,
+  a: { x: number; y: number; size: number },
+  b: { x: number; y: number; size: number },
 ): number {
-  const dx = x1 - x2;
-  const dy = y1 - y2;
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  const combinedRadius = (size1 + size2) / 2;
+  const combinedRadius = (a.size + b.size) / 2;
   if (combinedRadius <= 0) {
     return 0;
   }
@@ -80,7 +76,7 @@ export function computeTotalOverlap(
       continue;
     }
     const other = voices[i]!;
-    total += computeOverlap(v.x, v.y, v.size, other.x, other.y, other.size);
+    total += computeOverlap(v, other);
   }
   return Math.min(1, total);
 }

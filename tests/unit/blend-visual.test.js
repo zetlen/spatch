@@ -1,5 +1,5 @@
-// blend-visual.test.js — Verify that all 4 blend modes produce
-// visually distinct colors at the overlap region.
+// Blend-visual.test.js — Verify that all 4 blend modes produce
+// Visually distinct colors at the overlap region.
 
 import { describe, expect, test } from 'bun:test';
 
@@ -13,20 +13,25 @@ function blendChannel(a, b, mode) {
   const bn = b / 255;
   let result;
   switch (mode) {
-    case 'screen':
+    case 'screen': {
       result = 1 - (1 - an) * (1 - bn);
       break;
-    case 'multiply':
+    }
+    case 'multiply': {
       result = an * bn;
       break;
-    case 'exclusion':
+    }
+    case 'exclusion': {
       result = an + bn - 2 * an * bn;
       break;
-    case 'difference':
+    }
+    case 'difference': {
       result = Math.abs(an - bn);
       break;
-    default:
+    }
+    default: {
       result = an;
+    }
   }
   return Math.round(result * 255);
 }

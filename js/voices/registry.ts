@@ -1,8 +1,8 @@
-// registry.ts — Voice type registry.
+// Registry.ts — Voice type registry.
 //
 // Flat table mapping WaveformType to its three delegates (UI, Player,
 // Serializer) plus identity metadata. Consumer files look up entries by
-// waveform name or numeric ID.
+// Waveform name or numeric ID.
 
 import type { Voice, VoiceBase, WaveformType } from '../types.ts';
 import type { VoiceRegistryEntry } from './types.ts';
@@ -24,7 +24,9 @@ export function register(entry: VoiceRegistryEntry): void {
 /** Look up a voice type by waveform name. */
 export function get(waveform: WaveformType): VoiceRegistryEntry {
   const entry = byWaveform.get(waveform);
-  if (!entry) throw new Error(`Unknown waveform: ${waveform}`);
+  if (!entry) {
+    throw new Error(`Unknown waveform: ${waveform}`);
+  }
   return entry;
 }
 
@@ -35,7 +37,7 @@ export function getById(id: number): VoiceRegistryEntry | undefined {
 
 /** All registered voice types, sorted by ID. */
 export function all(): VoiceRegistryEntry[] {
-  return [...byWaveform.values()].sort((a, b) => a.id - b.id);
+  return [...byWaveform.values()].toSorted((a, b) => a.id - b.id);
 }
 
 /** Whether a waveform type supports timbre (rotation). */

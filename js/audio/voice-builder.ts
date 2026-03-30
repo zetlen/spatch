@@ -1,8 +1,8 @@
-// voice-builder.ts — Voice audio graph construction, types, and utilities.
+// Voice-builder.ts — Voice audio graph construction, types, and utilities.
 //
 // Contains utility functions and the buildVoice factory that constructs
-// the full audio graph for a single voice. Waveform-specific graph
-// construction is delegated to waveform strategies.
+// The full audio graph for a single voice. Waveform-specific graph
+// Construction is delegated to waveform strategies.
 
 import type { AudioEffect, Fill, PatternType, Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
@@ -22,7 +22,9 @@ export {
 
 /** Compute a stable key for a linear fill, or undefined for solid fills. */
 export function fillToKey(fill: Fill): string | undefined {
-  if (fill.mode !== 'linear') return undefined;
+  if (fill.mode !== 'linear') {
+    return undefined;
+  }
   return `${fill.h}:${fill.s}:${fill.l}:${fill.h2}:${fill.s2}:${fill.l2}:${fill.gradAngle}`;
 }
 
@@ -62,7 +64,7 @@ export function buildVoice(
   const panner = new StereoPannerNode(ctx, { pan: vibe.xToPan(voice.x) });
 
   // Wire: gain -> F1 -> mixer -> brightness -> [effect] -> panner -> master
-  //       gain -> F2 -> mixer
+  //       Gain -> F2 -> mixer
   //       [border osc -> borderGain -> gain]  (sibling of primary, same chain)
   // FM synthesis for blend modes is handled at the engine level (cross-voice routing).
   gain.connect(formantF1);
@@ -107,7 +109,7 @@ export function buildVoice(
     });
     octaveOsc.connect(octaveGainNode);
     // Connect to voice gain so border traverses the same chain as the primary
-    // oscillator: gain → F1/F2 → mixer → brightness → effect → panner → master.
+    // Oscillator: gain → F1/F2 → mixer → brightness → effect → panner → master.
     octaveGainNode.connect(gain);
   }
 

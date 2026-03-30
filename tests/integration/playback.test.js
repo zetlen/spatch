@@ -26,8 +26,8 @@ test.describe('Playback', () => {
     await expect(playBtn).toHaveClass(/playing/);
 
     // Poll until audio tap detects non-zero amplitude. The AudioContext must
-    // resume from suspended, build the graph, and fill the analyser buffer —
-    // a fixed wait races against headless chromium's deprioritized audio scheduling.
+    // Resume from suspended, build the graph, and fill the analyser buffer —
+    // A fixed wait races against headless chromium's deprioritized audio scheduling.
     await page.waitForFunction(() => globalThis.__audioTap?.isPlaying(), null, { timeout: 3000 });
 
     // Release to stop (momentary mode)
@@ -117,7 +117,7 @@ test.describe('Volume curves — relative loudness', () => {
 
   test('circle and triangle produce similar amplitude at medium size', async ({ page }) => {
     // Pulse/square (PWM waveshaper synthesis) produces near-silent output in
-    // headless Chromium, so we compare circle (sine) and triangle (blend) only.
+    // Headless Chromium, so we compare circle (sine) and triangle (blend) only.
     // The unit tests cover all three waveforms' convergence at size=0.5.
     const sineAmp = await measureAmplitude(page, 'circle');
     const blendAmp = await measureAmplitude(page, 'triangle');
@@ -128,7 +128,7 @@ test.describe('Volume curves — relative loudness', () => {
     // At medium size, amplitudes should be in the same ballpark.
     // Allow 8x tolerance since real audio RMS depends on more than just gain
     // (waveform harmonics, formant filtering, master effects chain, compressor,
-    // analyser timing — CI headless Chromium is especially variable).
+    // Analyser timing — CI headless Chromium is especially variable).
     const ratio = Math.max(sineAmp, blendAmp) / Math.min(sineAmp, blendAmp);
     expect(ratio).toBeLessThan(8);
   });

@@ -10,7 +10,7 @@ beforeAll(async () => {
   const win = new Window();
   // Bun doesn't populate happy-dom's Window with native error constructors.
   // SelectorParser.getSelectorGroups() uses `this.window.SyntaxError` internally,
-  // which is undefined without this patch, crashing any querySelector on SVG elements.
+  // Which is undefined without this patch, crashing any querySelector on SVG elements.
   win.window.SyntaxError = globalThis.SyntaxError;
   globalThis.document = win.document;
   globalThis.HTMLElement = win.window.HTMLElement;
@@ -113,7 +113,7 @@ describe('canvas render — voice creation', () => {
     expect(circle).not.toBeNull();
     expect(circle.getAttribute('cx')).toBe('0.5');
     expect(circle.getAttribute('cy')).toBe('0.5');
-    expect(circle.getAttribute('r')).toBe('0.1'); // size/2 = 0.2/2
+    expect(circle.getAttribute('r')).toBe('0.1'); // Size/2 = 0.2/2
   });
 
   test('creates a rect element for pulse voice', () => {
@@ -668,7 +668,7 @@ describe('canvas render — rotation', () => {
     render(svg, state, new Set(), undefined);
 
     const rect = svg.querySelector('g[data-layer="voices"] rect');
-    // timbre 0 => rotation 0 => no transform set
+    // Timbre 0 => rotation 0 => no transform set
     expect(rect.getAttribute('transform')).toBeNull();
   });
 });
@@ -763,11 +763,11 @@ describe('canvas render — DOM order preservation', () => {
     // Manually reorder: move 'b' before 'a' (simulates double-click send-to-back)
     const groupB = voiceLayer.querySelector('g[data-voice-id="b"]');
     voiceLayer.prepend(groupB);
-    expect(groups()).toEqual(['b', 'a']); // b is first in DOM now
+    expect(groups()).toEqual(['b', 'a']); // B is first in DOM now
 
     // Re-render — reconciler should NOT move groups back to data order
     render(svg, state, new Set(), undefined);
-    expect(groups()).toEqual(['b', 'a']); // order preserved, not reset to data order
+    expect(groups()).toEqual(['b', 'a']); // Order preserved, not reset to data order
   });
 });
 

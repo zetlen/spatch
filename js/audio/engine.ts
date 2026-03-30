@@ -1,4 +1,4 @@
-// engine.ts — Web Audio engine: AudioEngine class
+// Engine.ts — Web Audio engine: AudioEngine class
 
 import { computeOverlap, FM_PARAMS, computeFMDepth } from '../effects.ts';
 import { createEffect } from '../patterns.ts';
@@ -190,10 +190,10 @@ export class AudioEngine {
     this._eqMid.connect(this._eqHigh);
     this._eqHigh.connect(this._analyser);
     // Muffle filter: low-pass that's normally transparent (20 kHz cutoff)
-    // but drops to ~600 Hz when muffled (e.g. credits overlay).
+    // But drops to ~600 Hz when muffled (e.g. credits overlay).
     this._muffleFilter = new BiquadFilterNode(ctx, {
       type: 'lowpass',
-      frequency: this._muffled ? 600 : 20000,
+      frequency: this._muffled ? 600 : 20_000,
       Q: 0.7,
     });
     this._analyser.connect(this._muffleFilter);
@@ -262,9 +262,7 @@ export class AudioEngine {
         av.brightness.frequency.setValueAtTime(startCutoff, now);
 
         scheduleFormantSweep(
-          av.formantF1,
-          av.formantF2,
-          av.brightness,
+          { f1: av.formantF1, f2: av.formantF2, brightness: av.brightness },
           voice.fill,
           voice.waveform,
           sweepStart,
@@ -297,7 +295,7 @@ export class AudioEngine {
     }
 
     // Poll output level and clean up once inaudible, rather than guessing
-    // a fixed timeout from release + reverb tail duration.
+    // A fixed timeout from release + reverb tail duration.
     const SILENCE_THRESHOLD = 0.001; // ~-60 dB
     const reverbTail = this._reverbConvolver?.buffer
       ? this._reverbConvolver.buffer.duration + vibe.reverbPreDelay
@@ -306,7 +304,9 @@ export class AudioEngine {
     const sid = this._sessionId;
     const startTime = performance.now();
     const pollSilence = () => {
-      if (this._sessionId !== sid) return;
+      if (this._sessionId !== sid) {
+        return;
+      }
       if (this.getLevel() < SILENCE_THRESHOLD || performance.now() - startTime > maxWaitMs) {
         this._cleanup();
         return;
@@ -479,7 +479,9 @@ export class AudioEngine {
       this._combDry,
       this._combWet,
     ]) {
-      if (node) safeDisconnect(node);
+      if (node) {
+        safeDisconnect(node);
+      }
     }
     this._saturationShaper = undefined;
     this._saturationDry = undefined;
@@ -537,9 +539,11 @@ export class AudioEngine {
           audioVoice.brightness.frequency.setValueAtTime(startCutoff, now);
           const midDecay = Math.max(0.01, this._playEnvelope?.decay ?? 0.2);
           scheduleFormantSweep(
-            audioVoice.formantF1,
-            audioVoice.formantF2,
-            audioVoice.brightness,
+            {
+              f1: audioVoice.formantF1,
+              f2: audioVoice.formantF2,
+              brightness: audioVoice.brightness,
+            },
             voice.fill,
             voice.waveform,
             now,
@@ -626,9 +630,7 @@ export class AudioEngine {
 
         const retrigDecay = Math.max(0.01, this._playEnvelope?.decay ?? 0.2);
         scheduleFormantSweep(
-          audioVoice.formantF1,
-          audioVoice.formantF2,
-          audioVoice.brightness,
+          { f1: audioVoice.formantF1, f2: audioVoice.formantF2, brightness: audioVoice.brightness },
           voice.fill,
           voice.waveform,
           now,
@@ -677,14 +679,11 @@ export class AudioEngine {
       this._appliedVibe = vibe;
     }
 
-    // Global blend change — full FM rebuild
-    if (sigilState.blend !== this._lastBlend) {
+    // Global blend change or voice add/remove — full FM rebuild
+    if (sigilState.blend !== this._lastBlend || voicesChanged) {
       this._disposeFMConnections();
       this._syncFMConnections(sigilState.voices, sigilState.blend);
       this._lastBlend = sigilState.blend;
-    } else if (voicesChanged) {
-      this._disposeFMConnections();
-      this._syncFMConnections(sigilState.voices, sigilState.blend);
     } else if (movedVoiceIds.size > 0) {
       this._syncFMConnections(sigilState.voices, sigilState.blend, movedVoiceIds);
     }
@@ -727,7 +726,7 @@ export class AudioEngine {
       const now = this.audioCtx.currentTime;
       this._muffleFilter.frequency.cancelScheduledValues(now);
       this._muffleFilter.frequency.setValueAtTime(this._muffleFilter.frequency.value, now);
-      this._muffleFilter.frequency.linearRampToValueAtTime(20000, now + 0.15);
+      this._muffleFilter.frequency.linearRampToValueAtTime(20_000, now + 0.15);
     }
   }
 
@@ -768,7 +767,9 @@ export class AudioEngine {
     movedVoiceIds?: Set<string>,
   ): void {
     const ctx = this.audioCtx;
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const audioById = new Map(this.activeVoices.map((v) => [v.shapeId, v]));
     const activeKeys = new Set<string>();
@@ -779,14 +780,16 @@ export class AudioEngine {
         const modulatorData = voices[j]!;
 
         // Skip FM for blend modes with no modulation (e.g. screen) —
-        // check before computing overlap to avoid the sqrt
+        // Check before computing overlap to avoid the sqrt
         const params = FM_PARAMS[blend];
-        if (params.maxIndex <= 0) continue;
+        if (params.maxIndex <= 0) {
+          continue;
+        }
 
         const key = `${modulatorData.id}:${carrierData.id}`;
 
         // If we know which voices moved, skip pairs where neither voice
-        // changed position — their overlap and depth are unchanged.
+        // Changed position — their overlap and depth are unchanged.
         if (
           movedVoiceIds &&
           !movedVoiceIds.has(carrierData.id) &&
@@ -798,22 +801,19 @@ export class AudioEngine {
           continue;
         }
 
-        const overlap = computeOverlap(
-          modulatorData.x,
-          modulatorData.y,
-          modulatorData.size,
-          carrierData.x,
-          carrierData.y,
-          carrierData.size,
-        );
+        const overlap = computeOverlap(modulatorData, carrierData);
 
-        if (overlap <= 0) continue;
+        if (overlap <= 0) {
+          continue;
+        }
 
         activeKeys.add(key);
 
         const carrierAudio = audioById.get(carrierData.id);
         const modulatorAudio = audioById.get(modulatorData.id);
-        if (!carrierAudio || !modulatorAudio) continue;
+        if (!carrierAudio || !modulatorAudio) {
+          continue;
+        }
 
         let conn = this._fmConnections.get(key);
         if (!conn) {
@@ -874,7 +874,9 @@ export class AudioEngine {
   private _buildReverb(): void {
     this._appliedIR = vibe.ir;
     this._appliedReverbPreDelay = vibe.reverbPreDelay;
-    if (!vibe.ir || !this.audioCtx || !this.envelopeGain || !this.compressor) return;
+    if (!vibe.ir || !this.audioCtx || !this.envelopeGain || !this.compressor) {
+      return;
+    }
 
     const ctx = this.audioCtx;
     this._reverbConvolver = new ConvolverNode(ctx);
@@ -930,8 +932,12 @@ export class AudioEngine {
   }
 
   private _syncReverb(): void {
-    if (!this.isPlaying) return;
-    if (vibe.ir === this._appliedIR && vibe.reverbPreDelay === this._appliedReverbPreDelay) return;
+    if (!this.isPlaying) {
+      return;
+    }
+    if (vibe.ir === this._appliedIR && vibe.reverbPreDelay === this._appliedReverbPreDelay) {
+      return;
+    }
     this._teardownReverb();
     this._buildReverb();
   }
@@ -947,21 +953,15 @@ export class AudioEngine {
     this.activeVoices = [];
 
     if (this.masterGain) {
-      try {
-        this.masterGain.disconnect();
-      } catch {}
+      safeDisconnect(this.masterGain);
       this.masterGain = undefined;
     }
     if (this.envelopeGain) {
-      try {
-        this.envelopeGain.disconnect();
-      } catch {}
+      safeDisconnect(this.envelopeGain);
       this.envelopeGain = undefined;
     }
     if (this.compressor) {
-      try {
-        this.compressor.disconnect();
-      } catch {}
+      safeDisconnect(this.compressor);
       this.compressor = undefined;
     }
     if (this._analyser) {

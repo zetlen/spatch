@@ -1,4 +1,4 @@
-// player.ts — Sine (circle) Player delegate.
+// Player.ts — Sine (circle) Player delegate.
 //
 // Sine oscillator with analog warmth shaping (soft-saturation waveshaper).
 
@@ -11,11 +11,11 @@ const player: VoicePlayer = {
   oscillatorType: 'sine',
   shapeAreaCoeff: Math.PI,
   formantMaxQ: 4,
-  gainExponent: 1.0,
-  buildAudioGraph(ctx: AudioContext, voice: Voice, shared: AudioSharedNodes): AudioVoice {
-    const freq = yToFrequency(voice.y);
+  gainExponent: 1,
+  buildAudioGraph(ctx: AudioContext, initVoice: Voice, shared: AudioSharedNodes): AudioVoice {
+    const initFreq = yToFrequency(initVoice.y);
 
-    const osc = new OscillatorNode(ctx, { type: 'sine', frequency: freq });
+    const osc = new OscillatorNode(ctx, { type: 'sine', frequency: initFreq });
 
     // Soft-saturation warmth shaper (analog impurity)
     const sineWarm = new WaveShaperNode(ctx);
@@ -28,11 +28,11 @@ const player: VoicePlayer = {
     return {
       ...shared,
       hasSweep: false,
-      lastX: voice.x as number,
-      lastY: voice.y as number,
-      lastSize: voice.size as number,
+      lastX: initVoice.x as number,
+      lastY: initVoice.y as number,
+      lastSize: initVoice.size as number,
       outputNode: shared.panner,
-      shapeId: voice.id,
+      shapeId: initVoice.id,
       warmthShaper: sineWarm,
       start(time: number) {
         osc.start(time);

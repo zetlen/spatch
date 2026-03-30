@@ -27,12 +27,11 @@ function setMockLoader(responses = {}) {
 function stubImage() {
   imageInstances = [];
   originalImage = globalThis.Image;
-  globalThis.Image = class FakeImage {
+  globalThis.Image = class FakeImage extends EventTarget {
     constructor() {
+      super();
       imageInstances.push(this);
       this._src = '';
-      this.onload = null;
-      this.onerror = null;
     }
     get src() {
       return this._src;
@@ -40,7 +39,7 @@ function stubImage() {
     set src(value) {
       this._src = value;
       queueMicrotask(() => {
-        if (this.onload) this.onload();
+        this.dispatchEvent(new Event('load'));
       });
     }
   };
@@ -80,7 +79,7 @@ describe('prefetchScene', () => {
       name: 'no-ir',
       stageBackground: '/img/no-ir.jpg',
       imageCredit: 'test',
-      vibe: { reverbMix: 0.0 },
+      vibe: { reverbMix: 0 },
     };
 
     await prefetchScene(scene);
@@ -105,11 +104,11 @@ describe('prefetchScene', () => {
   });
 
   test('resolves when image fails but IR succeeds', async () => {
-    globalThis.Image = class FakeImage {
+    globalThis.Image = class FakeImage extends EventTarget {
       constructor() {
+        super();
         imageInstances.push(this);
         this._src = '';
-        this.onerror = null;
       }
       get src() {
         return this._src;
@@ -117,7 +116,7 @@ describe('prefetchScene', () => {
       set src(value) {
         this._src = value;
         queueMicrotask(() => {
-          if (this.onerror) this.onerror();
+          this.dispatchEvent(new Event('error'));
         });
       }
     };
@@ -158,12 +157,11 @@ describe('prefetchScene', () => {
 
   test('clears scenePending on failure so retry is possible', async () => {
     let failImage = true;
-    globalThis.Image = class FakeImage {
+    globalThis.Image = class FakeImage extends EventTarget {
       constructor() {
+        super();
         imageInstances.push(this);
         this._src = '';
-        this.onload = null;
-        this.onerror = null;
       }
       get src() {
         return this._src;
@@ -171,8 +169,7 @@ describe('prefetchScene', () => {
       set src(value) {
         this._src = value;
         queueMicrotask(() => {
-          if (failImage && this.onerror) this.onerror();
-          else if (this.onload) this.onload();
+          this.dispatchEvent(new Event(failImage ? 'error' : 'load'));
         });
       }
     };
@@ -223,7 +220,7 @@ describe('loadSceneIR', () => {
 
     await prefetchScene(scene);
 
-    const decoded = { duration: 1, length: 44100 };
+    const decoded = { duration: 1, length: 44_100 };
     const ctx = { decodeAudioData: () => Promise.resolve(decoded) };
 
     const result = await loadSceneIR(ctx, scene);
@@ -235,7 +232,7 @@ describe('loadSceneIR', () => {
       name: 'no-ir',
       stageBackground: '/img/no-ir.jpg',
       imageCredit: 'test',
-      vibe: { reverbMix: 0.0 },
+      vibe: { reverbMix: 0 },
     };
 
     const ctx = { decodeAudioData: () => Promise.resolve({}) };

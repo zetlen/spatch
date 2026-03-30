@@ -1,4 +1,4 @@
-// credits.ts -- Credits overlay toggle + audio muffling + dynamic photo credit
+// Credits.ts -- Credits overlay toggle + audio muffling + dynamic photo credit
 
 import { effect } from '@preact/signals-core';
 import type { AudioEngine } from './audio/engine.ts';
@@ -42,7 +42,9 @@ export function initCredits(audio: AudioEngine, store: SigilStore): OverlayHandl
   }
 
   function hide(): void {
-    if (overlay.classList.contains('hidden')) return;
+    if (overlay.classList.contains('hidden')) {
+      return;
+    }
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
     audio.unmuffle();

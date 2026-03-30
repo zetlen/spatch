@@ -1,4 +1,4 @@
-// sine/ui.ts — SVG rendering and selection handles for sine (circle) voices.
+// Sine/ui.ts — SVG rendering and selection handles for sine (circle) voices.
 
 import { resizeHandleEl, setAttrs, svgEl } from '../../dom.ts';
 import type { Voice } from '../../types.ts';

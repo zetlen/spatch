@@ -72,7 +72,7 @@ export class Toolbar {
     });
     btnBorder.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.panels.toggle('border', () => !!this.getSelected());
+      this.panels.toggle('border', () => Boolean(this.getSelected()));
     });
     btnPattern.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -95,10 +95,10 @@ export class Toolbar {
     {
       let first = true;
       effect(() => {
-        void store.data; // subscribe to store signal
+        void store.data; // Subscribe to store signal
         if (first) {
           first = false;
-          return; // skip initial run
+          return; // Skip initial run
         }
         if (this.selectedId) {
           this.syncToSelectedShape();
@@ -166,10 +166,14 @@ export class Toolbar {
       btnRedo.disabled = !hasRedos.value;
     });
     btnUndo.addEventListener('click', () => {
-      if (hasUndos.value) this.undo.undo();
+      if (hasUndos.value) {
+        this.undo.undo();
+      }
     });
     btnRedo.addEventListener('click', () => {
-      if (hasRedos.value) this.undo.redo();
+      if (hasRedos.value) {
+        this.undo.redo();
+      }
     });
     qel('#btn-deselect').addEventListener('click', () => {
       if (this.onToolChange) {
@@ -187,7 +191,9 @@ export class Toolbar {
         this.store.removeVoice(this.selectedId);
         this.currentTool = 'select';
         this._updateToolActive();
-        if (this.onToolChange) this.onToolChange('deselect');
+        if (this.onToolChange) {
+          this.onToolChange('deselect');
+        }
       }
     });
   }
@@ -196,10 +202,12 @@ export class Toolbar {
 
   syncToSelectedShape(): void {
     const sel = this.getSelected();
-    if (!sel) return;
+    if (!sel) {
+      return;
+    }
     this._fillPanel.syncToSelected();
     this._borderPanel.updateButton();
-    this._patternPanel.update(); // has-pattern indicator needs sync even when closed
+    this._patternPanel.update(); // Has-pattern indicator needs sync even when closed
     this.panels.updateOpen();
     this._syncVoicePanels();
   }

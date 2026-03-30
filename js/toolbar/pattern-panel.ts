@@ -1,4 +1,4 @@
-// pattern-panel.ts — Pattern dropdown panel
+// Pattern-panel.ts — Pattern dropdown panel
 
 import { PATTERN_TYPES, type PatternType } from '../types.ts';
 import { getPatternLabel, getPatternPreviewCSS } from '../patterns.ts';
@@ -35,7 +35,9 @@ export function createPatternPanel(deps: PanelDeps, triggerBtn: HTMLElement): Ex
     },
     onClick(key) {
       const sel = getSelectedVoice(deps);
-      if (!sel) return;
+      if (!sel) {
+        return;
+      }
       deps.undo.snapshot();
       deps.store.updateVoice(sel.id, {
         effect: sel.effect === key ? undefined : (key as PatternType),

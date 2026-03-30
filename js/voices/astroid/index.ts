@@ -1,5 +1,4 @@
-import { normalizedCoord } from '../../types.ts';
-import type { VoiceBase } from '../../types.ts';
+import { normalizedCoord, type VoiceBase } from '../../types.ts';
 import type { VoiceRegistryEntry } from '../types.ts';
 import { createOscillatorSerializer } from '../serializers/oscillator.ts';
 import ui from './ui.ts';

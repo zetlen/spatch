@@ -229,7 +229,7 @@ describe('SigilStore overlap tracking', () => {
     expect(store.data.blend).toBe('multiply');
 
     // Move voice away so no overlap, then recompute (simulates pointer release)
-    store.updateVoice(v1.id, { x: 0.0, y: 0.0 });
+    store.updateVoice(v1.id, { x: 0, y: 0 });
     store.recomputeOverlap();
     expect(store.hasOverlap).toBe(false);
     expect(store.data.blend).toBe('screen');

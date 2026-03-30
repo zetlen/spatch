@@ -68,7 +68,7 @@ describe('createIconButton', () => {
       symbol: 'tabler-ghost',
     });
     // Use children[0] instead of querySelector — happy-dom doesn't support
-    // querySelector across namespace boundaries on detached elements.
+    // QuerySelector across namespace boundaries on detached elements.
     const svg = btn.children[0];
     expect(svg).not.toBeUndefined();
     expect(svg.tagName).toBe('svg');

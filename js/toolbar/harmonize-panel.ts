@@ -1,4 +1,4 @@
-// harmonize-panel.ts — Long-press scale picker
+// Harmonize-panel.ts — Long-press scale picker
 // Icon references for sprite scanner:
 // #tabler-award #tabler-bell-school #tabler-chart-histogram #tabler-mailbox-off
 // #tabler-fish #tabler-currency-dram #tabler-circuit-cell-plus #tabler-joker

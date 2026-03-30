@@ -1,4 +1,4 @@
-// playback.ts — Play state machine, radial gesture, loop scheduling
+// Playback.ts — Play state machine, radial gesture, loop scheduling
 
 import type { AudioEngine } from './audio/engine.ts';
 import type { SigilData } from './types.ts';
@@ -39,7 +39,7 @@ export class PlaybackController {
   private zoneBorderCircle: SVGCircleElement | undefined;
   private pointerRadiusCircle: SVGCircleElement | undefined;
 
-  // ring r=31 in SVG viewBox units, circumference = 2*PI*31
+  // Ring r=31 in SVG viewBox units, circumference = 2*PI*31
   private static readonly RING_CIRCUMFERENCE = 2 * Math.PI * 31;
   private static readonly LATCH_MARGIN = 0.3;
 
@@ -120,7 +120,9 @@ export class PlaybackController {
     try {
       const state = this.getState();
       const irBuffer = await this.getIRBuffer();
-      if (gen !== this.playGeneration) return;
+      if (gen !== this.playGeneration) {
+        return;
+      }
       await this.audio.play(state, state.envelope, { irBuffer: irBuffer ?? undefined });
       if (gen !== this.playGeneration) {
         this.audio.stop();
@@ -204,7 +206,9 @@ export class PlaybackController {
         return;
       }
 
-      if (this.getState().voices.length === 0) return;
+      if (this.getState().voices.length === 0) {
+        return;
+      }
 
       this.gesturePointerId = e.pointerId;
       this.lastZoneInfo = undefined;
@@ -212,7 +216,7 @@ export class PlaybackController {
       this.playBtn.setPointerCapture(e.pointerId);
 
       // Compute zone geometry eagerly so radialZone() works even if the
-      // overlay timer is delayed by a busy main thread (first-load IR fetch).
+      // Overlay timer is delayed by a busy main thread (first-load IR fetch).
       this.computeOverlayGeometry();
 
       // Start audio immediately (momentary)
@@ -229,7 +233,9 @@ export class PlaybackController {
     });
 
     this.playBtn.addEventListener('pointermove', (e: PointerEvent) => {
-      if (e.pointerId !== this.gesturePointerId || !this.gestureActive) return;
+      if (e.pointerId !== this.gesturePointerId || !this.gestureActive) {
+        return;
+      }
 
       const info = this.radialZone(e.clientX, e.clientY);
       this.lastZoneInfo = info;
@@ -237,7 +243,9 @@ export class PlaybackController {
     });
 
     this.playBtn.addEventListener('pointerup', (e: PointerEvent) => {
-      if (e.pointerId !== this.gesturePointerId) return;
+      if (e.pointerId !== this.gesturePointerId) {
+        return;
+      }
 
       if (this.overlayTimerId != undefined) {
         clearTimeout(this.overlayTimerId);
@@ -245,10 +253,10 @@ export class PlaybackController {
       }
 
       // Always check the radial zone from the release position — don't gate
-      // on gestureActive (the overlay timer). The timer can be delayed by a
-      // busy main thread (first-load IR fetch), but the drag distance is
-      // reliable. If the pointer is still near the button center, treat it
-      // as a momentary tap regardless of hold duration.
+      // On gestureActive (the overlay timer). The timer can be delayed by a
+      // Busy main thread (first-load IR fetch), but the drag distance is
+      // Reliable. If the pointer is still near the button center, treat it
+      // As a momentary tap regardless of hold duration.
       const info = this.lastZoneInfo || this.radialZone(e.clientX, e.clientY);
 
       if (info.zone === 'latch') {
@@ -276,8 +284,12 @@ export class PlaybackController {
     });
 
     this.playBtn.addEventListener('lostpointercapture', (e: PointerEvent) => {
-      if (this.gesturePointerId == undefined) return;
-      if (e.pointerId !== this.gesturePointerId) return;
+      if (this.gesturePointerId == undefined) {
+        return;
+      }
+      if (e.pointerId !== this.gesturePointerId) {
+        return;
+      }
 
       if (this.overlayTimerId != undefined) {
         clearTimeout(this.overlayTimerId);
@@ -295,9 +307,15 @@ export class PlaybackController {
 
   /** Clear all pending timers. */
   dispose(): void {
-    if (this.loopTimeoutId != undefined) clearTimeout(this.loopTimeoutId);
-    if (this.releaseGlowTimeoutId != undefined) clearTimeout(this.releaseGlowTimeoutId);
-    if (this.overlayTimerId != undefined) clearTimeout(this.overlayTimerId);
+    if (this.loopTimeoutId != undefined) {
+      clearTimeout(this.loopTimeoutId);
+    }
+    if (this.releaseGlowTimeoutId != undefined) {
+      clearTimeout(this.releaseGlowTimeoutId);
+    }
+    if (this.overlayTimerId != undefined) {
+      clearTimeout(this.overlayTimerId);
+    }
   }
 
   // ---- Private helpers ----
@@ -463,7 +481,9 @@ export class PlaybackController {
 
   private hideRadialOverlay(): void {
     this.radialOverlay.classList.remove('active');
-    if (this.pointerZoneIcon) this.pointerZoneIcon.style.opacity = '0';
+    if (this.pointerZoneIcon) {
+      this.pointerZoneIcon.style.opacity = '0';
+    }
     this.radialOverlay.addEventListener(
       'transitionend',
       () => {

@@ -21,6 +21,12 @@
  *   Vertical dashed lines at marked events (gray, labeled at top)
  */
 
+function shimMediaStreamDest(ctx) {
+  const dummy = ctx.createGain();
+  dummy.stream = new MediaStream();
+  return dummy;
+}
+
 (function () {
   const OriginalOfflineAudioContext =
     globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
@@ -28,12 +34,12 @@
     return;
   }
 
-  const SAMPLE_RATE = 44100;
-  const MAX_DURATION = 10; // seconds — pre-allocated buffer ceiling
+  const SAMPLE_RATE = 44_100;
+  const MAX_DURATION = 10; // Seconds — pre-allocated buffer ceiling
 
   let capturedCtx = null;
   // True once startRendering() has been called. Before that, resume() is a
-  // no-op (the app calls it during warmup expecting AudioContext semantics).
+  // No-op (the app calls it during warmup expecting AudioContext semantics).
   let renderingStarted = false;
   // The real OfflineAudioContext.resume(), saved before shimming.
   let realResume = null;
@@ -48,7 +54,7 @@
     // Shim resume() — before rendering starts, the app calls it expecting
     // AudioContext.resume() semantics (initial unlock). Make that a no-op.
     // Once rendering starts, delegate to the real resume() so that
-    // suspend()/resume() breakpoints work.
+    // Suspend()/resume() breakpoints work.
     ctx.resume = () => {
       if (renderingStarted) {
         return realResume();
@@ -58,11 +64,11 @@
 
     // Shim createMediaStreamDestination() — not available on OfflineAudioContext.
     // Returns a gain node connected nowhere (the iOS Safari keep-alive path is
-    // irrelevant in headless test browsers).
+    // Irrelevant in headless test browsers).
     ctx.createMediaStreamDestination = () => {
       const dummy = ctx.createGain();
       // Give it a .stream property so the engine's `_streamDest.stream` access
-      // doesn't throw.
+      // Doesn't throw.
       dummy.stream = new MediaStream();
       return dummy;
     };
@@ -75,11 +81,7 @@
 
   // Shim MediaStreamAudioDestinationNode constructor — not available on
   // OfflineAudioContext. Engine uses `new MediaStreamAudioDestinationNode(ctx)`.
-  globalThis.MediaStreamAudioDestinationNode = function MediaStreamAudioDestinationNode(ctx) {
-    const dummy = ctx.createGain();
-    dummy.stream = new MediaStream();
-    return dummy;
-  };
+  globalThis.MediaStreamAudioDestinationNode = shimMediaStreamDest;
 
   // ---- Radix-2 Cooley-Tukey FFT (in-place) ----
 
@@ -88,7 +90,9 @@
     // Bit-reversal permutation
     for (let i = 1, j = 0; i < n; i++) {
       let bit = n >> 1;
-      for (; j & bit; bit >>= 1) j ^= bit;
+      for (; j & bit; bit >>= 1) {
+        j ^= bit;
+      }
       j ^= bit;
       if (i < j) {
         let tmp = real[i];
@@ -181,7 +185,9 @@
     for (const ch of downsampled) {
       for (let i = 0; i < ch.length; i++) {
         const abs = Math.abs(ch[i]);
-        if (abs > peak) peak = abs;
+        if (abs > peak) {
+          peak = abs;
+        }
       }
     }
     const waveScale = peak > 0 ? 1 / peak : 1;
@@ -195,8 +201,11 @@
       for (let px = 0; px < WIDTH; px++) {
         const normalized = data[px] * waveScale;
         const y = yOffset + ((1 - normalized) / 2) * HALF;
-        if (px === 0) g.moveTo(px, y);
-        else g.lineTo(px, y);
+        if (px === 0) {
+          g.moveTo(px, y);
+        } else {
+          g.lineTo(px, y);
+        }
       }
       g.stroke();
     }
@@ -204,7 +213,7 @@
     // ---- Frequency spectrum (bottom) ----
 
     // Use a 4096-point FFT from the sustain portion (30%-70% of capture)
-    // to avoid attack/release transients. Average both channels.
+    // To avoid attack/release transients. Average both channels.
     const FFT_N = 4096;
     const sustainStart = Math.min(Math.floor(sampleCount * 0.3), sampleCount - FFT_N);
     const real = new Float32Array(FFT_N);
@@ -225,20 +234,22 @@
     for (let i = 0; i < halfN; i++) {
       const mag = Math.sqrt(real[i] * real[i] + imag[i] * imag[i]);
       magDb[i] = 20 * Math.log10(mag + 1e-12);
-      if (magDb[i] > maxDb) maxDb = magDb[i];
+      if (magDb[i] > maxDb) {
+        maxDb = magDb[i];
+      }
     }
 
     // Show 0-8kHz range. At 44100Hz with 4096 FFT, each bin = ~10.77Hz.
     // 8kHz / 10.77 ≈ 743 bins.
     const maxFreq = 8000;
     const binCount = Math.min(halfN, Math.ceil((maxFreq / SAMPLE_RATE) * FFT_N));
-    const DB_RANGE = 80; // show 80dB of dynamic range
+    const DB_RANGE = 80; // Show 80dB of dynamic range
     const dbFloor = maxDb - DB_RANGE;
 
     // Draw spectrum as filled area, white on black
     g.fillStyle = '#fff';
     g.beginPath();
-    g.moveTo(0, WAVE_H + SPEC_H); // bottom-left
+    g.moveTo(0, WAVE_H + SPEC_H); // Bottom-left
 
     for (let px = 0; px < WIDTH; px++) {
       // Map pixel to bin (linear frequency scale)
@@ -249,7 +260,7 @@
       g.lineTo(px, y);
     }
 
-    g.lineTo(WIDTH, WAVE_H + SPEC_H); // bottom-right
+    g.lineTo(WIDTH, WAVE_H + SPEC_H); // Bottom-right
     g.closePath();
     g.fill();
 
@@ -266,7 +277,9 @@
 
       for (const evt of events) {
         const px = Math.round((evt.time / duration) * WIDTH);
-        if (px < 0 || px >= WIDTH) continue;
+        if (px < 0 || px >= WIDTH) {
+          continue;
+        }
 
         g.beginPath();
         g.moveTo(px, 0);
@@ -332,7 +345,7 @@
         throw new Error('No AudioContext was created — already rendered or never initialized');
       }
       const ctx = capturedCtx;
-      capturedCtx = null; // startRendering() can only be called once
+      capturedCtx = null; // StartRendering() can only be called once
       renderingStarted = true;
       return ctx.startRendering();
     },
@@ -389,11 +402,13 @@
       }
 
       // Start rendering — resolves when all suspensions are resumed and
-      // the full buffer is rendered.
+      // The full buffer is rendered.
       const bufferPromise = ctx.startRendering();
       bufferPromise.then((buf) => {
         renderBuffer = buf;
-        if (renderResolve) renderResolve();
+        if (renderResolve) {
+          renderResolve();
+        }
       });
     },
 

@@ -1,7 +1,7 @@
-// stample-panel.ts — Stample picker panel
+// Stample-panel.ts — Stample picker panel
 //
 // Opens an expansion panel showing all available stamples. Clicking one
-// sets the default stample for new stamp voices and dismisses the panel.
+// Sets the default stample for new stamp voices and dismisses the panel.
 // If a stamp voice is selected, also updates its stamp variant.
 
 import { STAMPLES } from '../stamples/index.ts';

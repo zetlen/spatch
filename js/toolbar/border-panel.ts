@@ -1,7 +1,6 @@
-// border-panel.ts — Border expansion panel
+// Border-panel.ts — Border expansion panel
 
-import type { BorderColor } from '../types.ts';
-import { normalizedCoord } from '../types.ts';
+import { normalizedCoord, type BorderColor } from '../types.ts';
 import {
   createExpansionPanel,
   getSelectedVoice,
@@ -159,7 +158,9 @@ export function createBorderPanel(
           slider.title = 'Octave Gain';
           slider.addEventListener('input', () => {
             const sel = getSelectedVoice(deps);
-            if (!sel?.border) return;
+            if (!sel?.border) {
+              return;
+            }
             store.updateVoice(sel.id, {
               border: { ...sel.border, thickness: normalizedCoord(parseInt(slider.value) / 100) },
             });
@@ -171,15 +172,25 @@ export function createBorderPanel(
     ],
     isActive(key) {
       const border = getSelectedVoice(deps)?.border;
-      if (!border) return false;
-      if (key === 'color:white' || key === 'color:black') return border.color === key.slice(6);
-      if (key === 'style:single') return !border.double;
-      if (key === 'style:double') return border.double;
+      if (!border) {
+        return false;
+      }
+      if (key === 'color:white' || key === 'color:black') {
+        return border.color === key.slice(6);
+      }
+      if (key === 'style:single') {
+        return !border.double;
+      }
+      if (key === 'style:double') {
+        return border.double;
+      }
       return false;
     },
     onClick(key) {
       const sel = getSelectedVoice(deps);
-      if (!sel) return;
+      if (!sel) {
+        return;
+      }
       undo.snapshot();
       if (key === 'color:white' || key === 'color:black') {
         const color = key.slice(6) as BorderColor;
@@ -193,7 +204,9 @@ export function createBorderPanel(
           });
         }
       } else if (key === 'style:single' || key === 'style:double') {
-        if (!sel.border) return;
+        if (!sel.border) {
+          return;
+        }
         store.updateVoice(sel.id, {
           border: { ...sel.border, double: key === 'style:double' },
         });

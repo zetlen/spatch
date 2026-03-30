@@ -1,4 +1,4 @@
-// blend/ui.ts — SVG rendering and selection handles for blend (triangle) voices.
+// Blend/ui.ts — SVG rendering and selection handles for blend (triangle) voices.
 
 import { resizeHandleEl, svgEl } from '../../dom.ts';
 import type { Voice } from '../../types.ts';

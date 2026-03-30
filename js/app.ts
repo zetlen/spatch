@@ -1,7 +1,7 @@
 // App.ts — Entry point, event wiring, render loop
 
 import { effect } from '@preact/signals-core';
-import { SigilStore, UndoManager } from './state.ts';
+import { SigilStore, UndoManager, SelectionManager } from './state.ts';
 import { render } from './canvas/render.ts';
 import { Toolbar } from './toolbar/toolbar.ts';
 import { AudioEngine } from './audio/engine.ts';
@@ -17,7 +17,6 @@ import {
 } from './voices/stamp/lifecycle.ts';
 import { Vibe, setVibe, vibeSignal } from './audio/vibe.ts';
 import { qel } from './dom.ts';
-import { SelectionManager } from './state.ts';
 import { PlaybackController } from './playback.ts';
 import { CanvasInteractionController } from './canvas/interaction.ts';
 import { bindKeyboardShortcuts } from './keyboard.ts';
@@ -44,7 +43,7 @@ setSampleLoader(createSampleLoader(fetch.bind(globalThis)));
 const audio = new AudioEngine();
 
 // Expose store and audio engine for integration tests (e.g. setting ADSR
-// envelope directly, scheduling parameter automation on active voices).
+// Envelope directly, scheduling parameter automation on active voices).
 // Only available when __audioCapture is present (test helper injected).
 if ('__audioCapture' in globalThis) {
   (globalThis as Record<string, unknown>).__testStore = store;
@@ -60,7 +59,9 @@ initStampSymbols(svgCanvas);
   const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
   function onFirstGesture(): void {
     audio.warmUp();
-    if (audio.audioCtx) decodeStampSamples(audio.audioCtx);
+    if (audio.audioCtx) {
+      decodeStampSamples(audio.audioCtx);
+    }
     for (const evt of warmUpEvents) {
       document.removeEventListener(evt, onFirstGesture);
     }
@@ -73,6 +74,8 @@ initStampSymbols(svgCanvas);
 // ---- Selection state (app-level, not in store) ----
 
 const selection = new SelectionManager(store);
+
+let needsRender = true;
 
 // ---- Solo state ----
 
@@ -97,7 +100,7 @@ soloBtn.addEventListener('click', toggleSolo);
 
 // Toolbar auto-syncs when selection changes (signals drive the effect).
 // Sets selectedId, toggles bottom bar visibility, and syncs panel state
-// to the newly selected voice (fill swatch, pattern, border, etc.).
+// To the newly selected voice (fill swatch, pattern, border, etc.).
 // Also pushes solo voice when solo mode is active.
 effect(() => {
   toolbar.selectedId = selection.voiceId;
@@ -127,13 +130,11 @@ if (loaded) {
   store.updateScene(randomSceneIndex());
 }
 
-let needsRender = true;
-
 const appEl = qel('#app');
 initStageLayers(appEl);
 
 // Scene readiness promise — resolves when the current scene's image + IR bytes
-// are fetched. Reassigned on every scene change.
+// Are fetched. Reassigned on every scene change.
 let sceneReady: Promise<void> = Promise.resolve();
 
 // Stage button: short click advances scene, long press opens scene picker
@@ -175,7 +176,9 @@ let sceneReady: Promise<void> = Promise.resolve();
   bindLongPress(
     btnBlend,
     () => {
-      if (!store.hasOverlap) return;
+      if (!store.hasOverlap) {
+        return;
+      }
       undo.snapshot();
       const current = store.data.blend;
       const idx = BLEND_MODES.indexOf(current);
@@ -184,21 +187,25 @@ let sceneReady: Promise<void> = Promise.resolve();
       needsRender = true;
     },
     () => {
-      if (!store.hasOverlap) return;
+      if (!store.hasOverlap) {
+        return;
+      }
       toolbar.panels.toggle('blend');
     },
   );
 }
 
 // React to scene changes (and apply the initial scene on first run):
-// update background crossfade + vibe + prefetch.
+// Update background crossfade + vibe + prefetch.
 // Guard: store.data is a single signal, so this effect fires on ANY state
-// change. Track previous scene index to skip when unchanged.
+// Change. Track previous scene index to skip when unchanged.
 {
   let prevScene = -1;
   effect(() => {
     const sceneIndex = store.data.scene;
-    if (sceneIndex === prevScene) return;
+    if (sceneIndex === prevScene) {
+      return;
+    }
     prevScene = sceneIndex;
     const sceneDef = getScene(sceneIndex);
     applyScene(appEl, sceneIndex);
@@ -224,7 +231,9 @@ const playback: PlaybackController = new PlaybackController({
     try {
       await sceneReady;
       const ctx = audio.audioCtx;
-      if (!ctx) return undefined;
+      if (!ctx) {
+        return undefined;
+      }
       return await loadSceneIR(ctx, getScene(store.data.scene));
     } catch {
       return undefined;
@@ -241,18 +250,18 @@ const splash = new SplashController({ store, audio, playback, overlay: splashOve
 
 // Signal effect: automatically subscribes to store.data changes.
 // Replaces the old store.onChange() listener — the signal detects immutable
-// reference changes and runs this effect synchronously on each mutation.
+// Reference changes and runs this effect synchronously on each mutation.
 {
   let first = true;
   effect(() => {
-    const data = store.data; // subscribe to the signal
+    const data = store.data; // Subscribe to the signal
     updateCanvasBorderRadius(canvasWrap, data.envelope);
     updateCanvasBorderRadius(tile, data.envelope);
     updateCanvasBorderRadius(svgCanvas, data.envelope, 10);
     document.body.classList.toggle('has-voices', data.voices.length > 0);
     if (first) {
       first = false;
-      return; // skip the initial run (matches old onChange behavior)
+      return; // Skip the initial run (matches old onChange behavior)
     }
     needsRender = true;
     debouncedSave();
@@ -353,7 +362,9 @@ splash.bindEvents();
 let navigating = false;
 let saveTimeout: ReturnType<typeof setTimeout> | undefined;
 function debouncedSave(): void {
-  if (navigating) return;
+  if (navigating) {
+    return;
+  }
   if (saveTimeout) {
     clearTimeout(saveTimeout);
   }
@@ -368,7 +379,7 @@ function debouncedSave(): void {
 
 // ---- History navigation (back/forward) ----
 
-window.addEventListener('popstate', () => {
+globalThis.addEventListener('popstate', () => {
   // Cancel any pending debounced save
   if (saveTimeout) {
     clearTimeout(saveTimeout);
@@ -389,6 +400,12 @@ window.addEventListener('popstate', () => {
   needsRender = true;
 });
 
+// ---- Tutorial (lazy-loaded, declared early for use in logo handler) ----
+
+let tutorial:
+  | { show(): void; hide(): void; readonly isVisible: boolean; onShow: (() => void) | null }
+  | undefined;
+
 // ---- Credits overlay ----
 
 const credits = initCredits(audio, store);
@@ -404,7 +421,9 @@ logoMark.addEventListener('click', () => {
     return;
   }
   // If another overlay is open, do nothing
-  if (!shareOverlay.classList.contains('hidden') || tutorial?.isVisible) return;
+  if (!shareOverlay.classList.contains('hidden') || tutorial?.isVisible) {
+    return;
+  }
   // Bounce then show credits
   logoMark.classList.remove('bounce');
   void logoMark.offsetWidth;
@@ -424,10 +443,6 @@ logoMark.addEventListener('click', () => {
 const share = initShare(audio, store);
 
 // ---- Tutorial overlay (lazy-loaded on first click) ----
-
-let tutorial:
-  | { show(): void; hide(): void; readonly isVisible: boolean; onShow: (() => void) | null }
-  | undefined;
 
 async function loadTutorial() {
   const { initTutorial } = await import('./tutorial.ts');
@@ -453,7 +468,9 @@ qel('#btn-tutorial').addEventListener('click', async () => {
     tutorial.hide();
     return;
   }
-  if (playback.isPlaying) playback.stop();
+  if (playback.isPlaying) {
+    playback.stop();
+  }
   const t = tutorial ?? (await loadTutorial());
   t.show();
 });
@@ -471,7 +488,9 @@ share.onShow = () => {
 // ---- Pause audio when tab is hidden ----
 
 document.addEventListener('visibilitychange', () => {
-  if (!audio.audioCtx) return;
+  if (!audio.audioCtx) {
+    return;
+  }
   if (document.hidden) {
     audio.audioCtx.suspend();
   } else {
@@ -527,16 +546,18 @@ qel('#btn-randomize').addEventListener('click', () => {
 // ---- Splash preview button ----
 
 qel('#btn-splash').addEventListener('click', () => {
-  if (playback.isPlaying) playback.stop();
+  if (playback.isPlaying) {
+    playback.stop();
+  }
   splash.enterPreview();
 });
 
 // ---- Reactive vibe → engine sync ----
 // When vibe changes (scene switch or debug tuner), update the audio engine
-// immediately so the new parameters are audible without waiting for a
-// store-driven data effect. The signal subscription auto-tracks changes.
+// Immediately so the new parameters are audible without waiting for a
+// Store-driven data effect. The signal subscription auto-tracks changes.
 effect(() => {
-  void vibeSignal.value; // subscribe to vibe changes
+  void vibeSignal.value; // Subscribe to vibe changes
   if (audio.isPlaying) {
     audio.update(store.data);
   }

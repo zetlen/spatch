@@ -109,7 +109,7 @@ export function buildSymbol(
 export function rewriteHtml(html: string, placeholder: string, spriteSvg: string): string {
   // Replace placeholder references with same-document fragments.
   // Vite dev server may resolve relative paths to absolute (adding leading /),
-  // so match an optional slash before the placeholder filename.
+  // So match an optional slash before the placeholder filename.
   const placeholderPattern = new RegExp(`href="/?${escapeRegExp(placeholder)}#`, 'g');
   let result = html.replace(placeholderPattern, 'href="#');
 

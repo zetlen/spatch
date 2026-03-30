@@ -7,7 +7,9 @@
   let list = [];
   try {
     const raw = sessionStorage.getItem(key);
-    if (raw) list = JSON.parse(raw);
+    if (raw) {
+      list = JSON.parse(raw);
+    }
   } catch {}
   if (!list.includes(pathname)) {
     list.push(pathname);

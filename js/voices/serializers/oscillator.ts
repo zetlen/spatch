@@ -1,4 +1,4 @@
-// oscillator.ts — Shared serializer for oscillator-based voices.
+// Oscillator.ts — Shared serializer for oscillator-based voices.
 //
 // Handles: sine, pulse, blend, astroid.
 // Register layout (per design doc):
@@ -30,7 +30,7 @@ import { encodeInt, decodeInt } from '../b64.ts';
 import type { VoiceSerializer } from '../types.ts';
 
 // Effect keys sorted for stable indexing (same order as v1).
-const EFFECT_KEYS: (PatternType | undefined)[] = [undefined, ...PATTERN_TYPES].sort();
+const EFFECT_KEYS: (PatternType | undefined)[] = [undefined, ...PATTERN_TYPES].toSorted();
 
 const TOTAL_NOTES = 36; // 37 semitones: index 0-36
 const X_RESOLUTION = 4095; // 12 bits: 0-4095 (2 B64 chars)
@@ -74,21 +74,28 @@ function unpackGradientColor(
 }
 
 // ---- Border packing ----
-// style (3b): 0=none, 1=white, 2=black, 3=white-double, 4=black-double
-// thickness (3b): 0-7
+// Style (3b): 0=none, 1=white, 2=black, 3=white-double, 4=black-double
+// Thickness (3b): 0-7
 
 function packBorder(border: Border | undefined): number {
-  if (!border) return 0;
+  if (!border) {
+    return 0;
+  }
   let style = 0;
-  if (border.color === 'white') style = border.double ? 3 : 1;
-  else style = border.double ? 4 : 2;
+  if (border.color === 'white') {
+    style = border.double ? 3 : 1;
+  } else {
+    style = border.double ? 4 : 2;
+  }
   const thick = Math.round(border.thickness * THICKNESS_STEPS);
   return ((style & 0x7) << 3) | (thick & 0x7);
 }
 
 function unpackBorder(val: number): Border | undefined {
   const style = (val >> 3) & 0x7;
-  if (style === 0) return undefined;
+  if (style === 0) {
+    return undefined;
+  }
   const thick = val & 0x7;
   return {
     color: style === 2 || style === 4 ? 'black' : 'white',
@@ -116,7 +123,9 @@ function packSP4Oscillator(voice: Voice): number {
 }
 
 function unpackSP4Oscillator(val: number, waveform: WaveformType): Record<string, unknown> {
-  if (waveform === 'sine' || waveform === 'stamp') return {};
+  if (waveform === 'sine' || waveform === 'stamp') {
+    return {};
+  }
   return { timbre: normalizedCoord(val / TIMBRE_STEPS) };
 }
 

@@ -1,4 +1,4 @@
-// types.ts — Delegate interfaces for the voice registry.
+// Types.ts — Delegate interfaces for the voice registry.
 //
 // A voice is three projections of the same identity:
 //   UI        — SVG rendering, selection handles, gesture eligibility

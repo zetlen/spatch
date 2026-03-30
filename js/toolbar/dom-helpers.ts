@@ -1,4 +1,4 @@
-// dom-helpers.ts — Toolbar-specific DOM construction helpers
+// Dom-helpers.ts — Toolbar-specific DOM construction helpers
 
 import { svgEl } from '../dom.ts';
 

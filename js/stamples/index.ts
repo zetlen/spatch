@@ -1,12 +1,12 @@
-// index.ts — Stamples registry.
+// Index.ts — Stamples registry.
 //
 // Each stample is a directory under js/stamples/<name>/ containing:
-//   stamp.svg   — detailed silhouette for rendering
-//   sample.mp3  — audio sample
-//   index.ts    — exports a Stample object (metadata, hull path, imports)
+//   Stamp.svg   — detailed silhouette for rendering
+//   Sample.mp3  — audio sample
+//   Index.ts    — exports a Stample object (metadata, hull path, imports)
 //
 // This module collects them into a registry array, mirroring the pattern
-// used by js/scenes/index.ts.
+// Used by js/scenes/index.ts.
 
 import palmTree from './palm-tree';
 import energyDome from './energy-dome';
@@ -88,7 +88,9 @@ function sampleHullPath(d: string): [number, number][] {
   const pts: [number, number][] = [];
   // Split into command + number groups
   const tokens = d.match(/[MLCQZ]|[-]?\d+\.?\d*/g);
-  if (!tokens) return pts;
+  if (!tokens) {
+    return pts;
+  }
 
   let i = 0;
   while (i < tokens.length) {
@@ -123,13 +125,17 @@ function computeHandlePoints(hull: string): HandlePoints {
   const dists = pts.map((p) => Math.hypot(p[0] - cx, p[1] - cy));
   const ranked: { pt: [number, number]; prominence: number }[] = [];
   for (let i = 1; i < dists.length - 1; i++) {
-    if (dists[i]! <= dists[i - 1]! || dists[i]! <= dists[i + 1]!) continue;
+    if (dists[i]! <= dists[i - 1]! || dists[i]! <= dists[i + 1]!) {
+      continue;
+    }
     const lo = Math.min(
       ...dists.slice(Math.max(0, i - 30), i),
       ...dists.slice(i + 1, Math.min(dists.length, i + 30)),
     );
     const prominence = dists[i]! - lo;
-    if (prominence > 10) ranked.push({ pt: pts[i]!, prominence });
+    if (prominence > 10) {
+      ranked.push({ pt: pts[i]!, prominence });
+    }
   }
   const tips = ranked.map((r) => r.pt);
 
@@ -142,8 +148,8 @@ function computeHandlePoints(hull: string): HandlePoints {
   };
 
   // Assign tips to each cardinal: among tips within ±60° of the direction,
-  // pick the one furthest from the centroid. Fall back to the bounding
-  // extreme (topmost, rightmost, etc.) when no tip qualifies.
+  // Pick the one furthest from the centroid. Fall back to the bounding
+  // Extreme (topmost, rightmost, etc.) when no tip qualifies.
   const MAX_ANGLE = Math.PI / 3; // 60°
   const cardinals: { key: keyof HandlePoints; angle: number }[] = [
     { key: 'n', angle: -Math.PI / 2 },
@@ -158,15 +164,21 @@ function computeHandlePoints(hull: string): HandlePoints {
     for (const tip of tips) {
       const tipAngle = Math.atan2(tip[1] - cy, tip[0] - cx);
       let diff = Math.abs(tipAngle - angle);
-      if (diff > Math.PI) diff = 2 * Math.PI - diff;
-      if (diff > MAX_ANGLE) continue;
+      if (diff > Math.PI) {
+        diff = 2 * Math.PI - diff;
+      }
+      if (diff > MAX_ANGLE) {
+        continue;
+      }
       const dist = Math.hypot(tip[0] - cx, tip[1] - cy);
       if (dist > bestDist) {
         bestDist = dist;
         best = tip;
       }
     }
-    if (!best) best = extremes[key];
+    if (!best) {
+      best = extremes[key];
+    }
     result[key] = { x: best[0], y: best[1] };
   }
   return result;
@@ -177,7 +189,9 @@ function computeHandlePoints(hull: string): HandlePoints {
  *  in the selection outline stroke). */
 function extractPathD(svgRaw: string): string {
   const match = svgRaw.match(/<path[^>]+d="([^"]+)"/);
-  if (!match) throw new Error('No <path d="..."> found in stamp SVG');
+  if (!match) {
+    throw new Error('No <path d="..."> found in stamp SVG');
+  }
   const d = match[1]!;
   return d.trimEnd().endsWith('Z') ? d : d + ' Z';
 }

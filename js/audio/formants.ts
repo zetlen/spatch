@@ -1,7 +1,7 @@
-// formants.ts — Formant filter mapping.
+// Formants.ts — Formant filter mapping.
 // Pure functions mapping visual fill properties to audio filter parameters.
 // No Web Audio API node creation — just parameter computation (except applyFormantFilter
-// which sets values on pre-existing BiquadFilterNodes).
+// Which sets values on pre-existing BiquadFilterNodes).
 
 import type { Fill, LinearFill, WaveformType } from '../types.ts';
 import { vibe } from './vibe.ts';
@@ -11,8 +11,8 @@ import { get } from '../voices/registry.ts';
 //
 // Hue drives a smooth path through vowel space (F1 = openness, F2 = frontness).
 // Saturation controls formant resonance (Q). Lightness controls a brightness
-// shelf.  Linear gradient crossfades formants between the two colors; gradient
-// angle controls the blend bias.
+// Shelf.  Linear gradient crossfades formants between the two colors; gradient
+// Angle controls the blend bias.
 
 interface FormantPoint {
   hue: number;
@@ -150,7 +150,7 @@ export function applyFormantFilter(
 // ---- Gradient-angle → sweep parameters ----
 //
 // For linear gradient fills, the gradient angle (always a multiple of 45°)
-// determines how the formant filter sweeps between the two colors over time.
+// Determines how the formant filter sweeps between the two colors over time.
 // `durationFrac` controls sweep speed (fraction of the decay phase) and
 // `exponent` shapes the easing curve (1 = linear, >1 = ease-in, <1 = ease-out).
 
@@ -160,7 +160,7 @@ interface SweepParams {
 }
 
 const SWEEP_TABLE: SweepParams[] = [
-  { durationFrac: 1.0, exponent: 1 }, // 0°   LR     — slowest, linear
+  { durationFrac: 1, exponent: 1 }, // 0°   LR     — slowest, linear
   { durationFrac: 0.8, exponent: 2 }, // 45°  TL→BR  — medium, ease-in
   { durationFrac: 0.6, exponent: 1 }, // 90°  TB     — moderate, linear
   { durationFrac: 0.8, exponent: 0.5 }, // 135° TR→BL  — medium, ease-out
@@ -213,14 +213,13 @@ export function isSweepReversed(gradAngle: number): boolean {
 }
 
 export function scheduleFormantSweep(
-  f1Node: BiquadFilterNode,
-  f2Node: BiquadFilterNode,
-  brightnessNode: BiquadFilterNode,
+  nodes: { f1: BiquadFilterNode; f2: BiquadFilterNode; brightness: BiquadFilterNode },
   fill: LinearFill,
   waveform: WaveformType,
   startTime: number,
   decayDuration: number,
 ): void {
+  const { f1: f1Node, f2: f2Node, brightness: brightnessNode } = nodes;
   const reversed = isSweepReversed(fill.gradAngle);
   const startF = hueToFormants(reversed ? fill.h2 : fill.h);
   const endF = hueToFormants(reversed ? fill.h : fill.h2);

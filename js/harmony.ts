@@ -41,8 +41,8 @@ const SCALES: Scale[] = [
 // ---- Semitone ↔ Y coordinate conversion ----
 // The canvas maps 37 chromatic semitones (G2–G5) across Y 0–1.
 // Y=0 is top (high pitch, semitone 36), Y=1 is bottom (low pitch, semitone 0).
-// yToSemitone returns a float to preserve sub-semitone precision for
-// accurate nearest-note snapping (rounding would create false ties).
+// YToSemitone returns a float to preserve sub-semitone precision for
+// Accurate nearest-note snapping (rounding would create false ties).
 
 const TOTAL_SEMITONES = 36;
 
@@ -72,7 +72,7 @@ function scaleNotes(scale: Scale, root: number): number[] {
       }
     }
   }
-  return [...new Set(notes)].sort((a, b) => a - b);
+  return [...new Set(notes)].toSorted((a, b) => a - b);
 }
 
 /** Find the nearest semitone in the given sorted array to the target. */
@@ -123,7 +123,9 @@ function applyScale(store: SigilStore, scale: Scale): void {
  */
 export function harmonize(store: SigilStore, undo: UndoManager): string {
   const voices = store.data.voices;
-  if (voices.length === 0) return '';
+  if (voices.length === 0) {
+    return '';
+  }
 
   const scale = SCALES[Math.floor(Math.random() * SCALES.length)]!;
   undo.snapshot();
@@ -141,7 +143,9 @@ export function harmonizeWithScale(
   scaleIndex: number,
 ): string {
   const voices = store.data.voices;
-  if (voices.length === 0) return '';
+  if (voices.length === 0) {
+    return '';
+  }
 
   const scale = SCALES[((scaleIndex % SCALES.length) + SCALES.length) % SCALES.length]!;
   undo.snapshot();
@@ -183,9 +187,9 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
   // Random ADSR envelope
   store.updateEnvelope({
     attack: 0.005 + Math.random() * 1.2, // 5ms – 1.2s
-    decay: 0.02 + Math.random() * 1.0, // 20ms – 1s
+    decay: 0.02 + Number(Math.random()), // 20ms – 1s
     sustain: 0.15 + Math.random() * 0.8, // 0.15 – 0.95
-    release: 0.05 + Math.random() * 2.0, // 50ms – 2s
+    release: 0.05 + Math.random() * 2, // 50ms – 2s
   });
 
   // Clear existing voices
@@ -196,7 +200,7 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
   // Create random voices with varied visual/audio properties
   for (let i = 0; i < RANDOM_VOICE_COUNT; i++) {
     const waveform = WAVEFORMS[Math.floor(Math.random() * WAVEFORMS.length)]!;
-    const x = normalizedCoord(0.1 + Math.random() * 0.8); // avoid extreme edges
+    const x = normalizedCoord(0.1 + Math.random() * 0.8); // Avoid extreme edges
     const y = normalizedCoord(0.05 + Math.random() * 0.9);
     store.addVoice(waveform, x, y);
 
@@ -218,7 +222,7 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
 
     // 15% chance of a border (random color, thickness, double).
     // Stamps skip borders — border adds an octave-doubled oscillator
-    // which doesn't apply to sample-based voices.
+    // Which doesn't apply to sample-based voices.
     if (waveform !== 'stamp' && Math.random() < 0.15) {
       updates.border = {
         color: Math.random() < 0.5 ? 'white' : 'black',
@@ -241,7 +245,7 @@ export function randomize(store: SigilStore, undo: UndoManager): string {
   }
 
   // Harmonize inline (can't call harmonize() — it would push a second
-  // undo snapshot, splitting the operation into two undo steps)
+  // Undo snapshot, splitting the operation into two undo steps)
   const scale = SCALES[Math.floor(Math.random() * SCALES.length)]!;
   applyScale(store, scale);
 

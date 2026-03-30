@@ -1,9 +1,9 @@
-// loader.ts — Scene asset prefetch and loading.
+// Loader.ts — Scene asset prefetch and loading.
 //
 // Preloads scene images (via Image) and IR bytes (via fetchSample) so they're
-// ready before a scene transition. Individual asset failures are absorbed
+// Ready before a scene transition. Individual asset failures are absorbed
 // (logged as warnings) so the scene always resolves. Caches successful
-// prefetches; clears failed entries so retries are possible.
+// Prefetches; clears failed entries so retries are possible.
 
 import type { Scene } from './scene-types';
 import { fetchSample, decodeSample } from '../audio/sample-loader';
@@ -14,22 +14,26 @@ const imagePending = new Map<string, Promise<void>>();
 
 /** Preload a single image URL. Resolves when loaded, rejects on error. */
 function preloadImage(url: string): Promise<void> {
-  if (imageLoaded.has(url)) return Promise.resolve();
+  if (imageLoaded.has(url)) {
+    return Promise.resolve();
+  }
 
   const inflight = imagePending.get(url);
-  if (inflight) return inflight;
+  if (inflight) {
+    return inflight;
+  }
 
   const promise = new Promise<void>((resolve, reject) => {
     const img = new Image();
-    img.onload = () => {
+    img.addEventListener('load', () => {
       imageLoaded.add(url);
       imagePending.delete(url);
       resolve();
-    };
-    img.onerror = () => {
+    });
+    img.addEventListener('error', () => {
       imagePending.delete(url);
       reject(new Error(`Failed to load scene image: ${url}`));
-    };
+    });
     img.src = url;
   });
 
@@ -50,13 +54,15 @@ export function prefetchScene(scene: Scene): Promise<void> {
   const key = scene.name;
 
   const inflight = scenePending.get(key);
-  if (inflight) return inflight;
+  if (inflight) {
+    return inflight;
+  }
 
   let anyFailed = false;
 
   const tasks: Promise<void>[] = [
-    preloadImage(scene.stageBackground).catch((err) => {
-      console.warn(`[spatch] Scene "${key}": image failed —`, err.message);
+    preloadImage(scene.stageBackground).catch((error) => {
+      console.warn(`[spatch] Scene "${key}": image failed —`, error.message);
       anyFailed = true;
     }),
   ];
@@ -65,8 +71,8 @@ export function prefetchScene(scene: Scene): Promise<void> {
     tasks.push(
       fetchSample(scene.vibe.ir)
         .then(() => undefined)
-        .catch((err) => {
-          console.warn(`[spatch] Scene "${key}": IR failed —`, err.message);
+        .catch((error) => {
+          console.warn(`[spatch] Scene "${key}": IR failed —`, error.message);
           anyFailed = true;
         }),
     );
@@ -87,7 +93,9 @@ export function prefetchScene(scene: Scene): Promise<void> {
  * If not yet prefetched, fetches automatically (via decodeSample's internal fetchSample).
  */
 export function loadSceneIR(ctx: BaseAudioContext, scene: Scene): Promise<AudioBuffer | undefined> {
-  if (!scene.vibe.ir) return Promise.resolve(undefined);
+  if (!scene.vibe.ir) {
+    return Promise.resolve(undefined);
+  }
   return decodeSample(ctx, scene.vibe.ir);
 }
 

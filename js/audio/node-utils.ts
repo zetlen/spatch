@@ -1,8 +1,8 @@
-// node-utils.ts — Pure Web Audio utility functions with no vibe or waveform dependencies.
+// Node-utils.ts — Pure Web Audio utility functions with no vibe or waveform dependencies.
 //
 // Kept separate from voice-builder.ts so that waveform strategy files can import
-// these utilities without creating a circular dependency:
-//   strategies → voice-builder → waveforms/index → strategies
+// These utilities without creating a circular dependency:
+//   Strategies → voice-builder → waveforms/index → strategies
 
 /** Safely stop and disconnect an AudioScheduledSourceNode. */
 export function safeStop(node: AudioScheduledSourceNode): void {

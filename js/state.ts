@@ -1,7 +1,7 @@
 // State.ts — Sigil data model, undo/redo, state management
 //
 // Uses @preact/signals-core for reactive state. All mutations are immutable:
-// each method creates a new state reference so the signal detects changes.
+// Each method creates a new state reference so the signal detects changes.
 
 import { type Signal, effect, signal } from '@preact/signals-core';
 
@@ -203,7 +203,7 @@ export class SigilStore {
         : updates;
     this._data.value = {
       ...this._data.value,
-      voices: voices.map((v) => (v.id === id ? ({ ...v, ...clamped } as Voice) : v)),
+      voices: voices.map((v) => (v.id === id ? (Object.assign({}, v, clamped) as Voice) : v)),
     };
   }
 
@@ -282,8 +282,8 @@ export class SelectionManager {
 // --- Undo/redo manager (wraps a SigilStore) ---
 //
 // With immutable state, snapshots are just previous signal values — no need
-// for structuredClone. The signal holds a new reference on each mutation, so
-// saving the old .data reference captures the entire state.
+// For structuredClone. The signal holds a new reference on each mutation, so
+// Saving the old .data reference captures the entire state.
 
 const MAX_UNDO = 50;
 
@@ -300,8 +300,8 @@ export class UndoManager {
   constructor(public store: SigilStore) {}
 
   private _broadcastAvailableUndos() {
-    this.hasUndos.value = !!this.undoStack.length;
-    this.hasRedos.value = !!this.redoStack.length;
+    this.hasUndos.value = Boolean(this.undoStack.length);
+    this.hasRedos.value = Boolean(this.redoStack.length);
   }
 
   /** Save the current state to the undo stack. Call before a mutation to make it undoable. */

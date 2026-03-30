@@ -217,7 +217,9 @@ function buildPatternEl(id: string, bytes: readonly number[]): SVGPatternElement
 
 /** Ensure all active pattern definitions exist in the given <defs> element. */
 export function ensurePatternDefs(defs: SVGDefsElement): void {
-  if (defs.querySelector(`[id^="pat-"]`)) return;
+  if (defs.querySelector(`[id^="pat-"]`)) {
+    return;
+  }
 
   for (const name of PATTERN_TYPES) {
     defs.append(buildPatternEl(`pat-${name}`, PATTERNS[name].bytes));
@@ -248,7 +250,9 @@ export function createEffect(ctx: AudioContext, pattern: PatternType): AudioEffe
  */
 export function getPatternPreviewCSS(pattern: PatternType): string {
   const def = PATTERNS[pattern];
-  if (!def) return '';
+  if (!def) {
+    return '';
+  }
   const rects: string[] = [];
   for (let row = 0; row < 8; row++) {
     const byte = def.bytes[row]!;

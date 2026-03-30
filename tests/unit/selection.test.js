@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { effect } from '@preact/signals-core';
-import { SigilStore } from '../../js/state.ts';
-import { SelectionManager } from '../../js/state.ts';
+import { SigilStore, SelectionManager } from '../../js/state.ts';
 
 describe('SelectionManager select and clear', () => {
   test('select voice sets voiceId', () => {
@@ -72,7 +71,7 @@ describe('SelectionManager getSelectedVoice', () => {
 
     store.removeVoice(voice.id);
     expect(sel.getSelectedVoice()).toBeUndefined();
-    // voiceId is still set, but the voice no longer exists in the store
+    // VoiceId is still set, but the voice no longer exists in the store
     expect(sel.voiceId).toBe(voice.id);
   });
 });
@@ -101,16 +100,16 @@ describe('SelectionManager signal reactivity', () => {
 
     let callCount = 0;
     const dispose = effect(() => {
-      void sel.voiceId; // subscribe to the signal
+      void sel.voiceId; // Subscribe to the signal
       callCount++;
     });
 
-    expect(callCount).toBe(1); // initial effect run
+    expect(callCount).toBe(1); // Initial effect run
     sel.select('v1');
     expect(callCount).toBe(2);
 
     dispose();
     sel.select('v2');
-    expect(callCount).toBe(2); // no additional call after dispose
+    expect(callCount).toBe(2); // No additional call after dispose
   });
 });

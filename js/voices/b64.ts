@@ -1,11 +1,11 @@
-// b64.ts — URL-safe Base64 encode/decode for register packing.
+// B64.ts — URL-safe Base64 encode/decode for register packing.
 //
 // Uses a 64-character alphabet (A-Z, a-z, 0-9, -, _) where each character
-// represents 6 bits. These are the atomic read/write operations for the
-// register-based wire format.
+// Represents 6 bits. These are the atomic read/write operations for the
+// Register-based wire format.
 
 const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-const B64_MAP = new Map(B64_CHARS.split('').map((c, i) => [c, i]));
+const B64_MAP = new Map([...B64_CHARS].map((c, i) => [c, i]));
 
 /** Encode a non-negative integer into `chars` B64 characters (big-endian). */
 export function encodeInt(val: number, chars: number): string {

@@ -1,8 +1,8 @@
-// canvas/interaction.ts — Pointer event handling for the SVG canvas.
+// Canvas/interaction.ts — Pointer event handling for the SVG canvas.
 //
 // Owns all pointer-down/move/up/cancel handlers, the InteractionState machine,
-// multi-touch pinch-rotate, shape hit testing, handle interactions,
-// and ADSR corner dragging. Dependencies are injected via the constructor.
+// Multi-touch pinch-rotate, shape hit testing, handle interactions,
+// And ADSR corner dragging. Dependencies are injected via the constructor.
 
 import { hardSnapYToNote, rotationToTimbre, snapYToNote } from '../audio/mapping.ts';
 import {
@@ -231,13 +231,19 @@ export class CanvasInteractionController {
 
   private handleCycleSelection(e: MouseEvent): void {
     const voiceEl = (e.target as Element).closest?.('[data-voice-id]');
-    if (!voiceEl) return;
+    if (!voiceEl) {
+      return;
+    }
 
     const voiceLayer = this.canvas.querySelector('g[data-layer="voices"]');
-    if (!voiceLayer) return;
+    if (!voiceLayer) {
+      return;
+    }
 
     const group = voiceEl.closest('g[data-voice-id]') as SVGGElement | null;
-    if (!group) return;
+    if (!group) {
+      return;
+    }
 
     // Send topmost shape to back
     voiceLayer.prepend(group);
@@ -437,7 +443,7 @@ export class CanvasInteractionController {
     this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     // Guard: if no buttons are pressed but we're mid-interaction, the pointerup
-    // was lost (mouse released outside captured element, browser dropped capture).
+    // Was lost (mouse released outside captured element, browser dropped capture).
     // Abort the interaction to prevent the corner from jumping to the cursor.
     if (e.buttons === 0 && this.interaction.mode !== 'idle') {
       this.interaction = IDLE;
@@ -509,7 +515,7 @@ export class CanvasInteractionController {
       }
 
       // Decompose pointer motion into radial (resize) and tangential (rotate)
-      // components relative to the voice center.
+      // Components relative to the voice center.
       const { cx, cy } = this.interaction;
       const curAngle = Math.atan2(ny - cy, nx - cx);
       const curDist = Math.hypot(nx - cx, ny - cy);

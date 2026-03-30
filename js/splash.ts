@@ -1,13 +1,13 @@
-// splash.ts — Splash screen controller
+// Splash.ts — Splash screen controller
 //
 // State machine with three modes: off (editor active), splash (overlay
-// intercepts pointer events, click plays + reveals), landscape (tap-to-play,
-// never reveals editor). A DOM overlay structurally blocks pointer events —
-// no isSplashActive flag threading needed in other modules.
+// Intercepts pointer events, click plays + reveals), landscape (tap-to-play,
+// Never reveals editor). A DOM overlay structurally blocks pointer events —
+// No isSplashActive flag threading needed in other modules.
 //
 // "Seen" state is tracked per-URL in sessionStorage (single key, capped array).
 // The homepage (/) never splashes. iOS Safari audio unlock constraints apply
-// to the overlay's event handlers — see CLAUDE.md for details.
+// To the overlay's event handlers — see CLAUDE.md for details.
 
 import type { AudioEngine } from './audio/engine.ts';
 import { qel } from './dom.ts';
@@ -22,7 +22,9 @@ const SEEN_MAX = 100;
 function getSeenList(): string[] {
   try {
     const raw = sessionStorage.getItem(SEEN_KEY);
-    if (!raw) return [];
+    if (!raw) {
+      return [];
+    }
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -36,7 +38,9 @@ function isSeen(pathname: string): boolean {
 
 function markSeen(pathname: string): void {
   const list = getSeenList();
-  if (list.includes(pathname)) return;
+  if (list.includes(pathname)) {
+    return;
+  }
   list.push(pathname);
   while (list.length > SEEN_MAX) {
     list.shift();
@@ -119,7 +123,7 @@ export class SplashController {
   /** Bind overlay listeners and start landscape monitoring. */
   bindEvents(): void {
     this.overlay.addEventListener('pointerdown', this.handleDown);
-    // iOS Safari: touchend/click are qualifying gestures for audio unlock.
+    // IOS Safari: touchend/click are qualifying gestures for audio unlock.
     // Do NOT use pointerup — it fires before touchend on iOS.
     this.overlay.addEventListener('touchend', this.handleUp);
     this.overlay.addEventListener('click', this.handleUp);
@@ -163,7 +167,7 @@ export class SplashController {
         this.landscapeBlock.setAttribute('aria-hidden', 'true');
       }
     } else {
-      // landscape
+      // Landscape
       this.overlay.style.display = '';
       document.body.classList.remove('is-editing');
       document.body.classList.add('landscape-locked');
@@ -175,18 +179,22 @@ export class SplashController {
   }
 
   private onPointerDown(_e: PointerEvent): void {
-    if (this.splashPointerDown) return; // Ignore multi-touch
+    if (this.splashPointerDown) {
+      return;
+    } // Ignore multi-touch
     this.splashPointerDown = true;
     this.splashDownTime = Date.now();
     // Do NOT preventDefault() — iOS Safari cancels click/touchend if we do,
-    // and those are the only events that can unlock audio.
+    // And those are the only events that can unlock audio.
   }
 
   private onPointerUp(): void {
-    if (!this.splashPointerDown) return;
+    if (!this.splashPointerDown) {
+      return;
+    }
     this.splashPointerDown = false;
 
-    // iOS Safari only unlocks audio from touchend/click — NOT pointerup.
+    // IOS Safari only unlocks audio from touchend/click — NOT pointerup.
     this.audio.warmUp();
 
     if (this.state === 'landscape') {
@@ -194,7 +202,7 @@ export class SplashController {
       return;
     }
 
-    // splash state — play, then reveal
+    // Splash state — play, then reveal
     const playReady = this.playback.start();
     const elapsed = Date.now() - this.splashDownTime;
     const remaining = Math.max(0, MIN_SUSTAIN_MS - elapsed);

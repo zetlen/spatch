@@ -70,7 +70,7 @@ describe('seen storage', () => {
     expect(_getSeenList()).toEqual([]);
     expect(_isSeen('/s/abc')).toBe(false);
 
-    // markSeen should still work after corruption
+    // MarkSeen should still work after corruption
     _markSeen('/s/abc');
     expect(_isSeen('/s/abc')).toBe(true);
   });

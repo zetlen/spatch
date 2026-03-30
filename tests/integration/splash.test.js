@@ -83,7 +83,7 @@ test.describe('Splash preview', () => {
     await overlay.click();
     await expect(page.locator('body')).toHaveClass(/is-editing/, { timeout: 8000 });
 
-    // sessionStorage should NOT have '/' in seen list (preview doesn't write seen)
+    // SessionStorage should NOT have '/' in seen list (preview doesn't write seen)
     const seen = await page.evaluate(() => {
       const raw = sessionStorage.getItem('spatch-seen');
       return raw ? JSON.parse(raw) : [];

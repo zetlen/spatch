@@ -21,7 +21,7 @@ describe('sweepParamsForAngle', () => {
 
   test('0° (LR) uses full decay, linear', () => {
     const p = sweepParamsForAngle(0);
-    expect(p.durationFrac).toBe(1.0);
+    expect(p.durationFrac).toBe(1);
     expect(p.exponent).toBe(1);
   });
 
@@ -106,7 +106,9 @@ describe('buildSweepCurve', () => {
       for (let i = 0; i < curve.length; i++) {
         expect(curve[i]).toBeGreaterThanOrEqual(0);
         expect(curve[i]).toBeLessThanOrEqual(1);
-        if (i > 0) expect(curve[i]).toBeGreaterThanOrEqual(curve[i - 1] - 0.001);
+        if (i > 0) {
+          expect(curve[i]).toBeGreaterThanOrEqual(curve[i - 1] - 0.001);
+        }
       }
     }
   });
@@ -123,7 +125,7 @@ function createMockAudioParam(initial = 0) {
     setValueCurveAtTime(values, t, d) {
       calls.push({
         method: 'setValueCurveAtTime',
-        values: Array.from(values),
+        values: [...values],
         time: t,
         duration: d,
       });
@@ -160,7 +162,7 @@ describe('scheduleFormantSweep', () => {
     const brightness = createMockBiquadFilter(1900, 0.7);
     brightness.type = 'lowpass';
 
-    scheduleFormantSweep(f1, f2, brightness, linearFill, 'pulse', 0.1, 0.5);
+    scheduleFormantSweep({ f1, f2, brightness }, linearFill, 'pulse', 0.1, 0.5);
 
     const f1FreqCurve = f1.frequency.calls.find((c) => c.method === 'setValueCurveAtTime');
     expect(f1FreqCurve).not.toBeUndefined();
@@ -185,7 +187,7 @@ describe('scheduleFormantSweep', () => {
     const brightness = createMockBiquadFilter(1900, 0.7);
     brightness.type = 'lowpass';
 
-    scheduleFormantSweep(f1, f2, brightness, linearFill, 'pulse', 0.0, 1.0);
+    scheduleFormantSweep({ f1, f2, brightness }, linearFill, 'pulse', 0, 1);
 
     const f1Curve = f1.frequency.calls.find((c) => c.method === 'setValueCurveAtTime');
     const values = f1Curve.values;
@@ -200,7 +202,7 @@ describe('scheduleFormantSweep', () => {
     brightness.type = 'lowpass';
 
     const reversedFill = { ...linearFill, gradAngle: 180 };
-    scheduleFormantSweep(f1, f2, brightness, reversedFill, 'pulse', 0.0, 1.0);
+    scheduleFormantSweep({ f1, f2, brightness }, reversedFill, 'pulse', 0, 1);
 
     const f1Curve = f1.frequency.calls.find((c) => c.method === 'setValueCurveAtTime');
     const values = f1Curve.values;
@@ -216,7 +218,7 @@ describe('scheduleFormantSweep', () => {
     brightness.type = 'lowpass';
 
     const decay = 0.8;
-    scheduleFormantSweep(f1, f2, brightness, linearFill, 'pulse', 0.0, decay);
+    scheduleFormantSweep({ f1, f2, brightness }, linearFill, 'pulse', 0, decay);
 
     const f1Curve = f1.frequency.calls.find((c) => c.method === 'setValueCurveAtTime');
     const expectedDuration = decay * sweepParamsForAngle(0).durationFrac;

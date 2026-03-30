@@ -631,7 +631,7 @@ describe('AudioEngine — vibe-based master reverb', () => {
   });
 
   test('play with preloaded IR buffer sets convolver buffer synchronously', async () => {
-    const irBuffer = { duration: 1.5, length: 66150 };
+    const irBuffer = { duration: 1.5, length: 66_150 };
     setVibe(new Vibe({ ir: 'preloaded.m4a', reverbMix: 0.6 }));
     const state = makeSigilState([makeVoice('a')]);
     await engine.play(state, state.envelope, { irBuffer });

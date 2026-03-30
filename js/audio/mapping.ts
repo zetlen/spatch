@@ -1,4 +1,4 @@
-// mapping.ts — Pure pitch/spatial mapping functions for audio synthesis.
+// Mapping.ts — Pure pitch/spatial mapping functions for audio synthesis.
 // No Web Audio API dependencies — just math.
 
 import { type NormalizedCoord, type WaveformType, normalizedCoord } from '../types.ts';
@@ -26,7 +26,7 @@ function midiToFreq(midi: number): number {
 
 // Maximum micro-detuning in cents when positioned between note snap points.
 // Set to 0 for hard chromatic snap. Can be re-enabled later as a deliberate
-// per-voice or global parameter rather than an accidental side effect.
+// Per-voice or global parameter rather than an accidental side effect.
 const MAX_DETUNE_CENTS = 0;
 
 /**
@@ -50,7 +50,7 @@ export function yToFrequency(y: NormalizedCoord): number {
   const baseFreq = midiToFreq(BASE_MIDI + CHROMATIC_SEMITONES[clamped]!);
 
   // Micro-detuning: tanh flattens near edges. Currently disabled (MAX_DETUNE_CENTS=0)
-  // for hard chromatic snap. Can be re-enabled as a deliberate parameter.
+  // For hard chromatic snap. Can be re-enabled as a deliberate parameter.
   const detuneCents = MAX_DETUNE_CENTS * Math.tanh(offset * 3);
   return baseFreq * 2 ** (detuneCents / 1200);
 }
@@ -130,7 +130,9 @@ export function yToPlaybackRate(y: NormalizedCoord, referencePitch: number): num
  */
 export function rotationToTimbre(rotation: number, waveform: WaveformType): number {
   const period = get(waveform).rotationPeriod;
-  if (!period) return 0;
+  if (!period) {
+    return 0;
+  }
   const phase = ((rotation % period) + period) % period;
   return phase / period;
 }
@@ -138,8 +140,8 @@ export function rotationToTimbre(rotation: number, waveform: WaveformType): numb
 // ---- Pulse-width modulation ----
 
 // Maximum PWM offset magnitude. At 0.9 the pulse collapses to ~5% duty cycle
-// and becomes inaudible. 0.75 keeps the minimum at ~12.5% — still a bright,
-// reedy timbre but clearly audible at every rotation angle.
+// And becomes inaudible. 0.75 keeps the minimum at ~12.5% — still a bright,
+// Reedy timbre but clearly audible at every rotation angle.
 const MAX_PWM_OFFSET = 0.75;
 
 /** Convert a timbre value [0, 1) to a PWM DC offset for pulse-width modulation. */

@@ -1,4 +1,4 @@
-// stage-panel.ts — Long-press scene picker
+// Stage-panel.ts — Long-press scene picker
 // Icon references for sprite scanner (pulled from each scene's `icon` field):
 // #tabler-armchair #tabler-fountain-off #tabler-building-monument
 // #tabler-building-airport #tabler-paint #tabler-traffic-cone #tabler-mouse-2

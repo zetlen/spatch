@@ -1,11 +1,11 @@
-// tutorial.ts — Interactive tutorial overlay with punch-out highlights
+// Tutorial.ts — Interactive tutorial overlay with punch-out highlights
 //
 // Framework for step-based tutorials. Each step declares a target to
-// punch-out, text to display, and an optional `play(ctx)` function that
-// receives a StepContext with auto-cancelling helpers for scheduling,
-// animation, and audio. All timers, loops, and audio started via the
-// context are cancelled automatically when the step exits — no manual
-// teardown needed.
+// Punch-out, text to display, and an optional `play(ctx)` function that
+// Receives a StepContext with auto-cancelling helpers for scheduling,
+// Animation, and audio. All timers, loops, and audio started via the
+// Context are cancelled automatically when the step exits — no manual
+// Teardown needed.
 //
 // Icon references for sprite scanner:
 // #tabler-mood-puzzled #tabler-x
@@ -163,7 +163,7 @@ const CHICLET_SCENE = 0;
 const SCBD_SCENE = 7;
 
 // Default Y positions: C major first inversion (E4, G4, C5)
-// y = 1 - (midi - 43) / 36
+// Y = 1 - (midi - 43) / 36
 const Y_E4 = 0.417;
 const Y_G4 = 0.333;
 const Y_C5 = 0.194;
@@ -203,7 +203,7 @@ function isolateShape(ctx: StepContext, shape: 'sine' | 'pulse' | 'blend' | 'ast
   ctx.addVoice(key, shape, 0.5, 0.5);
   ctx.store.updateVoice(ctx.demo[key]!, { size: ctx.nc(0.25) });
   if (shape !== 'sine') {
-    ctx.store.updateVoice(ctx.demo[key]!, { timbre: ctx.nc(0.0) });
+    ctx.store.updateVoice(ctx.demo[key]!, { timbre: ctx.nc(0) });
   }
   ctx.selection.clear();
   ctx.render();
@@ -212,13 +212,7 @@ function isolateShape(ctx: StepContext, shape: 'sine' | 'pulse' | 'blend' | 'ast
 /** Set up a single large square with a gradient fill. */
 function setupGradientSquare(
   ctx: StepContext,
-  h: number,
-  s: number,
-  l: number,
-  h2: number,
-  s2: number,
-  l2: number,
-  gradAngle: number,
+  fill: { h: number; s: number; l: number; h2: number; s2: number; l2: number; gradAngle: number },
 ): void {
   ctx.stop();
   ctx.clearVoices();
@@ -227,7 +221,7 @@ function setupGradientSquare(
   ctx.store.updateVoice(ctx.demo.sq!, {
     size: ctx.nc(0.25),
     timbre: ctx.nc(0.083),
-    fill: { mode: 'linear', h, s, l, h2, s2, l2, gradAngle },
+    fill: { mode: 'linear', ...fill },
   });
   ctx.selection.clear();
   ctx.render();
@@ -288,7 +282,9 @@ function noteSeq(
 
   function schedule(ms: number, fn: () => void): void {
     ctx.after(ms, () => {
-      if (guard()) fn();
+      if (guard()) {
+        fn();
+      }
     });
   }
 
@@ -321,17 +317,23 @@ function noteSeq(
       const resume = !playing;
       schedule(at, () => {
         for (let i = 0; i < voiceKeys.length; i++) {
-          if (midi[i] == null) continue;
+          if (midi[i] == null) {
+            continue;
+          }
           const y = midiToY(midi[i]!);
           if (resume) {
             ensure(voiceKeys[i]!, y);
           } else {
             const id = ctx.demo[voiceKeys[i]!];
-            if (id) ctx.store.updateVoice(id, { y: ctx.nc(y) });
+            if (id) {
+              ctx.store.updateVoice(id, { y: ctx.nc(y) });
+            }
           }
         }
         ctx.render();
-        if (resume) ctx.playLatched();
+        if (resume) {
+          ctx.playLatched();
+        }
       });
       t += beat * beats;
       playing = true;
@@ -345,7 +347,9 @@ function noteSeq(
       schedule(at, () => {
         if (resume) {
           for (let i = 0; i < voiceKeys.length; i++) {
-            if (targets[i] != null) ensure(voiceKeys[i]!, targets[i]!);
+            if (targets[i] != null) {
+              ensure(voiceKeys[i]!, targets[i]!);
+            }
           }
           ctx.playLatched();
         }
@@ -357,7 +361,9 @@ function noteSeq(
         const t0 = performance.now();
         let done = false;
         function ramp(): void {
-          if (!guard() || done) return;
+          if (!guard() || done) {
+            return;
+          }
           const p = Math.min((performance.now() - t0) / dur, 1);
           for (let i = 0; i < voiceKeys.length; i++) {
             const id = ctx.demo[voiceKeys[i]!];
@@ -368,8 +374,11 @@ function noteSeq(
             }
           }
           ctx.render();
-          if (p < 1) requestAnimationFrame(ramp);
-          else done = true;
+          if (p < 1) {
+            requestAnimationFrame(ramp);
+          } else {
+            done = true;
+          }
         }
         requestAnimationFrame(ramp);
       });
@@ -415,7 +424,9 @@ function playJumpSequence(ctx: StepContext): void {
     border: { color: 'black', double: true, thickness: normalizedCoord(0.143) },
   } as Partial<Voice>;
   ctx.addVoice('jb', 'blend', 0.343, midiToY(A3));
-  if (ctx.demo.jb) ctx.store.updateVoice(ctx.demo.jb, bassProps);
+  if (ctx.demo.jb) {
+    ctx.store.updateVoice(ctx.demo.jb, bassProps);
+  }
 
   // Melody voice config (3 light gray astroids — created on first chord, not upfront)
   const melodyProps: Partial<Voice> = {
@@ -472,7 +483,9 @@ function playJumpSequence(ctx: StepContext): void {
 
   // Master stop + unlock
   ctx.after((60_000 / BPM) * TOTAL_BEATS, () => {
-    if (gen !== jumpGen) return;
+    if (gen !== jumpGen) {
+      return;
+    }
     ctx.stop();
     overlay?.classList.remove('tutorial-locked');
   });
@@ -590,10 +603,14 @@ const steps: TutorialStep[] = [
       { h: 280, s: 60, l: 40 },
       { h: 120, s: 90, l: 70 },
     ].map((c, i) => (ctx: StepContext) => {
-      if (i === 0) setupDemoSpatch(ctx);
+      if (i === 0) {
+        setupDemoSpatch(ctx);
+      }
       const fill = { mode: 'solid' as const, ...c };
       for (const k of ['tri', 'sq', 'circ']) {
-        if (ctx.demo[k]) ctx.store.updateVoice(ctx.demo[k]!, { fill });
+        if (ctx.demo[k]) {
+          ctx.store.updateVoice(ctx.demo[k]!, { fill });
+        }
       }
       ctx.render();
       ctx.playLatched();
@@ -610,7 +627,15 @@ const steps: TutorialStep[] = [
       [240, 75, 50, 0, 75, 50, 180],
       [180, 75, 45, 60, 80, 60, 180],
     ].map(([h, s, l, h2, s2, l2, angle]) => (ctx: StepContext) => {
-      setupGradientSquare(ctx, h!, s!, l!, h2!, s2!, l2!, angle!);
+      setupGradientSquare(ctx, {
+        h: h!,
+        s: s!,
+        l: l!,
+        h2: h2!,
+        s2: s2!,
+        l2: l2!,
+        gradAngle: angle!,
+      });
       ctx.playFor(2500);
     }),
   },
@@ -623,9 +648,13 @@ const steps: TutorialStep[] = [
       (effect, i) => (ctx: StepContext) => {
         if (i === 0) {
           setupDemoSpatch(ctx);
-          if (ctx.demo.sq) ctx.selection.select(ctx.demo.sq);
+          if (ctx.demo.sq) {
+            ctx.selection.select(ctx.demo.sq);
+          }
         }
-        if (ctx.demo.sq) ctx.store.updateVoice(ctx.demo.sq, { effect });
+        if (ctx.demo.sq) {
+          ctx.store.updateVoice(ctx.demo.sq, { effect });
+        }
         ctx.render();
         ctx.playLatched();
       },
@@ -639,29 +668,37 @@ const steps: TutorialStep[] = [
     play: [
       (ctx: StepContext) => {
         setupDemoSpatch(ctx);
-        if (ctx.demo.tri)
+        if (ctx.demo.tri) {
           ctx.store.updateVoice(ctx.demo.tri, {
             x: ctx.nc(0.35),
             y: ctx.nc(0.4),
             size: ctx.nc(0.18),
           });
+        }
         if (ctx.demo.sq) {
           ctx.selection.select(ctx.demo.sq);
           ctx.store.updateVoice(ctx.demo.sq, { x: ctx.nc(0.5), y: ctx.nc(0.4), size: ctx.nc(0.2) });
         }
-        if (ctx.demo.circ)
+        if (ctx.demo.circ) {
           ctx.store.updateVoice(ctx.demo.circ, {
             x: ctx.nc(0.65),
             y: ctx.nc(0.4),
             size: ctx.nc(0.18),
           });
+        }
         ctx.render();
         ctx.playLatched();
       },
       (ctx: StepContext) => {
-        if (ctx.demo.tri) ctx.store.updateVoice(ctx.demo.tri, { x: ctx.nc(0.45) });
-        if (ctx.demo.sq) ctx.store.updateVoice(ctx.demo.sq, { x: ctx.nc(0.5) });
-        if (ctx.demo.circ) ctx.store.updateVoice(ctx.demo.circ, { x: ctx.nc(0.55) });
+        if (ctx.demo.tri) {
+          ctx.store.updateVoice(ctx.demo.tri, { x: ctx.nc(0.45) });
+        }
+        if (ctx.demo.sq) {
+          ctx.store.updateVoice(ctx.demo.sq, { x: ctx.nc(0.5) });
+        }
+        if (ctx.demo.circ) {
+          ctx.store.updateVoice(ctx.demo.circ, { x: ctx.nc(0.55) });
+        }
         ctx.store.recomputeOverlap();
         ctx.store.updateBlend('multiply');
         ctx.render();
@@ -705,7 +742,9 @@ const steps: TutorialStep[] = [
       if (ctx.demo.circ) {
         ctx.selection.select(ctx.demo.circ);
         const dupe = ctx.store.duplicateVoice(ctx.demo.circ, 0.08, -0.08);
-        if (dupe) ctx.demo.dupe = dupe.id;
+        if (dupe) {
+          ctx.demo.dupe = dupe.id;
+        }
       }
       ctx.render();
     },
@@ -804,7 +843,9 @@ const steps: TutorialStep[] = [
     punchOut: ['#btn-stage', '#canvas-wrap'],
     text: "Change the scenery. It'll change the whole vibe!",
     play: [CHICLET_SCENE, 3, 7].map((scene, i) => (ctx: StepContext) => {
-      if (i === 0) setupDemoSpatch(ctx);
+      if (i === 0) {
+        setupDemoSpatch(ctx);
+      }
       ctx.store.updateScene(scene);
       ctx.render();
       ctx.playFor(2000);
@@ -869,7 +910,7 @@ const steps: TutorialStep[] = [
         ctx.playFor(2000);
       },
       (ctx: StepContext) => {
-        ctx.store.updateEnvelope({ sustain: 1.0 });
+        ctx.store.updateEnvelope({ sustain: 1 });
         ctx.render();
         ctx.playFor(2000);
       },
@@ -918,15 +959,21 @@ const steps: TutorialStep[] = [
     play: [
       (ctx: StepContext) => {
         setupDemoSpatch(ctx);
-        if (ctx.demo.tri) ctx.selection.select(ctx.demo.tri);
+        if (ctx.demo.tri) {
+          ctx.selection.select(ctx.demo.tri);
+        }
         ctx.render();
         const soloBtn = document.querySelector<HTMLElement>('#btn-solo');
-        if (soloBtn && !soloBtn.classList.contains('solo-active')) soloBtn.click();
+        if (soloBtn && !soloBtn.classList.contains('solo-active')) {
+          soloBtn.click();
+        }
         ctx.playLatched();
       },
       (_ctx: StepContext) => {
         const soloBtn = document.querySelector<HTMLElement>('#btn-solo');
-        if (soloBtn && soloBtn.classList.contains('solo-active')) soloBtn.click();
+        if (soloBtn && soloBtn.classList.contains('solo-active')) {
+          soloBtn.click();
+        }
       },
     ],
   },
@@ -934,6 +981,39 @@ const steps: TutorialStep[] = [
   // Share button
   { punchOut: '#btn-share', text: 'My spatch. Look at it!' },
 ];
+
+// ---- Pure helpers (no captured state) ----
+
+function getPlayFns(step: TutorialStep): ((ctx: StepContext) => void)[] {
+  if (!step.play) {
+    return [];
+  }
+  return Array.isArray(step.play) ? step.play : [step.play];
+}
+
+function punchOutClip(rects: DOMRect[], pad: number): string {
+  const vw = globalThis.innerWidth;
+  const vh = globalThis.innerHeight;
+  const cr = 8;
+  let d = `M0 0H${vw}V${vh}H0Z`;
+  for (const rect of rects) {
+    const x = rect.left - pad;
+    const y = rect.top - pad;
+    const w = rect.width + pad * 2;
+    const h = rect.height + pad * 2;
+    const r = Math.min(cr, w / 2, h / 2);
+    d += ` M${x + r} ${y}`;
+    d += `H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}`;
+    d += `V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}`;
+    d += `H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}`;
+    d += `V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
+  }
+  return `path(evenodd,"${d}")`;
+}
+
+function tutorialSelectors(step: TutorialStep): string[] {
+  return Array.isArray(step.punchOut) ? step.punchOut : [step.punchOut];
+}
 
 // ---- Tutorial engine ----
 
@@ -988,7 +1068,9 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
   let pendingCancels: (() => void)[] = [];
 
   function cancelPending(): void {
-    for (const fn of pendingCancels) fn();
+    for (const fn of pendingCancels) {
+      fn();
+    }
     pendingCancels = [];
   }
 
@@ -1001,7 +1083,9 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
     function loop(periodMs: number, onFrame: (t: number) => void): void {
       let cancelled = false;
       function frame(): void {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         const t = (performance.now() % periodMs) / periodMs;
         onFrame(t);
         requestRender();
@@ -1030,9 +1114,13 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
     function clearVoices(): void {
       const ids = store.data.voices.map((v) => v.id);
-      for (const id of ids) store.removeVoice(id);
+      for (const id of ids) {
+        store.removeVoice(id);
+      }
       selection.clear();
-      for (const k of Object.keys(demo)) demo[k] = undefined;
+      for (const k of Object.keys(demo)) {
+        demo[k] = undefined;
+      }
     }
 
     function addVoice(
@@ -1072,7 +1160,9 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
   let savedState: SigilData | undefined;
 
   function restoreState(): void {
-    if (!savedState) return;
+    if (!savedState) {
+      return;
+    }
     store.loadState(savedState);
     savedState = undefined;
     selection.clear();
@@ -1080,7 +1170,9 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
   }
 
   window.addEventListener('beforeunload', () => {
-    if (savedState) store.loadState(savedState);
+    if (savedState) {
+      store.loadState(savedState);
+    }
   });
 
   // ---- Step lifecycle ----
@@ -1089,11 +1181,6 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
   let currentSubstep = 0;
 
   /** Get the play functions for a step as an array. */
-  function getPlayFns(step: TutorialStep): ((ctx: StepContext) => void)[] {
-    if (!step.play) return [];
-    return Array.isArray(step.play) ? step.play : [step.play];
-  }
-
   function cleanupStep(): void {
     releaseTarget();
     cancelPending();
@@ -1123,7 +1210,9 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
   }
 
   function hide(): void {
-    if (overlay.classList.contains('hidden')) return;
+    if (overlay.classList.contains('hidden')) {
+      return;
+    }
     cleanupStep();
     audio.stop();
     restoreState();
@@ -1186,31 +1275,6 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
   // ---- Step rendering ----
 
-  function punchOutClip(rects: DOMRect[], pad: number): string {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const cr = 8;
-    let d = `M0 0H${vw}V${vh}H0Z`;
-    for (const rect of rects) {
-      const x = rect.left - pad;
-      const y = rect.top - pad;
-      const w = rect.width + pad * 2;
-      const h = rect.height + pad * 2;
-      const r = Math.min(cr, w / 2, h / 2);
-      d += ` M${x + r} ${y}`;
-      d += `H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}`;
-      d += `V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}`;
-      d += `H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}`;
-      d += `V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
-    }
-    return `path(evenodd,"${d}")`;
-  }
-
-  /** Resolve punchOut to an array of selectors. */
-  function selectors(step: TutorialStep): string[] {
-    return Array.isArray(step.punchOut) ? step.punchOut : [step.punchOut];
-  }
-
   function showStep(index: number): void {
     const step = steps[index]!;
     const ctx = createStepContext();
@@ -1222,11 +1286,13 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
     }
 
     requestAnimationFrame(() => {
-      const sels = selectors(step);
+      const sels = tutorialSelectors(step);
       const punchRects: DOMRect[] = [];
       for (const sel of sels) {
         const el = document.querySelector<HTMLElement>(sel);
-        if (el) punchRects.push(el.getBoundingClientRect());
+        if (el) {
+          punchRects.push(el.getBoundingClientRect());
+        }
       }
 
       if (punchRects.length === 0) {
@@ -1262,22 +1328,30 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
       let top: number;
 
       switch (corner) {
-        case 'bl': // Attack: text BL corner → 2rem up+right of anchor
+        case 'bl': {
+          // Attack: text BL corner → 2rem up+right of anchor
           left = ax + gap;
           top = ay - m.height - gap;
           break;
-        case 'tl': // Decay: text TL corner → 2rem down+right of anchor
+        }
+        case 'tl': {
+          // Decay: text TL corner → 2rem down+right of anchor
           left = ax + gap;
           top = ay + gap;
           break;
-        case 'tr': // Sustain: text TR corner → 2rem down+left of anchor
+        }
+        case 'tr': {
+          // Sustain: text TR corner → 2rem down+left of anchor
           left = ax - m.width - gap;
           top = ay + gap;
           break;
-        case 'br': // Release: text BR corner → 2rem up+left of anchor
+        }
+        case 'br': {
+          // Release: text BR corner → 2rem up+left of anchor
           left = ax - m.width - gap;
           top = ay - m.height - gap;
           break;
+        }
       }
 
       textEl.style.left = `${left}px`;
@@ -1348,17 +1422,25 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (overlay.classList.contains('tutorial-locked')) return;
+    if (overlay.classList.contains('tutorial-locked')) {
+      return;
+    }
     hide();
   });
 
   dotsEl.addEventListener('click', (e) => {
-    if (overlay.classList.contains('tutorial-locked')) return;
+    if (overlay.classList.contains('tutorial-locked')) {
+      return;
+    }
     const dot = (e.target as HTMLElement).closest<HTMLElement>('.tutorial-dot');
-    if (!dot) return;
+    if (!dot) {
+      return;
+    }
     e.stopPropagation();
     const target = Number(dot.dataset.step);
-    if (Number.isNaN(target) || target === currentStep) return;
+    if (Number.isNaN(target) || target === currentStep) {
+      return;
+    }
     cleanupStep();
     currentStep = target;
     currentSubstep = 0;
@@ -1372,11 +1454,17 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
   function depressTarget(): void {
     releaseTarget();
     const step = steps[currentStep];
-    if (!step) return;
-    const sel = selectors(step)[0];
-    if (!sel) return;
+    if (!step) {
+      return;
+    }
+    const sel = tutorialSelectors(step)[0];
+    if (!sel) {
+      return;
+    }
     const el = document.querySelector<HTMLElement>(sel);
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     el.classList.add('active');
     depressedEl = el;
   }
@@ -1390,23 +1478,37 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
   function isNavClick(e: Event): boolean {
     const t = e.target as Node;
-    if (closeBtn.contains(t) || dotsEl.contains(t)) return true;
+    if (closeBtn.contains(t) || dotsEl.contains(t)) {
+      return true;
+    }
     const el = t instanceof Element ? t : t.parentElement;
-    return !!el?.closest('[data-tutorial-interactive]');
+    return Boolean(el?.closest('[data-tutorial-interactive]'));
   }
 
   overlay.addEventListener('pointerdown', (e) => {
-    if (overlay.classList.contains('tutorial-locked')) return;
-    if (isNavClick(e)) return;
-    if (!introEl.classList.contains('hidden')) return;
+    if (overlay.classList.contains('tutorial-locked')) {
+      return;
+    }
+    if (isNavClick(e)) {
+      return;
+    }
+    if (!introEl.classList.contains('hidden')) {
+      return;
+    }
     depressTarget();
   });
 
   overlay.addEventListener('pointerup', (e) => {
     releaseTarget();
-    if (overlay.classList.contains('tutorial-locked')) return;
-    if (isNavClick(e)) return;
-    if (!introEl.classList.contains('hidden')) return;
+    if (overlay.classList.contains('tutorial-locked')) {
+      return;
+    }
+    if (isNavClick(e)) {
+      return;
+    }
+    if (!introEl.classList.contains('hidden')) {
+      return;
+    }
     advance();
   });
 
@@ -1427,7 +1529,9 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
   // Repaint punch-out overlay on resize so clip paths track element positions.
   let resizeTimer: ReturnType<typeof setTimeout> | undefined;
   window.addEventListener('resize', () => {
-    if (overlay.classList.contains('hidden')) return;
+    if (overlay.classList.contains('hidden')) {
+      return;
+    }
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => showStep(currentStep), 2000);
   });

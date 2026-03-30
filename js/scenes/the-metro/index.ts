@@ -19,7 +19,7 @@ const scene: Scene = {
     eqHighGain: -2,
     compThreshold: -14,
     compRatio: 4,
-    warmth: 2.0,
+    warmth: 2,
     stereoWidth: 1.8,
     reverbPreDelay: 0.06,
   },

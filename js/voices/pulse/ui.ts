@@ -1,4 +1,4 @@
-// pulse/ui.ts — SVG rendering and selection handles for pulse (square) voices.
+// Pulse/ui.ts — SVG rendering and selection handles for pulse (square) voices.
 
 import { resizeHandleEl, setAttrs, svgEl } from '../../dom.ts';
 import type { Voice } from '../../types.ts';

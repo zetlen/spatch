@@ -1,7 +1,7 @@
-// player.ts — Blend (triangle) Player delegate.
+// Player.ts — Blend (triangle) Player delegate.
 //
 // Crossfaded sawtooth + triangle oscillator pair. Timbre controls the
-// saw/tri blend ratio.
+// Saw/tri blend ratio.
 
 import { safeStop } from '../../audio/node-utils.ts';
 import { yToFrequency } from '../../audio/mapping.ts';
@@ -13,18 +13,18 @@ const player: VoicePlayer = {
   shapeAreaCoeff: (3 * Math.sqrt(3)) / 4,
   formantMaxQ: 8,
   gainExponent: 1.3,
-  buildAudioGraph(ctx: AudioContext, voice: Voice, shared: AudioSharedNodes): AudioVoice {
-    const timbre = 'timbre' in voice ? voice.timbre : 0;
-    const freq = yToFrequency(voice.y);
+  buildAudioGraph(ctx: AudioContext, initVoice: Voice, shared: AudioSharedNodes): AudioVoice {
+    const initTimbre = 'timbre' in initVoice ? initVoice.timbre : 0;
+    const initFreq = yToFrequency(initVoice.y);
 
-    const oscSaw = new OscillatorNode(ctx, { type: 'sawtooth', frequency: freq });
-    const oscTri = new OscillatorNode(ctx, { type: 'triangle', frequency: freq });
+    const oscSaw = new OscillatorNode(ctx, { type: 'sawtooth', frequency: initFreq });
+    const oscTri = new OscillatorNode(ctx, { type: 'triangle', frequency: initFreq });
     const gainSaw = new GainNode(ctx);
     const gainTri = new GainNode(ctx);
 
-    const mix = 1 - Math.abs(timbre - 0.5) * 2;
-    gainTri.gain.value = Math.sin((mix * Math.PI) / 2);
-    gainSaw.gain.value = Math.cos((mix * Math.PI) / 2);
+    const initMix = 1 - Math.abs(initTimbre - 0.5) * 2;
+    gainTri.gain.value = Math.sin((initMix * Math.PI) / 2);
+    gainSaw.gain.value = Math.cos((initMix * Math.PI) / 2);
 
     oscSaw.connect(gainSaw);
     oscTri.connect(gainTri);
@@ -34,11 +34,11 @@ const player: VoicePlayer = {
     return {
       ...shared,
       hasSweep: false,
-      lastX: voice.x as number,
-      lastY: voice.y as number,
-      lastSize: voice.size as number,
+      lastX: initVoice.x as number,
+      lastY: initVoice.y as number,
+      lastSize: initVoice.size as number,
       outputNode: shared.panner,
-      shapeId: voice.id,
+      shapeId: initVoice.id,
       warmthShaper: undefined,
       start(time: number) {
         oscSaw.start(time);
