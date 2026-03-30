@@ -1,31 +1,29 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { _clearCaches } from '../../js/audio/sample-loader.ts';
+import { createSampleLoader, setSampleLoader } from '../../js/audio/sample-loader.ts';
+import { prefetchScene, loadSceneIR, preloadNextScene, _reset } from '../../js/scenes/loader.ts';
+import { SCENES, getScene } from '../../js/scenes/index.ts';
 
-// Stub globalThis.fetch before importing the module under test, so fetchIR
-// doesn't hit the network during module-level side effects.
-let originalFetch;
 let originalImage;
+let imageInstances;
 
-function stubFetch(responses = {}) {
-  originalFetch = globalThis.fetch;
-  globalThis.fetch = (url) => {
-    const key = typeof url === 'string' ? url : url.toString();
-    if (responses[key]) {
+function setMockLoader(responses = {}) {
+  setSampleLoader(
+    createSampleLoader((url) => {
+      const key = typeof url === 'string' ? url : url.toString();
+      if (responses[key]) {
+        return Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(responses[key]),
+        });
+      }
       return Promise.resolve({
         ok: true,
-        arrayBuffer: () => Promise.resolve(responses[key]),
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(16)),
       });
-    }
-    // Default: return a small ArrayBuffer for any URL
-    return Promise.resolve({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(16)),
-    });
-  };
+    }),
+  );
 }
 
-// Minimal Image stub: calls onload async when src is set
-let imageInstances;
 function stubImage() {
   imageInstances = [];
   originalImage = globalThis.Image;
@@ -41,7 +39,6 @@ function stubImage() {
     }
     set src(value) {
       this._src = value;
-      // Fire onload asynchronously
       queueMicrotask(() => {
         if (this.onload) this.onload();
       });
@@ -50,22 +47,14 @@ function stubImage() {
 }
 
 beforeEach(() => {
-  stubFetch();
+  setMockLoader();
   stubImage();
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
   globalThis.Image = originalImage;
-  _clearCaches();
   imageInstances = [];
 });
-
-// Import the module under test after stubs are set up (but these are
-// bun:test imports so they happen at parse time — the stubs in beforeEach
-// will be active when the actual test functions run).
-import { prefetchScene, loadSceneIR, preloadNextScene, _reset } from '../../js/scenes/loader.ts';
-import { SCENES, getScene } from '../../js/scenes/index.ts';
 
 describe('prefetchScene', () => {
   afterEach(() => {
@@ -82,7 +71,6 @@ describe('prefetchScene', () => {
 
     await prefetchScene(scene);
 
-    // Image was created and src was set
     expect(imageInstances.length).toBe(1);
     expect(imageInstances[0].src).toBe('/img/test.jpg');
   });
@@ -97,7 +85,6 @@ describe('prefetchScene', () => {
 
     await prefetchScene(scene);
 
-    // Image was loaded
     expect(imageInstances.length).toBe(1);
     expect(imageInstances[0].src).toBe('/img/no-ir.jpg');
   });
@@ -114,12 +101,10 @@ describe('prefetchScene', () => {
     const countAfterFirst = imageInstances.length;
 
     await prefetchScene(scene);
-    // No additional Image was created on second call
     expect(imageInstances.length).toBe(countAfterFirst);
   });
 
   test('resolves when image fails but IR succeeds', async () => {
-    // Override Image stub to fire onerror
     globalThis.Image = class FakeImage {
       constructor() {
         imageInstances.push(this);
@@ -144,22 +129,22 @@ describe('prefetchScene', () => {
       vibe: { ir: '/audio/ok.m4a', reverbMix: 0.5 },
     };
 
-    // Should resolve, not reject
     await prefetchScene(scene);
   });
 
   test('resolves when IR fails but image succeeds', async () => {
-    // Make fetch fail for IR URLs
-    globalThis.fetch = (url) => {
-      const key = typeof url === 'string' ? url : url.toString();
-      if (key.endsWith('.m4a')) {
-        return Promise.resolve({ ok: false, status: 404 });
-      }
-      return Promise.resolve({
-        ok: true,
-        arrayBuffer: () => Promise.resolve(new ArrayBuffer(16)),
-      });
-    };
+    setSampleLoader(
+      createSampleLoader((url) => {
+        const key = typeof url === 'string' ? url : url.toString();
+        if (key.endsWith('.m4a')) {
+          return Promise.resolve({ ok: false, status: 404 });
+        }
+        return Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(16)),
+        });
+      }),
+    );
 
     const scene = {
       name: 'ir-fail',
@@ -168,7 +153,6 @@ describe('prefetchScene', () => {
       vibe: { ir: '/audio/broken.m4a', reverbMix: 0.5 },
     };
 
-    // Should resolve, not reject
     await prefetchScene(scene);
   });
 
@@ -200,11 +184,9 @@ describe('prefetchScene', () => {
       vibe: {},
     };
 
-    // First call: image fails, but prefetchScene still resolves
     await prefetchScene(scene);
     const countAfterFirst = imageInstances.length;
 
-    // Second call: image succeeds — should retry (not return cached failure)
     failImage = false;
     await prefetchScene(scene);
     expect(imageInstances.length).toBeGreaterThan(countAfterFirst);
@@ -220,7 +202,6 @@ describe('prefetchScene', () => {
 
     await Promise.all([prefetchScene(scene), prefetchScene(scene)]);
 
-    // Only one Image was created
     expect(imageInstances.length).toBe(1);
   });
 });
@@ -231,8 +212,7 @@ describe('loadSceneIR', () => {
   });
 
   test('returns decoded AudioBuffer after prefetch', async () => {
-    const irBuffer = new ArrayBuffer(32);
-    stubFetch({ '/audio/decode.m4a': irBuffer });
+    setMockLoader({ '/audio/decode.m4a': new ArrayBuffer(32) });
 
     const scene = {
       name: 'decode-scene',
@@ -274,13 +254,10 @@ describe('preloadNextScene', () => {
     const currentIndex = 0;
     const nextScene = getScene(currentIndex + 1);
 
-    // Fire-and-forget; we just verify it doesn't throw
     preloadNextScene(currentIndex);
 
-    // Give microtasks time to resolve
     await new Promise((r) => setTimeout(r, 50));
 
-    // The next scene's image should have been requested
     const loadedSrcs = imageInstances.map((img) => img.src);
     expect(loadedSrcs).toContain(nextScene.stageBackground);
   });
@@ -313,7 +290,6 @@ describe('_reset', () => {
     _reset();
 
     await prefetchScene(scene);
-    // A new Image was created after reset
     expect(imageInstances.length).toBe(countBefore + 1);
   });
 });

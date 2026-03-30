@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { AudioEngine } from '../../js/audio/engine.ts';
+import { createSampleLoader, setSampleLoader } from '../../js/audio/sample-loader.ts';
 import { Vibe, setVibe } from '../../js/audio/vibe.ts';
+
+// Set up a mock sample loader so decodeSample calls in the engine don't throw.
+setSampleLoader(
+  createSampleLoader(() =>
+    Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(16)) }),
+  ),
+);
 
 // Reset vibe to defaults after every test so state doesn't leak
 afterEach(() => setVibe(new Vibe()));

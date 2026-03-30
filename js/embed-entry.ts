@@ -3,6 +3,7 @@
 import { render } from './canvas/render.ts';
 import { computeOverlappingVoices } from './overlap.ts';
 import { AudioEngine } from './audio/engine.ts';
+import { createSampleLoader, setSampleLoader } from './audio/sample-loader.ts';
 import { deserializeState, serializeState } from './serialize.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { qel } from './dom.ts';
@@ -16,6 +17,7 @@ import {
 } from './voices/stamp/lifecycle.ts';
 import type { SigilData } from './types.ts';
 
+setSampleLoader(createSampleLoader(fetch.bind(globalThis)));
 prefetchStampSamples();
 
 const MIN_PLAY_MS = 2000;

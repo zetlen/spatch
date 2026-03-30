@@ -5,6 +5,7 @@ import { SigilStore, UndoManager } from './state.ts';
 import { render } from './canvas/render.ts';
 import { Toolbar } from './toolbar/toolbar.ts';
 import { AudioEngine } from './audio/engine.ts';
+import { createSampleLoader, setSampleLoader } from './audio/sample-loader.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { loadFromURL, pathToState, resetDirty, saveToURL } from './serialize.ts';
 import { applyScene, getScene, initStageLayers, randomSceneIndex, SCENES } from './scenes';
@@ -39,6 +40,7 @@ const tile = qel('#tile');
 const store = new SigilStore();
 const undo = new UndoManager(store);
 const toolbar = new Toolbar(store, undo);
+setSampleLoader(createSampleLoader(fetch.bind(globalThis)));
 const audio = new AudioEngine();
 
 // Expose store and audio engine for integration tests (e.g. setting ADSR
