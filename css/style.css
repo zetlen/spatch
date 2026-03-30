@@ -930,6 +930,9 @@ body.landscape-locked #stage {
 /* ---- Responsive ---- */
 
 @media (max-width: 700px) {
+  #stage {
+    padding-inline: 24px;
+  }
   .toolbar-row,
   .toolbar-context {
     padding: 4px 6px;

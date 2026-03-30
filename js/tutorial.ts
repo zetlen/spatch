@@ -114,6 +114,10 @@ export interface TutorialStep {
    */
   textAnchor?: () => DOMRect;
 
+  /** Which corner of the text label to anchor to the textAnchor point.
+   *  Text is placed so this corner sits 2rem inward from the anchor. */
+  textCorner?: 'tl' | 'tr' | 'bl' | 'br';
+
   /**
    * Demo function(s) for this step. If a single function, it runs once.
    * If an array, each click advances to the next function in order.
@@ -144,20 +148,19 @@ export interface TutorialHandle {
   onShow: (() => void) | null;
 }
 
-/** Return a small rect at one corner of #canvas-wrap for ADSR punch-outs. */
+/** Return a point rect at one corner of #canvas-wrap for ADSR text anchoring. */
 function canvasCornerRect(corner: 'tl' | 'tr' | 'bl' | 'br'): DOMRect {
   const el = document.querySelector<HTMLElement>('#canvas-wrap')!;
   const r = el.getBoundingClientRect();
-  const size = 64;
-  const x = corner === 'tl' || corner === 'bl' ? r.left : r.right - size;
-  const y = corner === 'tl' || corner === 'tr' ? r.top : r.bottom - size;
-  return new DOMRect(x, y, size, size);
+  const x = corner === 'tl' || corner === 'bl' ? r.left : r.right;
+  const y = corner === 'tl' || corner === 'tr' ? r.top : r.bottom;
+  return new DOMRect(x, y, 0, 0);
 }
 
 // ---- Demo constants ----
 
-/** Chiclet is the most neutral-sounding scene. */
 const CHICLET_SCENE = 0;
+const SCBD_SCENE = 7;
 
 // Default Y positions: C major first inversion (E4, G4, C5)
 // y = 1 - (midi - 43) / 36
@@ -235,7 +238,7 @@ function setupGradientSquare(
 const EIGHTH = 0.5;
 const QUARTER = 1;
 const DOTTED_QUARTER = 1.5;
-const HALF = 2;
+const DOTTED_HALF = 3;
 const WHOLE = 4;
 
 // MIDI note names used by the Jump sequence
@@ -396,18 +399,18 @@ function playJumpSequence(ctx: StepContext): void {
   const gen = ++jumpGen;
   ctx.stop();
   ctx.clearVoices();
-  ctx.store.updateScene(CHICLET_SCENE);
+  ctx.store.updateScene(SCBD_SCENE);
 
   const overlay = document.querySelector<HTMLElement>('.tutorial-overlay');
   overlay?.classList.add('tutorial-locked');
 
   ctx.store.updateEnvelope({ attack: 0, decay: 0.286, sustain: 0.714, release: 0.429 });
 
-  // Bass voice (blend/triangle) — dark red, striped, double black border
+  // Bass voice (blend/triangle) — bright red, chorused, double black border
   const bassProps: Partial<Voice> = {
-    size: normalizedCoord(0.349),
+    size: normalizedCoord(0.7),
     timbre: normalizedCoord(0.492),
-    fill: { mode: 'solid', h: 0, s: 100, l: 15 },
+    fill: { mode: 'solid', h: 0, s: 100, l: 55 },
     effect: 'stripes',
     border: { color: 'black', double: true, thickness: normalizedCoord(0.143) },
   } as Partial<Voice>;
@@ -423,15 +426,15 @@ function playJumpSequence(ctx: StepContext): void {
   ctx.selection.clear();
   ctx.render();
 
-  const BPM = 100;
-  const TOTAL_BEATS = 16;
+  const BPM = 130;
+  const TOTAL_BEATS = 17;
   const guard = () => gen === jumpGen;
 
   // Bass line
   noteSeq(ctx, BPM, { jb: { waveform: 'blend', x: 0.343, props: bassProps } }, guard, 0.349)
     .chord([A3], WHOLE + WHOLE + WHOLE + EIGHTH)
     .chord([D3], QUARTER)
-    .chord([E3], HALF + EIGHTH)
+    .chord([E3], DOTTED_HALF)
     .end();
 
   // Melody line
@@ -464,7 +467,7 @@ function playJumpSequence(ctx: StepContext): void {
     .rest(EIGHTH)
     .chord([A3, D4, Fs4], QUARTER)
     .chord([A3, Cs4, E4], QUARTER)
-    .chord([A3, B3, E4], HALF + EIGHTH)
+    .chord([A3, B3, E4], DOTTED_HALF)
     .end();
 
   // Master stop + unlock
@@ -812,6 +815,7 @@ const steps: TutorialStep[] = [
   {
     punchOut: '#canvas-wrap',
     textAnchor: () => canvasCornerRect('bl'),
+    textCorner: 'bl',
     text: 'Attack.',
     play: [
       (ctx: StepContext) => {
@@ -834,6 +838,7 @@ const steps: TutorialStep[] = [
   {
     punchOut: '#canvas-wrap',
     textAnchor: () => canvasCornerRect('tl'),
+    textCorner: 'tl',
     text: 'Decay.',
     play: [
       (ctx: StepContext) => {
@@ -855,6 +860,7 @@ const steps: TutorialStep[] = [
   {
     punchOut: '#canvas-wrap',
     textAnchor: () => canvasCornerRect('tr'),
+    textCorner: 'tr',
     text: 'Sustain.',
     play: [
       (ctx: StepContext) => {
@@ -876,6 +882,7 @@ const steps: TutorialStep[] = [
   {
     punchOut: '#canvas-wrap',
     textAnchor: () => canvasCornerRect('br'),
+    textCorner: 'br',
     text: 'Release.',
     play: [
       (ctx: StepContext) => {
@@ -1230,7 +1237,7 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
 
       dim.style.clipPath = punchOutClip(punchRects, 6);
       const textRect = step.textAnchor?.() || punchRects[0]!;
-      positionText(textRect);
+      positionText(textRect, step.textCorner);
       if (step.renderText) {
         textEl.textContent = '';
         step.renderText(textEl, ctx);
@@ -1241,26 +1248,62 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
     });
   }
 
-  function positionText(targetRect: DOMRect): void {
+  function positionText(targetRect: DOMRect, corner?: 'tl' | 'tr' | 'bl' | 'br'): void {
+    const gap = 32; // 2rem
+
+    if (corner) {
+      // Measure text by placing off-screen
+      textEl.style.left = '-9999px';
+      textEl.style.top = '0';
+      const m = textEl.getBoundingClientRect();
+      const ax = targetRect.left;
+      const ay = targetRect.top;
+      let left: number;
+      let top: number;
+
+      switch (corner) {
+        case 'bl': // Attack: text BL corner → 2rem up+right of anchor
+          left = ax + gap;
+          top = ay - m.height - gap;
+          break;
+        case 'tl': // Decay: text TL corner → 2rem down+right of anchor
+          left = ax + gap;
+          top = ay + gap;
+          break;
+        case 'tr': // Sustain: text TR corner → 2rem down+left of anchor
+          left = ax - m.width - gap;
+          top = ay + gap;
+          break;
+        case 'br': // Release: text BR corner → 2rem up+left of anchor
+          left = ax - m.width - gap;
+          top = ay - m.height - gap;
+          break;
+      }
+
+      textEl.style.left = `${left}px`;
+      textEl.style.top = `${top}px`;
+      return;
+    }
+
+    // Generic: center text below anchor, clamped to viewport
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const textW = 320;
     const textH = 80;
-    const gap = 16;
 
     let left = targetRect.left + targetRect.width / 2 - textW / 2;
-    let top = targetRect.bottom + gap;
+    let top = targetRect.bottom + 16;
 
     if (top + textH > vh - 60) {
-      top = targetRect.top - textH - gap;
+      top = targetRect.top - textH - 16;
     }
 
     if (top < 60) {
       top = targetRect.top + targetRect.height / 2 - textH / 2;
-      if (targetRect.right + gap + textW < vw) {
-        left = targetRect.right + gap;
+      if (targetRect.right + 16 + textW < vw) {
+        left = targetRect.right + 16;
       } else {
-        left = targetRect.left - textW - gap;
+        left = targetRect.left - textW - 16;
       }
     }
 
@@ -1379,6 +1422,14 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
     ) {
       hide();
     }
+  });
+
+  // Repaint punch-out overlay on resize so clip paths track element positions.
+  let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+  window.addEventListener('resize', () => {
+    if (overlay.classList.contains('hidden')) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => showStep(currentStep), 2000);
   });
 
   return handle;
