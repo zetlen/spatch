@@ -11,7 +11,6 @@ import {
   hueToFormants,
   lightnessToCutoff,
 } from '../../js/audio/formants.ts';
-import { Vibe } from '../../js/audio/vibe.ts';
 
 describe('yToFrequency', () => {
   test('y=0 (top) returns highest chromatic note (G5)', () => {
@@ -69,38 +68,6 @@ describe('yToFrequency', () => {
       freqs.add(rounded);
     }
     expect(freqs.size).toBe(37);
-  });
-});
-
-describe('vibe.xToPan', () => {
-  const vibe = new Vibe(); // Default stereoWidth = 1.0
-
-  test('x=0 pans full left (-1)', () => {
-    expect(vibe.xToPan(0)).toBe(-1);
-  });
-
-  test('x=0.5 pans center (0)', () => {
-    expect(vibe.xToPan(0.5)).toBe(0);
-  });
-
-  test('x=1 pans full right (+1)', () => {
-    expect(vibe.xToPan(1)).toBe(1);
-  });
-
-  test('x=0.25 pans half-left (-0.5)', () => {
-    expect(vibe.xToPan(0.25)).toBe(-0.5);
-  });
-
-  test('stereoWidth=0 collapses to mono', () => {
-    const mono = new Vibe({ stereoWidth: 0 });
-    expect(mono.xToPan(0)).toBe(-0);
-    expect(mono.xToPan(1)).toBe(0);
-  });
-
-  test('stereoWidth=0.5 narrows the field', () => {
-    const narrow = new Vibe({ stereoWidth: 0.5 });
-    expect(narrow.xToPan(0)).toBe(-0.5);
-    expect(narrow.xToPan(1)).toBe(0.5);
   });
 });
 

@@ -1,13 +1,10 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
   sweepParamsForAngle,
   buildSweepCurve,
   isSweepReversed,
   scheduleFormantSweep,
 } from '../../js/audio/formants.ts';
-import { Vibe, setVibe } from '../../js/audio/vibe.ts';
-
-afterEach(() => setVibe(new Vibe()));
 
 describe('sweepParamsForAngle', () => {
   test('returns params for all 8 positions', () => {

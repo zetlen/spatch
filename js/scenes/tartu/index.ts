@@ -8,18 +8,7 @@ const scene: Scene = {
   stageBackground,
   imageCredit: 'Indrek Mustimets',
   creditUrl: 'https://www.instagram.com/indrekmustimets/',
-  vibe: {
-    ir,
-    reverbMix: 0.75,
-    // Elegant, crystalline — church acoustics, train station lobby
-    eqMidFreq: 3000,
-    eqMidGain: 2,
-    eqHighGain: 3,
-    eqLowGain: -1,
-    warmth: 1.1,
-    formantQ: 1.4,
-    stereoWidth: 1.3,
-  },
+  reverb: { ir, reverbMix: 0.75 },
 };
 
 export default scene;

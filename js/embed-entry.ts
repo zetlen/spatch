@@ -7,7 +7,6 @@ import { createSampleLoader, setSampleLoader } from './audio/sample-loader.ts';
 import { deserializeState, serializeState } from './serialize.ts';
 import { updateCanvasBorderRadius } from './shapes.ts';
 import { qel } from './dom.ts';
-import { Vibe, setVibe } from './audio/vibe.ts';
 import { getScene } from './scenes';
 import { prefetchScene, loadSceneIR } from './scenes/loader';
 import {
@@ -61,9 +60,8 @@ function showError(msg: string): void {
 }
 
 function boot(sigil: SigilData): void {
-  // Scene + vibe
+  // Scene
   const sceneDef = getScene(sigil.scene);
-  setVibe(new Vibe(sceneDef.vibe));
   const sceneReady = prefetchScene(sceneDef);
 
   // DOM
@@ -144,7 +142,7 @@ function boot(sigil: SigilData): void {
     try {
       await sceneReady;
       const irBuffer = audio.audioCtx ? await loadSceneIR(audio.audioCtx, sceneDef) : undefined;
-      await audio.play(sigil, sigil.envelope, { irBuffer });
+      await audio.play(sigil, sigil.envelope, sceneDef.reverb, { irBuffer });
     } catch {
       doRelease();
     }

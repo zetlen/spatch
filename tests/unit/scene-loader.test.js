@@ -65,7 +65,7 @@ describe('prefetchScene', () => {
       name: 'test-scene',
       stageBackground: '/img/test.jpg',
       imageCredit: 'test',
-      vibe: { ir: '/audio/test.m4a', reverbMix: 0.5 },
+      reverb: { ir: '/audio/test.m4a', reverbMix: 0.5 },
     };
 
     await prefetchScene(scene);
@@ -79,7 +79,7 @@ describe('prefetchScene', () => {
       name: 'no-ir',
       stageBackground: '/img/no-ir.jpg',
       imageCredit: 'test',
-      vibe: { reverbMix: 0 },
+      reverb: { ir: '', reverbMix: 0 },
     };
 
     await prefetchScene(scene);
@@ -93,7 +93,7 @@ describe('prefetchScene', () => {
       name: 'cached',
       stageBackground: '/img/cached.jpg',
       imageCredit: 'test',
-      vibe: { ir: '/audio/cached.m4a', reverbMix: 0.5 },
+      reverb: { ir: '/audio/cached.m4a', reverbMix: 0.5 },
     };
 
     await prefetchScene(scene);
@@ -125,7 +125,7 @@ describe('prefetchScene', () => {
       name: 'img-fail',
       stageBackground: '/img/broken.jpg',
       imageCredit: 'test',
-      vibe: { ir: '/audio/ok.m4a', reverbMix: 0.5 },
+      reverb: { ir: '/audio/ok.m4a', reverbMix: 0.5 },
     };
 
     await prefetchScene(scene);
@@ -149,7 +149,7 @@ describe('prefetchScene', () => {
       name: 'ir-fail',
       stageBackground: '/img/ok.jpg',
       imageCredit: 'test',
-      vibe: { ir: '/audio/broken.m4a', reverbMix: 0.5 },
+      reverb: { ir: '/audio/broken.m4a', reverbMix: 0.5 },
     };
 
     await prefetchScene(scene);
@@ -178,7 +178,7 @@ describe('prefetchScene', () => {
       name: 'retry-test',
       stageBackground: '/img/flaky.jpg',
       imageCredit: 'test',
-      vibe: {},
+      reverb: { ir: '', reverbMix: 0 },
     };
 
     await prefetchScene(scene);
@@ -194,7 +194,7 @@ describe('prefetchScene', () => {
       name: 'dedup',
       stageBackground: '/img/dedup.jpg',
       imageCredit: 'test',
-      vibe: { ir: '/audio/dedup.m4a', reverbMix: 0.5 },
+      reverb: { ir: '/audio/dedup.m4a', reverbMix: 0.5 },
     };
 
     await Promise.all([prefetchScene(scene), prefetchScene(scene)]);
@@ -215,7 +215,7 @@ describe('loadSceneIR', () => {
       name: 'decode-scene',
       stageBackground: '/img/decode.jpg',
       imageCredit: 'test',
-      vibe: { ir: '/audio/decode.m4a', reverbMix: 0.5 },
+      reverb: { ir: '/audio/decode.m4a', reverbMix: 0.5 },
     };
 
     await prefetchScene(scene);
@@ -232,7 +232,7 @@ describe('loadSceneIR', () => {
       name: 'no-ir',
       stageBackground: '/img/no-ir.jpg',
       imageCredit: 'test',
-      vibe: { reverbMix: 0 },
+      reverb: { ir: '', reverbMix: 0 },
     };
 
     const ctx = { decodeAudioData: () => Promise.resolve({}) };
@@ -278,7 +278,7 @@ describe('_reset', () => {
       name: 'reset-test',
       stageBackground: '/img/reset.jpg',
       imageCredit: 'test',
-      vibe: {},
+      reverb: { ir: '', reverbMix: 0 },
     };
 
     await prefetchScene(scene);

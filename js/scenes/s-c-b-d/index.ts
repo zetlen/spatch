@@ -8,18 +8,7 @@ const scene: Scene = {
   stageBackground,
   imageCredit: 'Mohammed Alim',
   creditUrl: 'https://www.pexels.com/@apyfz/',
-  vibe: {
-    ir,
-    reverbMix: 0.75,
-    // Shimmering, nocturnal — Jakarta city lights
-    eqHighFreq: 6000,
-    eqHighGain: 4,
-    eqLowGain: 1,
-    warmth: 1.4,
-    formantMix: 0.6,
-    stereoWidth: 1.4,
-    compThreshold: -14,
-  },
+  reverb: { ir, reverbMix: 0.75 },
 };
 
 export default scene;

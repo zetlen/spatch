@@ -8,19 +8,7 @@ const scene: Scene = {
   stageBackground,
   imageCredit: '/u/Born03',
   creditUrl: 'https://reddit.com/u/Born03',
-  vibe: {
-    ir,
-    reverbMix: 0.7,
-    // Soft, retro, smooth — vintage Mac mouse
-    eqLowGain: -2,
-    eqMidFreq: 1200,
-    eqMidGain: 3,
-    eqHighGain: -2,
-    warmth: 1,
-    formantMix: 0.9,
-    brightnessQ: 0.5,
-    stereoWidth: 0.9,
-  },
+  reverb: { ir, reverbMix: 0.7 },
 };
 
 export default scene;

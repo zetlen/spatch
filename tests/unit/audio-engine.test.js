@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { AudioEngine } from '../../js/audio/engine.ts';
 import { createSampleLoader, setSampleLoader } from '../../js/audio/sample-loader.ts';
-import { Vibe, setVibe } from '../../js/audio/vibe.ts';
 
 // Set up a mock sample loader so decodeSample calls in the engine don't throw.
 setSampleLoader(
@@ -10,8 +9,8 @@ setSampleLoader(
   ),
 );
 
-// Reset vibe to defaults after every test so state doesn't leak
-afterEach(() => setVibe(new Vibe()));
+/** Default reverb config for tests: no reverb. */
+const TEST_REVERB = { ir: '', reverbMix: 0 };
 
 // Minimal Web Audio API stubs for testing voice reconciliation logic.
 // We only need enough to let _buildVoice wire up nodes and updateVoices
@@ -179,12 +178,11 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     engine = new AudioEngine();
     // Inject stub context so we skip real AudioContext
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {
     const state = makeSigilState(voices);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
     return state;
   }
 
@@ -197,7 +195,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
 
     // Add a second voice
     const voiceB = makeVoice('b');
-    engine.update(makeSigilState([voiceA, voiceB]));
+    engine.update(makeSigilState([voiceA, voiceB]), TEST_REVERB);
 
     expect(engine.activeVoices.length).toBe(2);
     expect(engine.activeVoices.map((v) => v.shapeId).toSorted()).toEqual(['a', 'b']);
@@ -211,7 +209,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     expect(engine.activeVoices.length).toBe(2);
 
     // Remove voice B
-    engine.update(makeSigilState([voiceA]));
+    engine.update(makeSigilState([voiceA]), TEST_REVERB);
 
     expect(engine.activeVoices.length).toBe(1);
     expect(engine.activeVoices[0].shapeId).toBe('a');
@@ -224,7 +222,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
 
     // Remove A, add C
     const voiceC = makeVoice('c');
-    engine.update(makeSigilState([voiceB, voiceC]));
+    engine.update(makeSigilState([voiceB, voiceC]), TEST_REVERB);
 
     expect(engine.activeVoices.length).toBe(2);
     const ids = engine.activeVoices.map((v) => v.shapeId).toSorted();
@@ -237,7 +235,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     await startWith([voiceA]);
 
     const voicesBefore = engine.activeVoices.length;
-    engine.update(makeSigilState([voiceA]));
+    engine.update(makeSigilState([voiceA]), TEST_REVERB);
 
     expect(engine.activeVoices.length).toBe(voicesBefore);
   });
@@ -247,7 +245,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     const voiceB = makeVoice('b');
     await startWith([voiceA, voiceB]);
 
-    engine.update(makeSigilState([]));
+    engine.update(makeSigilState([]), TEST_REVERB);
 
     expect(engine.activeVoices.length).toBe(0);
   });
@@ -256,7 +254,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
     await startWith([]);
 
     const voices = [makeVoice('circ', 'sine'), makeVoice('sq', 'pulse'), makeVoice('tri', 'blend')];
-    engine.update(makeSigilState(voices));
+    engine.update(makeSigilState(voices), TEST_REVERB);
 
     expect(engine.activeVoices.length).toBe(3);
     expect(engine.activeVoices.map((v) => v.shapeId).toSorted()).toEqual(['circ', 'sq', 'tri']);
@@ -265,7 +263,7 @@ describe('AudioEngine.updateVoices — voice reconciliation', () => {
   test('does nothing when not playing', () => {
     engine.isPlaying = false;
     const voiceA = makeVoice('a');
-    engine.update(makeSigilState([voiceA]));
+    engine.update(makeSigilState([voiceA]), TEST_REVERB);
 
     expect(engine.activeVoices.length).toBe(0);
   });
@@ -277,12 +275,11 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {
     const state = makeSigilState(voices);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
     return state;
   }
 
@@ -303,7 +300,7 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
     expect(engine._fmConnections.size).toBe(0);
 
     // Change to multiply — should create FM connections
-    engine.update(makeSigilState([voiceA, voiceB], 'multiply'));
+    engine.update(makeSigilState([voiceA, voiceB], 'multiply'), TEST_REVERB);
 
     expect(engine._fmConnections.size).toBeGreaterThan(0);
   });
@@ -314,7 +311,7 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
     const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
     for (const blend of blends) {
       await startWith([voiceA, voiceB]);
-      engine.update(makeSigilState([voiceA, voiceB], blend));
+      engine.update(makeSigilState([voiceA, voiceB], blend), TEST_REVERB);
       expect(engine.activeVoices.length).toBe(2);
       engine.stop();
     }
@@ -324,12 +321,16 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
     // Two voices at the same position — should have overlap
     const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
     const voiceB = makeVoice('b', 'pulse', { x: 0.5, y: 0.5, size: 0.2 });
-    await engine.play(makeSigilState([voiceA, voiceB], 'multiply'), {
-      attack: 0.1,
-      decay: 0.2,
-      release: 0.4,
-      sustain: 0.7,
-    });
+    await engine.play(
+      makeSigilState([voiceA, voiceB], 'multiply'),
+      {
+        attack: 0.1,
+        decay: 0.2,
+        release: 0.4,
+        sustain: 0.7,
+      },
+      TEST_REVERB,
+    );
 
     // FM connections are internal, but we can verify voices were built successfully
     expect(engine.activeVoices.length).toBe(2);
@@ -339,12 +340,16 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
     // Voices far apart — no overlap
     const voiceA = makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 });
     const voiceB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 });
-    await engine.play(makeSigilState([voiceA, voiceB], 'multiply'), {
-      attack: 0.1,
-      decay: 0.2,
-      release: 0.4,
-      sustain: 0.7,
-    });
+    await engine.play(
+      makeSigilState([voiceA, voiceB], 'multiply'),
+      {
+        attack: 0.1,
+        decay: 0.2,
+        release: 0.4,
+        sustain: 0.7,
+      },
+      TEST_REVERB,
+    );
 
     expect(engine.activeVoices.length).toBe(2);
     // No FM connections should exist (internal map is empty)
@@ -365,12 +370,16 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
   test('FM connections are cleaned up when voices separate', async () => {
     const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
     const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    await engine.play(makeSigilState([voiceA, voiceB], 'multiply'), {
-      attack: 0.1,
-      decay: 0.2,
-      release: 0.4,
-      sustain: 0.7,
-    });
+    await engine.play(
+      makeSigilState([voiceA, voiceB], 'multiply'),
+      {
+        attack: 0.1,
+        decay: 0.2,
+        release: 0.4,
+        sustain: 0.7,
+      },
+      TEST_REVERB,
+    );
 
     // Should have FM connection from overlap
     expect(engine._fmConnections.size).toBeGreaterThan(0);
@@ -378,7 +387,7 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
     // Move voices apart
     const updatedA = makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 });
     const updatedB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 });
-    engine.update(makeSigilState([updatedA, updatedB], 'multiply'));
+    engine.update(makeSigilState([updatedA, updatedB], 'multiply'), TEST_REVERB);
 
     // FM connections should be torn down
     expect(engine._fmConnections.size).toBe(0);
@@ -391,12 +400,11 @@ describe('AudioEngine — border / octave doubling', () => {
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {
     const state = makeSigilState(voices);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
     return state;
   }
 
@@ -432,7 +440,7 @@ describe('AudioEngine — border / octave doubling', () => {
     const updated = makeVoice('a', 'sine', {
       border: { color: 'black', double: false, thickness: 0.5 },
     });
-    engine.update(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]), TEST_REVERB);
 
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice).not.toBe(originalVoice);
@@ -449,7 +457,7 @@ describe('AudioEngine — border / octave doubling', () => {
     const updated = makeVoice('a', 'sine', {
       border: { color: 'white', double: true, thickness: 0.7 },
     });
-    engine.update(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]), TEST_REVERB);
 
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice).not.toBe(originalVoice);
@@ -465,7 +473,7 @@ describe('AudioEngine — border / octave doubling', () => {
 
     // Remove border
     const updated = makeVoice('a', 'sine', { border: undefined });
-    engine.update(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]), TEST_REVERB);
 
     const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(newVoice.octaveOsc).toBeUndefined();
@@ -484,7 +492,7 @@ describe('AudioEngine — border / octave doubling', () => {
     const updated = makeVoice('a', 'sine', {
       border: { color: 'white', double: false, thickness: 0.8 },
     });
-    engine.update(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]), TEST_REVERB);
 
     // Same voice object — NOT rebuilt
     const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
@@ -506,7 +514,7 @@ describe('AudioEngine — border / octave doubling', () => {
       border: { color: 'white', double: false, thickness: 0.3 },
       size: 0.7,
     });
-    engine.update(makeSigilState([sizeChanged]));
+    engine.update(makeSigilState([sizeChanged]), TEST_REVERB);
     expect(audioVoice.octaveGainNode.gain.value).toBeCloseTo(initialOctaveGain);
 
     // Increase thickness — octaveGainNode increases
@@ -514,7 +522,7 @@ describe('AudioEngine — border / octave doubling', () => {
       border: { color: 'white', double: false, thickness: 0.8 },
       size: 0.7,
     });
-    engine.update(makeSigilState([thickerBorder]));
+    engine.update(makeSigilState([thickerBorder]), TEST_REVERB);
     expect(audioVoice.octaveGainNode.gain.value).toBeGreaterThan(initialOctaveGain);
   });
 
@@ -533,127 +541,117 @@ describe('AudioEngine — border / octave doubling', () => {
   });
 });
 
-describe('AudioEngine — vibe-based master reverb', () => {
+describe('AudioEngine — master reverb', () => {
   let engine;
 
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
-  async function startWith(voices) {
+  async function startWith(voices, reverb = TEST_REVERB) {
     const state = makeSigilState(voices);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, reverb);
     return state;
   }
 
-  test('play with zero reverbMix creates no convolver', async () => {
-    setVibe(new Vibe({ reverbMix: 0 }));
-    await startWith([makeVoice('a')]);
+  test('play with empty ir creates no convolver', async () => {
+    await startWith([makeVoice('a')], TEST_REVERB);
 
-    expect(engine._reverbConvolver).toBeUndefined();
-    expect(engine._reverbWet).toBeUndefined();
+    // Master's internal _reverbConvolver should not be set for empty ir
+    expect(engine.master._reverbConvolver).toBeUndefined();
+    expect(engine.master._reverbWet).toBeUndefined();
   });
 
-  test('play with positive reverbMix and ir creates convolver and wet gain', async () => {
-    setVibe(new Vibe({ ir: 'test.m4a', reverbMix: 0.5 }));
-    await startWith([makeVoice('a')]);
+  test('play with ir and reverbMix creates convolver and wet gain', async () => {
+    await startWith([makeVoice('a')], { ir: 'test.m4a', reverbMix: 0.5 });
 
-    expect(engine._reverbConvolver).not.toBeUndefined();
-    expect(engine._reverbWet).not.toBeUndefined();
+    expect(engine.master._reverbConvolver).not.toBeUndefined();
+    expect(engine.master._reverbWet).not.toBeUndefined();
   });
 
   test('play with reverbMix but no ir creates no convolver', async () => {
-    setVibe(new Vibe({ reverbMix: 0.5 }));
-    await startWith([makeVoice('a')]);
+    await startWith([makeVoice('a')], { ir: '', reverbMix: 0.5 });
 
-    expect(engine._reverbConvolver).toBeUndefined();
-    expect(engine._reverbWet).toBeUndefined();
+    expect(engine.master._reverbConvolver).toBeUndefined();
+    expect(engine.master._reverbWet).toBeUndefined();
   });
 
-  test('reverb wet gain matches vibe.reverbMix', async () => {
-    setVibe(new Vibe({ ir: 'test.m4a', reverbMix: 0.75 }));
-    await startWith([makeVoice('a')]);
+  test('reverb wet gain matches reverbMix', async () => {
+    await startWith([makeVoice('a')], { ir: 'test.m4a', reverbMix: 0.75 });
 
-    expect(engine._reverbWet.gain.value).toBe(0.75);
+    expect(engine.master._reverbWet.gain.value).toBe(0.75);
   });
 
   test('cleanup nulls reverb nodes', async () => {
-    setVibe(new Vibe({ ir: 'test.m4a', reverbMix: 0.5 }));
-    await startWith([makeVoice('a')]);
+    await startWith([makeVoice('a')], { ir: 'test.m4a', reverbMix: 0.5 });
 
-    expect(engine._reverbConvolver).not.toBeUndefined();
+    expect(engine.master._reverbConvolver).not.toBeUndefined();
 
     engine.stop();
 
-    expect(engine._reverbConvolver).toBeUndefined();
-    expect(engine._reverbWet).toBeUndefined();
+    expect(engine.master._reverbConvolver).toBeUndefined();
+    expect(engine.master._reverbWet).toBeUndefined();
   });
 
-  test('compressor uses vibe params', async () => {
-    setVibe(new Vibe({ compThreshold: -20, compKnee: 10, compRatio: 5 }));
+  test('master uses fixed compressor params', async () => {
     await startWith([makeVoice('a')]);
 
-    expect(engine.compressor.threshold.value).toBe(-20);
-    expect(engine.compressor.knee.value).toBe(10);
-    expect(engine.compressor.ratio.value).toBe(5);
+    // Compressor params are fixed constants from VIBE_DEFAULTS
+    expect(engine.master._compressor.threshold.value).toBe(-10);
+    expect(engine.master._compressor.knee.value).toBe(18);
+    expect(engine.master._compressor.ratio.value).toBe(3);
   });
 
-  test('masterGain uses vibe.masterGain', async () => {
-    setVibe(new Vibe({ masterGain: 0.8 }));
+  test('master uses fixed gain value', async () => {
     await startWith([makeVoice('a')]);
 
-    expect(engine.masterGain.gain.value).toBe(0.8);
+    expect(engine.master.input.gain.value).toBe(0.5);
   });
 
-  test('3-band EQ nodes are created', async () => {
-    setVibe(new Vibe({ eqLowGain: 3, eqMidGain: -2, eqHighGain: 1 }));
+  test('3-band EQ nodes are created with fixed values', async () => {
     await startWith([makeVoice('a')]);
 
-    expect(engine._eqLow).not.toBeUndefined();
-    expect(engine._eqMid).not.toBeUndefined();
-    expect(engine._eqHigh).not.toBeUndefined();
-    expect(engine._eqLow.gain.value).toBe(3);
-    expect(engine._eqMid.gain.value).toBe(-2);
-    expect(engine._eqHigh.gain.value).toBe(1);
+    expect(engine.master._eqLow).not.toBeUndefined();
+    expect(engine.master._eqMid).not.toBeUndefined();
+    expect(engine.master._eqHigh).not.toBeUndefined();
+    // EQ gains are all 0 by default (flat response)
+    expect(engine.master._eqLow.gain.value).toBe(0);
+    expect(engine.master._eqMid.gain.value).toBe(0);
+    expect(engine.master._eqHigh.gain.value).toBe(0);
   });
 
   test('cleanup nulls EQ nodes', async () => {
-    setVibe(new Vibe());
     await startWith([makeVoice('a')]);
 
     engine.stop();
 
-    expect(engine._eqLow).toBeUndefined();
-    expect(engine._eqMid).toBeUndefined();
-    expect(engine._eqHigh).toBeUndefined();
+    expect(engine.master._eqLow).toBeUndefined();
+    expect(engine.master._eqMid).toBeUndefined();
+    expect(engine.master._eqHigh).toBeUndefined();
   });
 
   test('play with preloaded IR buffer sets convolver buffer synchronously', async () => {
     const irBuffer = { duration: 1.5, length: 66_150 };
-    setVibe(new Vibe({ ir: 'preloaded.m4a', reverbMix: 0.6 }));
     const state = makeSigilState([makeVoice('a')]);
-    await engine.play(state, state.envelope, { irBuffer });
+    await engine.play(state, state.envelope, { ir: 'preloaded.m4a', reverbMix: 0.6 }, { irBuffer });
 
-    expect(engine._reverbConvolver).not.toBeUndefined();
-    expect(engine._reverbConvolver.buffer).toBe(irBuffer);
+    expect(engine.master._reverbConvolver).not.toBeUndefined();
+    expect(engine.master._reverbConvolver.buffer).toBe(irBuffer);
   });
 });
 
-describe('AudioEngine — reverb tail cleanup delay (vibe-based)', () => {
+describe('AudioEngine — reverb tail cleanup delay', () => {
   let engine;
 
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   test('release without reverb uses normal cleanup delay', async () => {
-    setVibe(new Vibe());
     const state = makeSigilState([makeVoice('a')]);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
 
     engine.release(state.envelope);
 
@@ -675,10 +673,9 @@ describe('AudioEngine — getLevel()', () => {
   test('returns 0 for silent buffer', async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
 
     const state = makeSigilState([makeVoice('a')]);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
 
     // Stub fills buffer with zeros by default
     expect(engine.getLevel()).toBe(0);
@@ -687,16 +684,15 @@ describe('AudioEngine — getLevel()', () => {
   test('returns correct RMS for known signal', async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
 
     const state = makeSigilState([makeVoice('a')]);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
 
     // Inject a known buffer: all 0.5 → RMS = 0.5
     const buf = new Float32Array(256);
     buf.fill(0.5);
-    engine._analyserBuf = buf;
-    engine._analyser.getFloatTimeDomainData = (arr) => {
+    engine.master._analyserBuf = buf;
+    engine.master._analyser.getFloatTimeDomainData = (arr) => {
       for (let i = 0; i < arr.length; i++) {
         arr[i] = buf[i];
       }
@@ -709,10 +705,9 @@ describe('AudioEngine — getLevel()', () => {
   test('returns 0 after stop', async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
 
     const state = makeSigilState([makeVoice('a')]);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
     engine.stop();
 
     expect(engine.getLevel()).toBe(0);
@@ -725,12 +720,11 @@ describe('AudioEngine — diphthong sweep', () => {
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {
     const state = makeSigilState(voices);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
     return state;
   }
 
@@ -765,7 +759,7 @@ describe('AudioEngine — diphthong sweep', () => {
     const updated = makeVoice('a', 'sine', {
       fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 120, s2: 60, l2: 70, gradAngle: 90 },
     });
-    engine.update(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]), TEST_REVERB);
 
     const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(sameVoice).toBe(originalVoice);
@@ -784,7 +778,7 @@ describe('AudioEngine — diphthong sweep', () => {
     const updated = makeVoice('a', 'sine', {
       fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 200, s2: 60, l2: 70, gradAngle: 0 },
     });
-    engine.update(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]), TEST_REVERB);
 
     const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(sameVoice).toBe(originalVoice);
@@ -802,7 +796,7 @@ describe('AudioEngine — diphthong sweep', () => {
     const updated = makeVoice('a', 'sine', {
       fill: { mode: 'solid', h: 100, s: 80, l: 50 },
     });
-    engine.update(makeSigilState([updated]));
+    engine.update(makeSigilState([updated]), TEST_REVERB);
 
     const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(sameVoice).toBe(originalVoice);
@@ -815,12 +809,11 @@ describe('AudioEngine — solo mode', () => {
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-    engine.masterGain = new GainNode(engine.audioCtx);
   });
 
   async function startWith(voices) {
     const state = makeSigilState(voices);
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
     return state;
   }
 
@@ -830,7 +823,7 @@ describe('AudioEngine — solo mode', () => {
     const state = await startWith([voiceA, voiceB]);
 
     engine.setSoloVoice('a');
-    engine.update(state);
+    engine.update(state, TEST_REVERB);
 
     const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
     const avB = engine.activeVoices.find((v) => v.shapeId === 'b');
@@ -844,9 +837,9 @@ describe('AudioEngine — solo mode', () => {
     const state = await startWith([voiceA, voiceB]);
 
     engine.setSoloVoice('a');
-    engine.update(state);
+    engine.update(state, TEST_REVERB);
     engine.setSoloVoice(undefined);
-    engine.update(state);
+    engine.update(state, TEST_REVERB);
 
     const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
     const avB = engine.activeVoices.find((v) => v.shapeId === 'b');
@@ -859,7 +852,7 @@ describe('AudioEngine — solo mode', () => {
     const state = await startWith([voiceA]);
 
     engine.setSoloVoice('nonexistent');
-    engine.update(state);
+    engine.update(state, TEST_REVERB);
 
     const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
     expect(avA.gain.gain.value).toBeGreaterThan(0);
@@ -869,10 +862,10 @@ describe('AudioEngine — solo mode', () => {
     const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
     const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
     const state = makeSigilState([voiceA, voiceB], 'multiply');
-    await engine.play(state, state.envelope);
+    await engine.play(state, state.envelope, TEST_REVERB);
 
     engine.setSoloVoice('a');
-    engine.update(state);
+    engine.update(state, TEST_REVERB);
 
     // FM connections should still exist despite voice B being muted
     expect(engine._fmConnections.size).toBeGreaterThan(0);

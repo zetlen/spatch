@@ -67,9 +67,9 @@ export function prefetchScene(scene: Scene): Promise<void> {
     }),
   ];
 
-  if (scene.vibe.ir) {
+  if (scene.reverb.ir) {
     tasks.push(
-      fetchSample(scene.vibe.ir)
+      fetchSample(scene.reverb.ir)
         .then(() => undefined)
         .catch((error) => {
           console.warn(`[spatch] Scene "${key}": IR failed —`, error.message);
@@ -93,10 +93,10 @@ export function prefetchScene(scene: Scene): Promise<void> {
  * If not yet prefetched, fetches automatically (via decodeSample's internal fetchSample).
  */
 export function loadSceneIR(ctx: BaseAudioContext, scene: Scene): Promise<AudioBuffer | undefined> {
-  if (!scene.vibe.ir) {
+  if (!scene.reverb.ir) {
     return Promise.resolve(undefined);
   }
-  return decodeSample(ctx, scene.vibe.ir);
+  return decodeSample(ctx, scene.reverb.ir);
 }
 
 /**

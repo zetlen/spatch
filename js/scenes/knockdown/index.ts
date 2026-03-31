@@ -8,19 +8,7 @@ const scene: Scene = {
   stageBackground,
   imageCredit: 'me',
   creditUrl: 'https://jbz.fyi',
-  vibe: {
-    ir,
-    reverbMix: 0.6,
-    // Punchy, dry, close — basement plaster texture
-    eqLowGain: 4,
-    eqMidFreq: 2000,
-    eqMidGain: 1,
-    compThreshold: -8,
-    compRatio: 4,
-    compAttack: 0.002,
-    warmth: 2,
-    stereoWidth: 0.8,
-  },
+  reverb: { ir, reverbMix: 0.6 },
 };
 
 export default scene;

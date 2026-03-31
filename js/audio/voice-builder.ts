@@ -7,7 +7,7 @@
 import type { AudioEffect, Fill, PatternType, Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import { applyFormantFilter } from './formants.ts';
-import { vibe } from './vibe.ts';
+import type { Mixer } from './mixer.ts';
 import { get } from '../voices/registry.ts';
 import type { AudioSharedNodes } from '../voices/types.ts';
 export type { AudioVoice } from '../voices/types.ts';
@@ -28,6 +28,10 @@ export function fillToKey(fill: Fill): string | undefined {
   return `${fill.h}:${fill.s}:${fill.l}:${fill.h2}:${fill.s2}:${fill.l2}:${fill.gradAngle}`;
 }
 
+const FORMANT_MIX = 0.7;
+const BRIGHTNESS_Q = Math.SQRT1_2;
+const WARMTH = 1.5;
+
 // ---- Voice graph builder ----
 
 /**
@@ -40,6 +44,7 @@ export function fillToKey(fill: Fill): string | undefined {
  * @param ctx - The active AudioContext
  * @param voice - Voice data from the sigil store
  * @param masterGain - The master gain node to connect the voice output to
+ * @param mixer - Mixer providing gain, pan, and border octave calculations
  * @param createPatternEffect - Factory for pattern-driven audio effects
  * @returns A fully wired AudioVoice ready to be started
  */
@@ -47,21 +52,22 @@ export function buildVoice(
   ctx: AudioContext,
   voice: Voice,
   masterGain: GainNode,
+  mixer: Mixer,
   createPatternEffect: (ctx: AudioContext, effect: PatternType) => AudioEffect | undefined,
 ) {
-  const gain = new GainNode(ctx, { gain: vibe.voiceGain(voice.waveform, voice.size) });
+  const gain = new GainNode(ctx, { gain: mixer.voiceGain(voice.waveform, voice.size) });
 
   const freq = yToFrequency(voice.y);
 
   // Dual formant filter bank + brightness shelf
   const formantF1 = new BiquadFilterNode(ctx, { type: 'bandpass' });
   const formantF2 = new BiquadFilterNode(ctx, { type: 'bandpass' });
-  const formantMixer = new GainNode(ctx, { gain: vibe.formantMix });
-  const brightness = new BiquadFilterNode(ctx, { type: 'lowpass', Q: vibe.brightnessQ });
+  const formantMixer = new GainNode(ctx, { gain: FORMANT_MIX });
+  const brightness = new BiquadFilterNode(ctx, { type: 'lowpass', Q: BRIGHTNESS_Q });
 
   applyFormantFilter(formantF1, formantF2, brightness, voice.fill, voice.waveform);
 
-  const panner = new StereoPannerNode(ctx, { pan: vibe.xToPan(voice.x) });
+  const panner = new StereoPannerNode(ctx, { pan: mixer.xToPan(voice.x) });
 
   // Wire: gain -> F1 -> mixer -> brightness -> [effect] -> panner -> master
   //       Gain -> F2 -> mixer
@@ -105,7 +111,7 @@ export function buildVoice(
     });
 
     octaveGainNode = new GainNode(ctx, {
-      gain: vibe.borderOctaveGain(voice.border.thickness, voice.border.color, voice.border.double),
+      gain: mixer.borderOctaveGain(voice.border.thickness, voice.border.color, voice.border.double),
     });
     octaveOsc.connect(octaveGainNode);
     // Connect to voice gain so border traverses the same chain as the primary
@@ -131,7 +137,7 @@ export function buildVoice(
     currentEffect: voice.effect,
     currentBorder: borderKey,
     currentFillKey: fillToKey(voice.fill),
-    warmth: vibe.warmth,
+    warmth: WARMTH,
   };
 
   return get(voice.waveform).player.buildAudioGraph(ctx, voice, shared);

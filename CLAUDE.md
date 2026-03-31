@@ -65,12 +65,14 @@ js/
     render.ts        SVG DOM reconciler (voices, selection UI)
     interaction.ts   Pointer/touch input, InteractionState state machine
   audio/
-    engine.ts        AudioEngine: Web Audio lifecycle, voice management
+    engine.ts        AudioEngine: Web Audio lifecycle, voice management, FM routing
+    mixer.ts         Mixer: per-voice gain normalization, pan, border octave gain
+    master.ts        Master: post-sum signal chain (compressor, EQ, reverb, effects)
+    master-types.ts  ReverbConfig interface
     sample-loader.ts Two-layer cache: fetchSample (bytes) + decodeSample (AudioBuffer)
-    mapping.ts       Audio mapping (pitch, pan, gain, timbre, formants)
-    node-utils.ts    Pure audio utilities (no vibe/waveform imports)
+    mapping.ts       Audio mapping (pitch, timbre, formants)
+    node-utils.ts    Pure audio utilities (no waveform imports)
     voice-builder.ts Voice audio graph plumbing (formants, effects, borders)
-    vibe.ts          Vibe class: gain curves, reverb, EQ, compression, synthesis
     formants.ts      Formant filter bank for fill-driven vowel synthesis
   voices/
     types.ts         Delegate interfaces (VoiceUI, VoicePlayer, VoiceSerializer),
@@ -106,7 +108,7 @@ js/
     stample-panel.ts Stample picker
     dom-helpers.ts   createIconButton, svgEl helpers
   debug/
-    vibe-tuner.ts    Hidden vibe tuner side drawer (behind URL param)
+    vibe-tuner.ts    Hidden reverb tuner side drawer (behind URL param)
   harmony.ts         Randomize + harmonize (9 scales)
   shapes.ts          Resize/rotate math, ADSR corner conversion
   colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
@@ -187,7 +189,7 @@ See `docs/plans/2026-03-01-bijective-audio-visual-design.md` for full rationale.
 ### State & Transforms
 
 `SigilStore` is the single source of truth. Four domains — **Envelope**,
-**Scene/Vibe**, **Blend**, **Voices** — each projected in three directions:
+**Scene**, **Blend**, **Voices** — each projected in three directions:
 
 - **Interface** (two-way ↔): state ↔ DOM
 - **Serializer** (two-way ↔): state ↔ URL (`/s/<base64data>`)
@@ -335,12 +337,12 @@ const scene: Scene = {
   stageBackground,
   imageCredit: 'source',
   creditUrl: 'https://...',  // optional
-  vibe: { ir, reverbMix: 0.7 },
+  reverb: { ir, reverbMix: 0.7 },
 };
 export default scene;
 ```
 
-Import in `js/scenes/index.ts`, append to `SCENES`. Tune vibe with hidden
+Import in `js/scenes/index.ts`, append to `SCENES`. Tune reverb with hidden
 URL param tuner. Vite resolves `.jpg`/`.m4a` to asset URLs at build time.
 
 ### Add a new stample
@@ -392,12 +394,19 @@ Add Fill variant in `types.ts`, update `fillToFillDraft`/`fillDraftToFill`,
 `colors.ts`, `toolbar/fill-panel.ts`, `audio/mapping.ts` formant mapping,
 `serialize.ts`. Every fill field must affect the formant filter.
 
-### Modify scene/vibe behavior
+### Modify scene reverb behavior
 
-Update `Scene` in `scenes/scene-types.ts`, `VibeOptions`/`Vibe` in
-`audio/vibe.ts`, `audio/engine.ts` (master chain), `audio/voice-builder.ts`
-(per-voice params), `debug/vibe-tuner.ts` (debug UI), `serialize.ts` (scene
-index = 1 B64 char).
+Update `ReverbConfig` in `audio/master-types.ts`, `Scene` in
+`scenes/scene-types.ts`, `audio/master.ts` (reverb setup),
+`debug/vibe-tuner.ts` (debug UI), `serialize.ts` (scene index = 1 B64 char).
+
+### Modify mastering behavior
+
+Update fixed constants in `audio/master.ts` (compressor, EQ, master effects).
+
+### Modify per-voice gain/pan behavior
+
+Update `audio/mixer.ts` (gain curve, normalization, pan, border octave gain).
 
 ### embed.html
 

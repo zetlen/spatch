@@ -2,6 +2,7 @@
 
 import type { AudioEngine } from './audio/engine.ts';
 import type { SigilData } from './types.ts';
+import { getScene } from './scenes/index.ts';
 import { qel, svgEl } from './dom.ts';
 
 // ---- Radial gesture constants ----
@@ -123,7 +124,9 @@ export class PlaybackController {
       if (gen !== this.playGeneration) {
         return;
       }
-      await this.audio.play(state, state.envelope, { irBuffer: irBuffer ?? undefined });
+      await this.audio.play(state, state.envelope, getScene(state.scene).reverb, {
+        irBuffer: irBuffer ?? undefined,
+      });
       if (gen !== this.playGeneration) {
         this.audio.stop();
         return;

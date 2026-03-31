@@ -8,16 +8,7 @@ const scene: Scene = {
   stageBackground,
   imageCredit: 'Ed the Punk Rock Guy',
   creditUrl: 'https://reddit.com/u/Chicky_P00t',
-  vibe: {
-    ir,
-    reverbMix: 0.75,
-    // Spacious, airy — cavernous palace court
-    eqLowGain: 2,
-    eqMidGain: -2,
-    warmth: 1.2,
-    stereoWidth: 1.5,
-    compRatio: 2,
-  },
+  reverb: { ir, reverbMix: 0.75 },
 };
 
 export default scene;

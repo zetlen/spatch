@@ -15,7 +15,6 @@ import {
   initStampSymbols,
   decodeStampSamples,
 } from './voices/stamp/lifecycle.ts';
-import { Vibe, setVibe, vibeSignal } from './audio/vibe.ts';
 import { qel } from './dom.ts';
 import { PlaybackController } from './playback.ts';
 import { CanvasInteractionController } from './canvas/interaction.ts';
@@ -91,7 +90,7 @@ function toggleSolo(): void {
     audio.setSoloVoice(undefined);
   }
   if (audio.isPlaying) {
-    audio.update(store.data);
+    audio.update(store.data, getScene(store.data.scene).reverb);
   }
   needsRender = true;
 }
@@ -116,7 +115,7 @@ effect(() => {
   if (soloActive) {
     audio.setSoloVoice(selection.voiceId);
     if (audio.isPlaying) {
-      audio.update(store.data);
+      audio.update(store.data, getScene(store.data.scene).reverb);
     }
   }
 });
@@ -196,7 +195,7 @@ let sceneReady: Promise<void> = Promise.resolve();
 }
 
 // React to scene changes (and apply the initial scene on first run):
-// Update background crossfade + vibe + prefetch.
+// Update background crossfade + prefetch.
 // Guard: store.data is a single signal, so this effect fires on ANY state
 // Change. Track previous scene index to skip when unchanged.
 {
@@ -209,7 +208,6 @@ let sceneReady: Promise<void> = Promise.resolve();
     prevScene = sceneIndex;
     const sceneDef = getScene(sceneIndex);
     applyScene(appEl, sceneIndex);
-    setVibe(new Vibe(sceneDef.vibe));
     sceneReady = prefetchScene(sceneDef);
   });
 }
@@ -266,7 +264,7 @@ const splash = new SplashController({ store, audio, playback, overlay: splashOve
     needsRender = true;
     debouncedSave();
     if (audio.isPlaying) {
-      audio.update(data);
+      audio.update(data, getScene(data.scene).reverb);
     }
   });
 }
@@ -550,17 +548,6 @@ qel('#btn-splash').addEventListener('click', () => {
     playback.stop();
   }
   splash.enterPreview();
-});
-
-// ---- Reactive vibe → engine sync ----
-// When vibe changes (scene switch or debug tuner), update the audio engine
-// Immediately so the new parameters are audible without waiting for a
-// Store-driven data effect. The signal subscription auto-tracks changes.
-effect(() => {
-  void vibeSignal.value; // Subscribe to vibe changes
-  if (audio.isPlaying) {
-    audio.update(store.data);
-  }
 });
 
 // ---- Debug: Vibe tuner (hidden, activated via ?debug URL param) ----

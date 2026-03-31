@@ -8,17 +8,7 @@ const scene: Scene = {
   stageBackground,
   imageCredit: 'Archetonic',
   creditUrl: 'https://archetonic.mx/studio',
-  vibe: {
-    ir,
-    reverbMix: 0.8,
-    // Majestic, clean — abbey ruins, stone and water
-    eqMidFreq: 800,
-    eqMidGain: 2,
-    eqHighGain: 1,
-    compThreshold: -14,
-    warmth: 1.3,
-    formantMix: 0.8,
-  },
+  reverb: { ir, reverbMix: 0.8 },
 };
 
 export default scene;

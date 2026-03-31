@@ -1,4 +1,10 @@
 // Engine.ts — Web Audio engine: AudioEngine class
+//
+// Owns AudioContext lifecycle, voice map, play/stop/release orchestration,
+// FM cross-voice routing, and solo mode.
+//
+// All signal processing after the voice summing point is delegated to Master.
+// Per-voice gain/pan/border calculations are delegated to Mixer.
 
 import { computeOverlap, FM_PARAMS, computeFMDepth } from '../effects.ts';
 import { createEffect } from '../patterns.ts';
@@ -12,15 +18,10 @@ import {
   lightnessToCutoff,
   scheduleFormantSweep,
 } from './formants.ts';
-import { decodeSample } from './sample-loader.ts';
-import { type Vibe, vibe } from './vibe.ts';
-import {
-  type AudioVoice,
-  buildVoice,
-  fillToKey,
-  makeSaturationCurve,
-  safeDisconnect,
-} from './voice-builder.ts';
+import { Mixer } from './mixer.ts';
+import { Master } from './master.ts';
+import type { ReverbConfig } from './master-types.ts';
+import { type AudioVoice, buildVoice, fillToKey, safeDisconnect } from './voice-builder.ts';
 
 export interface PlayOptions {
   irBuffer?: AudioBuffer;
@@ -37,42 +38,17 @@ interface FMConnection {
 export class AudioEngine {
   audioCtx: AudioContext | undefined = undefined;
   activeVoices: AudioVoice[] = [];
-  masterGain: GainNode | undefined;
+  readonly mixer = new Mixer();
+  readonly master = new Master();
   private _fmConnections = new Map<string, FMConnection>();
-  envelopeGain: GainNode | undefined;
-  compressor: DynamicsCompressorNode | undefined;
   isPlaying: boolean = false;
   private _sessionId: number = 0;
-  private _analyser: AnalyserNode | undefined;
-  private _analyserBuf: Float32Array<ArrayBuffer> | undefined;
-  private _reverbConvolver: ConvolverNode | undefined;
-  private _reverbWet: GainNode | undefined;
   private _streamDest: MediaStreamAudioDestinationNode | undefined;
   private _audioEl: HTMLAudioElement | undefined;
-  private _eqLow: BiquadFilterNode | undefined;
-  private _eqMid: BiquadFilterNode | undefined;
-  private _eqHigh: BiquadFilterNode | undefined;
-  private _saturationShaper: WaveShaperNode | undefined;
-  private _saturationDry: GainNode | undefined;
-  private _saturationWet: GainNode | undefined;
-  private _exciterShaper: WaveShaperNode | undefined;
-  private _exciterHP: BiquadFilterNode | undefined;
-  private _exciterDry: GainNode | undefined;
-  private _exciterWet: GainNode | undefined;
-  private _combDelay: DelayNode | undefined;
-  private _combFeedback: GainNode | undefined;
-  private _combDry: GainNode | undefined;
-  private _combWet: GainNode | undefined;
-  private _muffleFilter: BiquadFilterNode | undefined;
-  private _muffled: boolean = false;
-  private _reverbPreDelayNode: DelayNode | undefined;
-  private _playEnvelope: Envelope | undefined;
-  private _appliedVibe: Vibe | undefined;
-  private _appliedIR: string | undefined;
-  private _appliedReverbPreDelay: number = 0;
-  private _pendingIRBuffer: AudioBuffer | undefined;
   private _soloVoiceId: string | undefined;
   private _lastBlend: BlendMode = 'screen';
+  private _playEnvelope: Envelope | undefined;
+  private _activeReverb: ReverbConfig | undefined;
 
   /** Synchronously create and unlock the AudioContext.
    *  Everything here MUST be synchronous — iOS Safari revokes user-gesture
@@ -125,10 +101,14 @@ export class AudioEngine {
     this._init();
   }
 
-  async play(sigilState: SigilData, envelope: Envelope, opts?: PlayOptions): Promise<void> {
+  async play(
+    sigilState: SigilData,
+    envelope: Envelope,
+    reverb: ReverbConfig,
+    opts?: PlayOptions,
+  ): Promise<void> {
     this._init();
     this.stop();
-    this._pendingIRBuffer = opts?.irBuffer;
 
     const ctx = this.audioCtx!;
     // Don't await resume() — warmUp() already called it synchronously from
@@ -138,96 +118,28 @@ export class AudioEngine {
       ctx.resume();
     }
 
-    // Master chain
-    this.compressor = new DynamicsCompressorNode(ctx, {
-      threshold: vibe.compThreshold,
-      knee: vibe.compKnee,
-      ratio: vibe.compRatio,
-      attack: vibe.compAttack,
-      release: vibe.compRelease,
-    });
+    // Build the master signal chain (masterGain → envelope → effects → compressor → EQ → analyser → muffle → destination)
+    this.master.build(ctx, { streamDest: this._streamDest, irBuffer: opts?.irBuffer });
+    this.master.setReverb(ctx, reverb, opts?.irBuffer);
+    this._activeReverb = reverb;
 
-    this.envelopeGain = new GainNode(ctx, { gain: 0 });
-
-    this.masterGain = new GainNode(ctx, { gain: vibe.masterGain });
-
-    // Analyser for level metering (drives play glow)
-    this._analyser = new AnalyserNode(ctx, { fftSize: 256 });
-    this._analyserBuf = new Float32Array(this._analyser.fftSize);
-
-    // 3-band EQ from vibe
-    this._eqLow = new BiquadFilterNode(ctx, {
-      type: 'lowshelf',
-      frequency: vibe.eqLowFreq,
-      gain: vibe.eqLowGain,
-    });
-
-    this._eqMid = new BiquadFilterNode(ctx, {
-      type: 'peaking',
-      frequency: vibe.eqMidFreq,
-      gain: vibe.eqMidGain,
-      Q: vibe.eqMidQ,
-    });
-
-    this._eqHigh = new BiquadFilterNode(ctx, {
-      type: 'highshelf',
-      frequency: vibe.eqHighFreq,
-      gain: vibe.eqHighGain,
-    });
-
-    // Master effects chain (between envelope and compressor)
-    this._buildMasterEffects(ctx);
-
-    // Wire: masterGain -> envelopeGain -> [saturation -> exciter -> comb] -> compressor -> EQ -> analyser -> dest
-    this.masterGain.connect(this.envelopeGain);
-    let lastNode: AudioNode = this.envelopeGain;
-    lastNode = this._wireMasterEffect(lastNode, this._saturationDry!, this._saturationWet!);
-    lastNode = this._wireMasterEffect(lastNode, this._exciterDry!, this._exciterWet!);
-    lastNode = this._wireMasterEffect(lastNode, this._combDry!, this._combWet!);
-    lastNode.connect(this.compressor);
-    this.compressor.connect(this._eqLow);
-    this._eqLow.connect(this._eqMid);
-    this._eqMid.connect(this._eqHigh);
-    this._eqHigh.connect(this._analyser);
-    // Muffle filter: low-pass that's normally transparent (20 kHz cutoff)
-    // But drops to ~600 Hz when muffled (e.g. credits overlay).
-    this._muffleFilter = new BiquadFilterNode(ctx, {
-      type: 'lowpass',
-      frequency: this._muffled ? 600 : 20_000,
-      Q: 0.7,
-    });
-    this._analyser.connect(this._muffleFilter);
-    // Actual audio output goes through ctx.destination as normal.
-    this._muffleFilter.connect(ctx.destination);
-    // Also feed the stream destination — its <audio> element keeps Safari
-    // From suspending the AudioContext, but doesn't produce audible output.
-    if (this._streamDest) {
-      this._muffleFilter.connect(this._streamDest);
-      // Resume keep-alive <audio> if it was paused after a previous stop.
-      // May fail outside a user gesture (e.g. loop restart) — that's OK,
-      // The AudioContext is already running and the permanent touchend/click
-      // Listeners in _init() will resume it on the next qualifying gesture.
-      if (this._audioEl && this._audioEl.paused) {
-        this._audioEl.play().catch(() => {});
-      }
+    // Resume keep-alive <audio> if it was paused after a previous stop.
+    // May fail outside a user gesture (e.g. loop restart) — that's OK,
+    // The AudioContext is already running and the permanent touchend/click
+    // Listeners in _init() will resume it on the next qualifying gesture.
+    if (this._audioEl && this._audioEl.paused) {
+      this._audioEl.play().catch(() => {});
     }
 
-    // Master reverb from vibe
-    this._buildReverb();
-
     // Apply ADSR envelope
-    const now = ctx.currentTime;
-    const attack = Math.max(0.01, envelope.attack);
-    const decay = Math.max(0.01, envelope.decay);
-    const sustain = Math.max(0, Math.min(1, envelope.sustain));
-
-    this.envelopeGain.gain.setValueAtTime(0, now);
-    this.envelopeGain.gain.linearRampToValueAtTime(1, now + attack);
-    this.envelopeGain.gain.linearRampToValueAtTime(sustain, now + attack + decay);
+    this.master.scheduleEnvelope(ctx, envelope);
 
     // Build voices
     const soloActive =
       this._soloVoiceId !== undefined && sigilState.voices.some((v) => v.id === this._soloVoiceId);
+    const now = ctx.currentTime;
+    const attack = Math.max(0.01, envelope.attack);
+    const decay = Math.max(0.01, envelope.decay);
     const decayTime = now + attack;
     for (const voice of sigilState.voices) {
       const audioVoice = this._buildVoice(ctx, voice);
@@ -272,21 +184,16 @@ export class AudioEngine {
       }
     }
 
-    this._appliedVibe = vibe;
     this.isPlaying = true;
   }
 
   release(envelope: Envelope): void {
-    if (!this.isPlaying || !this.envelopeGain) {
+    if (!this.isPlaying || !this.master.envelopeGain) {
       return;
     }
     const ctx = this.audioCtx!;
-    const now = ctx.currentTime;
-    const releaseTime = Math.max(0.01, envelope.release);
 
-    this.envelopeGain.gain.cancelScheduledValues(now);
-    this.envelopeGain.gain.setValueAtTime(this.envelopeGain.gain.value, now);
-    this.envelopeGain.gain.linearRampToValueAtTime(0, now + releaseTime);
+    this.master.scheduleRelease(ctx, envelope);
 
     // Fire onRelease hooks (e.g. release-triggered stamp samples)
     const releaseNow = ctx.currentTime;
@@ -297,9 +204,8 @@ export class AudioEngine {
     // Poll output level and clean up once inaudible, rather than guessing
     // A fixed timeout from release + reverb tail duration.
     const SILENCE_THRESHOLD = 0.001; // ~-60 dB
-    const reverbTail = this._reverbConvolver?.buffer
-      ? this._reverbConvolver.buffer.duration + vibe.reverbPreDelay
-      : 0;
+    const releaseTime = Math.max(0.01, envelope.release);
+    const reverbTail = this.master.reverbTailDuration();
     const maxWaitMs = (releaseTime + reverbTail) * 1000 + 2000;
     const sid = this._sessionId;
     const startTime = performance.now();
@@ -307,7 +213,7 @@ export class AudioEngine {
       if (this._sessionId !== sid) {
         return;
       }
-      if (this.getLevel() < SILENCE_THRESHOLD || performance.now() - startTime > maxWaitMs) {
+      if (this.master.getLevel() < SILENCE_THRESHOLD || performance.now() - startTime > maxWaitMs) {
         this._cleanup();
         return;
       }
@@ -318,182 +224,18 @@ export class AudioEngine {
   }
 
   setEnvelopePosition(t: number, envelope: Envelope): void {
-    if (!this.isPlaying || !this.envelopeGain) {
-      return;
-    }
-    const attack = Math.max(0.01, envelope.attack);
-    const decay = Math.max(0.01, envelope.decay);
-    const sustain = Math.max(0, Math.min(1, envelope.sustain));
-    const totalTime = attack + decay;
-    const actualTime = t * totalTime;
-    let gain;
-    if (actualTime <= attack) {
-      gain = actualTime / attack;
-    } else {
-      gain = 1 - ((actualTime - attack) / decay) * (1 - sustain);
-    }
-    const ctx = this.audioCtx!;
-    const now = ctx.currentTime;
-    this.envelopeGain.gain.cancelScheduledValues(now);
-    this.envelopeGain.gain.setValueAtTime(this.envelopeGain.gain.value, now);
-    this.envelopeGain.gain.linearRampToValueAtTime(gain, now + 0.05);
-  }
-
-  update(sigilState: SigilData): void {
-    this._updateVoices(sigilState);
-    this._updateMasterChain();
-    this._syncReverb();
-  }
-
-  private _updateMasterChain(): void {
     if (!this.isPlaying || !this.audioCtx) {
       return;
     }
-    const now = this.audioCtx.currentTime;
-
-    if (this.compressor) {
-      this.compressor.threshold.setValueAtTime(vibe.compThreshold, now);
-      this.compressor.knee.setValueAtTime(vibe.compKnee, now);
-      this.compressor.ratio.setValueAtTime(vibe.compRatio, now);
-      this.compressor.attack.setValueAtTime(vibe.compAttack, now);
-      this.compressor.release.setValueAtTime(vibe.compRelease, now);
-    }
-    if (this.masterGain) {
-      this.masterGain.gain.setValueAtTime(vibe.masterGain, now);
-    }
-    if (this._eqLow) {
-      this._eqLow.frequency.setValueAtTime(vibe.eqLowFreq, now);
-      this._eqLow.gain.setValueAtTime(vibe.eqLowGain, now);
-    }
-    if (this._eqMid) {
-      this._eqMid.frequency.setValueAtTime(vibe.eqMidFreq, now);
-      this._eqMid.gain.setValueAtTime(vibe.eqMidGain, now);
-      this._eqMid.Q.setValueAtTime(vibe.eqMidQ, now);
-    }
-    if (this._eqHigh) {
-      this._eqHigh.frequency.setValueAtTime(vibe.eqHighFreq, now);
-      this._eqHigh.gain.setValueAtTime(vibe.eqHighGain, now);
-    }
-    if (this._reverbWet) {
-      this._reverbWet.gain.setValueAtTime(vibe.reverbMix, now);
-    }
-    this._updateMasterEffects(now);
+    this.master.setEnvelopePosition(this.audioCtx, t, envelope);
   }
 
-  /** Build the 3 master effect chains: saturation, exciter, comb filter. */
-  private _buildMasterEffects(ctx: AudioContext): void {
-    // Tape saturation — tanh waveshaper with variable drive
-    const satCurve = this._makeSaturationCurve(vibe.saturation);
-    this._saturationShaper = new WaveShaperNode(ctx, { curve: satCurve, oversample: '2x' });
-    this._saturationDry = new GainNode(ctx, { gain: vibe.saturation > 0 ? 0 : 1 });
-    this._saturationWet = new GainNode(ctx, { gain: vibe.saturation > 0 ? 1 : 0 });
-    this._saturationShaper.connect(this._saturationWet);
-
-    // Harmonic exciter — asymmetric waveshaper + high-pass to isolate added harmonics
-    const exciteCurve = this._makeExciterCurve();
-    this._exciterShaper = new WaveShaperNode(ctx, { curve: exciteCurve, oversample: '2x' });
-    this._exciterHP = new BiquadFilterNode(ctx, { type: 'highpass', frequency: 2000, Q: 0.5 });
-    this._exciterDry = new GainNode(ctx, { gain: 1 - vibe.excite });
-    this._exciterWet = new GainNode(ctx, { gain: vibe.excite });
-    this._exciterShaper.connect(this._exciterHP);
-    this._exciterHP.connect(this._exciterWet);
-
-    // Comb filter — delay with negative feedback for spectral notches
-    this._combDelay = new DelayNode(ctx, { maxDelayTime: 0.05, delayTime: vibe.combFreq });
-    this._combFeedback = new GainNode(ctx, { gain: -0.7 });
-    this._combDry = new GainNode(ctx, { gain: 1 - vibe.combMix });
-    this._combWet = new GainNode(ctx, { gain: vibe.combMix });
-    this._combDelay.connect(this._combFeedback);
-    this._combFeedback.connect(this._combDelay);
-    this._combDelay.connect(this._combWet);
-  }
-
-  /** Wire a dry/wet master effect into a chain. Returns the output merge node. */
-  private _wireMasterEffect(source: AudioNode, dry: GainNode, wet: GainNode): GainNode {
-    const ctx = this.audioCtx!;
-    const merge = new GainNode(ctx);
-    source.connect(dry);
-    dry.connect(merge);
-    // For saturation and comb, the input also feeds the effect chain
-    // (the effect nodes are already connected to wet in _buildMasterEffects)
-    if (wet === this._saturationWet) {
-      source.connect(this._saturationShaper!);
-    } else if (wet === this._exciterWet) {
-      source.connect(this._exciterShaper!);
-    } else if (wet === this._combWet) {
-      source.connect(this._combDelay!);
+  update(sigilState: SigilData, reverb: ReverbConfig): void {
+    this._updateVoices(sigilState);
+    if (this.audioCtx) {
+      this.master.syncReverb(this.audioCtx, reverb);
     }
-    wet.connect(merge);
-    return merge;
-  }
-
-  private _makeSaturationCurve(drive: number): Float32Array<ArrayBuffer> {
-    return makeSaturationCurve(Math.max(0.1, drive));
-  }
-
-  private _makeExciterCurve(): Float32Array<ArrayBuffer> {
-    const samples = 1024;
-    const curve = new Float32Array(samples);
-    for (let i = 0; i < samples; i++) {
-      const x = (i * 2) / samples - 1;
-      curve[i] = x >= 0 ? Math.tanh(x * 4) : Math.tanh(x * 2) * 0.8;
-    }
-    return curve;
-  }
-
-  /** Update master effect gains and parameters from the current vibe. */
-  private _updateMasterEffects(now: number): void {
-    // Saturation: when drive > 0, route through shaper; when 0, bypass
-    if (this._saturationDry && this._saturationWet && this._saturationShaper) {
-      const active = vibe.saturation > 0;
-      this._saturationDry.gain.setValueAtTime(active ? 0 : 1, now);
-      this._saturationWet.gain.setValueAtTime(active ? 1 : 0, now);
-      if (active) {
-        this._saturationShaper.curve = this._makeSaturationCurve(vibe.saturation);
-      }
-    }
-    // Exciter: crossfade dry/wet to prevent clipping
-    if (this._exciterDry && this._exciterWet) {
-      this._exciterDry.gain.setValueAtTime(1 - vibe.excite, now);
-      this._exciterWet.gain.setValueAtTime(vibe.excite, now);
-    }
-    // Comb filter: crossfade dry/wet to prevent clipping
-    if (this._combDry && this._combWet && this._combDelay) {
-      this._combDry.gain.setValueAtTime(1 - vibe.combMix, now);
-      this._combWet.gain.setValueAtTime(vibe.combMix, now);
-      this._combDelay.delayTime.setValueAtTime(vibe.combFreq, now);
-    }
-  }
-
-  private _cleanupMasterEffects(): void {
-    for (const node of [
-      this._saturationShaper,
-      this._saturationDry,
-      this._saturationWet,
-      this._exciterShaper,
-      this._exciterHP,
-      this._exciterDry,
-      this._exciterWet,
-      this._combDelay,
-      this._combFeedback,
-      this._combDry,
-      this._combWet,
-    ]) {
-      if (node) {
-        safeDisconnect(node);
-      }
-    }
-    this._saturationShaper = undefined;
-    this._saturationDry = undefined;
-    this._saturationWet = undefined;
-    this._exciterShaper = undefined;
-    this._exciterHP = undefined;
-    this._exciterDry = undefined;
-    this._exciterWet = undefined;
-    this._combDelay = undefined;
-    this._combFeedback = undefined;
-    this._combDry = undefined;
-    this._combWet = undefined;
+    this._activeReverb = reverb;
   }
 
   private _updateVoices(sigilState: SigilData): void {
@@ -588,10 +330,10 @@ export class AudioEngine {
 
       const isMuted = soloActive && voice.id !== this._soloVoiceId;
       audioVoice.gain.gain.setValueAtTime(
-        isMuted ? 0 : vibe.voiceGain(voice.waveform, voice.size),
+        isMuted ? 0 : this.mixer.voiceGain(voice.waveform, voice.size),
         now,
       );
-      audioVoice.panner.pan.setValueAtTime(vibe.xToPan(voice.x), now);
+      audioVoice.panner.pan.setValueAtTime(this.mixer.xToPan(voice.x), now);
 
       // Detect position/size changes for incremental FM sync
       if (
@@ -662,21 +404,15 @@ export class AudioEngine {
       if (audioVoice.octaveGainNode) {
         audioVoice.octaveGainNode.gain.setValueAtTime(
           voice.border
-            ? vibe.borderOctaveGain(voice.border.thickness, voice.border.color, voice.border.double)
+            ? this.mixer.borderOctaveGain(
+                voice.border.thickness,
+                voice.border.color,
+                voice.border.double,
+              )
             : 0,
           now,
         );
       }
-    }
-
-    // Sync voice-level vibe params when vibe instance changed (scene or tuner)
-    if (vibe !== this._appliedVibe) {
-      for (const av of this.activeVoices) {
-        av.formantMixer.gain.setValueAtTime(vibe.formantMix, now);
-        av.brightness.Q.setValueAtTime(vibe.brightnessQ, now);
-        av.syncGlobalParams(vibe, now);
-      }
-      this._appliedVibe = vibe;
     }
 
     // Global blend change or voice add/remove — full FM rebuild
@@ -698,35 +434,18 @@ export class AudioEngine {
 
   /** Current RMS output level as 0–1. */
   getLevel(): number {
-    if (!this._analyser || !this._analyserBuf) {
-      return 0;
-    }
-    this._analyser.getFloatTimeDomainData(this._analyserBuf);
-    let sum = 0;
-    for (let i = 0; i < this._analyserBuf.length; i++) {
-      const s = this._analyserBuf[i]!;
-      sum += s * s;
-    }
-    return Math.sqrt(sum / this._analyserBuf.length);
+    return this.master.getLevel();
   }
 
   muffle(): void {
-    this._muffled = true;
-    if (this._muffleFilter && this.audioCtx) {
-      const now = this.audioCtx.currentTime;
-      this._muffleFilter.frequency.cancelScheduledValues(now);
-      this._muffleFilter.frequency.setValueAtTime(this._muffleFilter.frequency.value, now);
-      this._muffleFilter.frequency.linearRampToValueAtTime(600, now + 0.15);
+    if (this.audioCtx) {
+      this.master.muffle(this.audioCtx);
     }
   }
 
   unmuffle(): void {
-    this._muffled = false;
-    if (this._muffleFilter && this.audioCtx) {
-      const now = this.audioCtx.currentTime;
-      this._muffleFilter.frequency.cancelScheduledValues(now);
-      this._muffleFilter.frequency.setValueAtTime(this._muffleFilter.frequency.value, now);
-      this._muffleFilter.frequency.linearRampToValueAtTime(20_000, now + 0.15);
+    if (this.audioCtx) {
+      this.master.unmuffle(this.audioCtx);
     }
   }
 
@@ -871,77 +590,6 @@ export class AudioEngine {
     return { depthGain, feedbackGain };
   }
 
-  private _buildReverb(): void {
-    this._appliedIR = vibe.ir;
-    this._appliedReverbPreDelay = vibe.reverbPreDelay;
-    if (!vibe.ir || !this.audioCtx || !this.envelopeGain || !this.compressor) {
-      return;
-    }
-
-    const ctx = this.audioCtx;
-    this._reverbConvolver = new ConvolverNode(ctx);
-    this._reverbWet = new GainNode(ctx, { gain: vibe.reverbMix });
-
-    if (vibe.reverbPreDelay > 0) {
-      this._reverbPreDelayNode = new DelayNode(ctx, {
-        maxDelayTime: 1,
-        delayTime: vibe.reverbPreDelay,
-      });
-      this.envelopeGain.connect(this._reverbPreDelayNode);
-      this._reverbPreDelayNode.connect(this._reverbConvolver);
-    } else {
-      this.envelopeGain.connect(this._reverbConvolver);
-    }
-    this._reverbConvolver.connect(this._reverbWet);
-    this._reverbWet.connect(this.compressor);
-
-    // Use pre-decoded buffer if provided, otherwise load async
-    if (this._pendingIRBuffer) {
-      this._reverbConvolver.buffer = this._pendingIRBuffer;
-      this._pendingIRBuffer = undefined;
-    } else {
-      const convolver = this._reverbConvolver;
-      decodeSample(ctx, vibe.ir)
-        .then((buf) => {
-          convolver.buffer = buf;
-        })
-        .catch(() => {});
-    }
-  }
-
-  private _teardownReverb(): void {
-    if (this._reverbPreDelayNode) {
-      try {
-        this.envelopeGain?.disconnect(this._reverbPreDelayNode);
-      } catch {}
-      safeDisconnect(this._reverbPreDelayNode);
-      this._reverbPreDelayNode = undefined;
-    } else if (this._reverbConvolver && this.envelopeGain) {
-      try {
-        this.envelopeGain.disconnect(this._reverbConvolver);
-      } catch {}
-    }
-    if (this._reverbConvolver) {
-      safeDisconnect(this._reverbConvolver);
-      this._reverbConvolver = undefined;
-    }
-    if (this._reverbWet) {
-      safeDisconnect(this._reverbWet);
-      this._reverbWet = undefined;
-    }
-  }
-
-  private _syncReverb(): void {
-    if (!this.isPlaying) {
-      return;
-    }
-    if (vibe.ir === this._appliedIR && vibe.reverbPreDelay === this._appliedReverbPreDelay) {
-      return;
-    }
-    this._teardownReverb();
-    this._buildReverb();
-  }
-
   _cleanup(): void {
     this._sessionId++;
 
@@ -952,45 +600,9 @@ export class AudioEngine {
     }
     this.activeVoices = [];
 
-    if (this.masterGain) {
-      safeDisconnect(this.masterGain);
-      this.masterGain = undefined;
-    }
-    if (this.envelopeGain) {
-      safeDisconnect(this.envelopeGain);
-      this.envelopeGain = undefined;
-    }
-    if (this.compressor) {
-      safeDisconnect(this.compressor);
-      this.compressor = undefined;
-    }
-    if (this._analyser) {
-      safeDisconnect(this._analyser);
-      this._analyser = undefined;
-      this._analyserBuf = undefined;
-    }
-    this._teardownReverb();
+    this.master.cleanup();
     this._playEnvelope = undefined;
-    this._appliedVibe = undefined;
-    this._appliedIR = undefined;
-    this._appliedReverbPreDelay = 0;
-    if (this._eqLow) {
-      safeDisconnect(this._eqLow);
-      this._eqLow = undefined;
-    }
-    if (this._eqMid) {
-      safeDisconnect(this._eqMid);
-      this._eqMid = undefined;
-    }
-    if (this._eqHigh) {
-      safeDisconnect(this._eqHigh);
-      this._eqHigh = undefined;
-    }
-    if (this._muffleFilter) {
-      safeDisconnect(this._muffleFilter);
-      this._muffleFilter = undefined;
-    }
-    this._cleanupMasterEffects();
+    this._activeReverb = undefined;
 
     // Pause the keep-alive <audio> element so iOS drops the audio session
     // Indicator (speaker icon in status bar / Control Center). It will be
@@ -1010,6 +622,6 @@ export class AudioEngine {
   }
 
   _buildVoice(ctx: AudioContext, voice: Voice): AudioVoice {
-    return buildVoice(ctx, voice, this.masterGain!, createEffect);
+    return buildVoice(ctx, voice, this.master.input!, this.mixer, createEffect);
   }
 }

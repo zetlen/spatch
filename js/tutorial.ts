@@ -14,6 +14,7 @@ import { harmonize, randomize } from './harmony.ts';
 import type { AudioEngine } from './audio/engine.ts';
 import type { SelectionManager, SigilStore, UndoManager } from './state.ts';
 import { normalizedCoord, type NormalizedCoord, type SigilData, type Voice } from './types.ts';
+import { getScene } from './scenes/index.ts';
 
 const LS_KEY = 'spatch-tutorial-seen';
 
@@ -1098,13 +1099,13 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
     }
 
     function playFor(ms: number): void {
-      audio.play(store.data, store.data.envelope);
+      audio.play(store.data, store.data.envelope, getScene(store.data.scene).reverb);
       after(ms, () => audio.release(store.data.envelope));
     }
 
     function playLatched(): void {
       if (!audio.isPlaying) {
-        audio.play(store.data, store.data.envelope);
+        audio.play(store.data, store.data.envelope, getScene(store.data.scene).reverb);
       }
     }
 

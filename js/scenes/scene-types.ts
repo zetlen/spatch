@@ -1,4 +1,4 @@
-import type { VibeOptions } from '../audio/vibe';
+import type { ReverbConfig } from '../audio/master-types';
 
 export interface Scene {
   name: string;
@@ -6,5 +6,5 @@ export interface Scene {
   stageBackground: string;
   imageCredit: string;
   creditUrl?: string;
-  vibe: Partial<VibeOptions>;
+  reverb: ReverbConfig;
 }

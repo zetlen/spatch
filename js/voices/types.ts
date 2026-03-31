@@ -26,7 +26,7 @@ export interface AudioSharedNodes {
   currentEffect: string | undefined;
   currentBorder: string | undefined;
   currentFillKey: string | undefined;
-  /** Initial warmth value for the sine saturation shaper; sourced from vibe at build time. */
+  /** Initial warmth value for the sine saturation shaper. */
   warmth: number;
 }
 
