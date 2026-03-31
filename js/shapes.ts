@@ -73,18 +73,90 @@ export function clampSize(size: number): NormalizedCoord {
   return normalizedCoord(Math.max(MIN_SIZE, Math.min(MAX_SIZE, size)));
 }
 
-/** Tilt angles for stamp trigger values: A=-5°, D=0°, R=+5°. */
-const STAMP_TRIGGER_TILT = [-5, 0, 5] as const;
+/** Tilt angles for stamp trigger values: A=-15°, D=0°, R=+15°. */
+export const STAMP_TRIGGER_TILT: [number, number, number] = [-15, 0, 15];
+
+const TILT_SPACING = 15; // degrees between adjacent stops
+const TILT_HALF_ZONE = TILT_SPACING / 2; // 7.5°
+
+// ---- Drag tilt override ----
+//
+// During rotation gestures, stamps need continuous visual tilt (for smooth
+// quintic feedback) while the store holds a discrete trigger (for audio).
+// This ephemeral map bridges the gap — set during drag, cleared on release.
+// voiceRotation() checks it first so the renderer shows the live angle.
+
+const dragTiltOverrides = new Map<string, number>();
+
+export function setDragTilt(id: string, degrees: number): void {
+  dragTiltOverrides.set(id, degrees);
+}
+
+export function getDragTilt(id: string): number | undefined {
+  return dragTiltOverrides.get(id);
+}
+
+export function clearDragTilt(id: string): void {
+  dragTiltOverrides.delete(id);
+}
 
 /** Get the visual rotation for a voice (derived from timbre, or trigger for stamps). */
 export function voiceRotation(voice: Voice): number {
   if (voice.waveform === 'stamp') {
+    const override = getDragTilt(voice.id);
+    if (override !== undefined) {
+      return override;
+    }
     const trigger = 'trigger' in voice ? (voice as { trigger: number }).trigger : 1;
     return STAMP_TRIGGER_TILT[trigger] ?? 0;
   }
   const entry = get(voice.waveform);
   const timbre = 'timbre' in voice ? (voice.timbre as number) : 0;
   return Math.min(1, Math.max(0, timbre)) * entry.rotationPeriod;
+}
+
+/**
+ * Quintic magnetic snap for stamp tilt. Returns continuous tilt (for visual)
+ * and discrete trigger index (for audio). Same math as snapYToNote().
+ */
+export function snapTriggerTilt(rawDegrees: number): { tilt: number; trigger: 0 | 1 | 2 } {
+  // Find nearest stop (bestIdx always in 0..2, non-null assertion is safe)
+  let bestIdx = 0;
+  let bestDist = Math.abs(rawDegrees - STAMP_TRIGGER_TILT[0]);
+  for (let i = 1; i < STAMP_TRIGGER_TILT.length; i++) {
+    const d = Math.abs(rawDegrees - STAMP_TRIGGER_TILT[i]!);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i;
+    }
+  }
+  const stopCenter = STAMP_TRIGGER_TILT[bestIdx]!;
+  const offset = rawDegrees - stopCenter;
+  const t = Math.max(-1, Math.min(1, offset / TILT_HALF_ZONE));
+
+  // Quintic pull: t^5 preserves sign, creates wider sticky center than cubic
+  const t2 = t * t;
+  const pulled = t2 * t2 * t;
+
+  const tilt = Math.max(
+    STAMP_TRIGGER_TILT[0],
+    Math.min(STAMP_TRIGGER_TILT[2]!, stopCenter + pulled * TILT_HALF_ZONE),
+  );
+  return { tilt, trigger: bestIdx as 0 | 1 | 2 };
+}
+
+/** Hard-snap to nearest trigger (no quintic). Used on pointer release. */
+export function hardSnapTrigger(rawDegrees: number): 0 | 1 | 2 {
+  let bestIdx = 0;
+  let bestDist = Math.abs(rawDegrees - STAMP_TRIGGER_TILT[0]);
+  for (let i = 1; i < STAMP_TRIGGER_TILT.length; i++) {
+    const d = Math.abs(rawDegrees - STAMP_TRIGGER_TILT[i]!);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i;
+    }
+  }
+  return bestIdx as 0 | 1 | 2;
 }
 
 // Check if a point falls in a clipped-out corner region (outside the border-radius arc).

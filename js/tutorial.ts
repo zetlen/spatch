@@ -90,6 +90,9 @@ export interface StepContext {
     y: number,
   ): string;
 
+  /** Add a demo stamp voice and store its ID in `demo[key]`. */
+  addStamp(key: string, x: number, y: number): string;
+
   /** Randomize the spatch (delegates to harmony.ts). */
   randomize(): void;
 
@@ -591,6 +594,37 @@ const steps: TutorialStep[] = [
       });
       el.append(link);
     },
+  },
+
+  // Stamp — place, cycle through trigger positions
+  {
+    punchOut: ['[data-tool="stamp"]', '#canvas-wrap'],
+    text: 'Stamps play samples. Tilt to change when they fire.',
+    play: [
+      (ctx: StepContext) => {
+        ctx.clearVoices();
+        ctx.store.updateScene(CHICLET_SCENE);
+        ctx.addStamp('st', 0.5, 0.5);
+        ctx.store.updateVoice(ctx.demo.st!, { size: ctx.nc(0.2) });
+        ctx.selection.clear();
+        ctx.render();
+        ctx.playFor(2000);
+      },
+      (ctx: StepContext) => {
+        if (ctx.demo.st) {
+          ctx.store.updateVoice(ctx.demo.st, { trigger: 0 });
+        }
+        ctx.render();
+        ctx.playFor(2000);
+      },
+      (ctx: StepContext) => {
+        if (ctx.demo.st) {
+          ctx.store.updateVoice(ctx.demo.st, { trigger: 2 });
+        }
+        ctx.render();
+        ctx.playFor(2000);
+      },
+    ],
   },
 
   // Colors are vowels — cycle through hues, all three shapes same color
@@ -1135,6 +1169,12 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
       return v.id;
     }
 
+    function addStamp(key: string, x: number, y: number): string {
+      const v = store.addVoice('stamp', normalizedCoord(x), normalizedCoord(y));
+      demo[key] = v.id;
+      return v.id;
+    }
+
     return {
       after,
       loop,
@@ -1151,6 +1191,7 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
       demo,
       clearVoices,
       addVoice,
+      addStamp,
       randomize: () => randomize(store, undo),
       harmonize: () => harmonize(store, undo),
     };

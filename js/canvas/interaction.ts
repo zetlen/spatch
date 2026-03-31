@@ -6,10 +6,16 @@
 
 import { hardSnapYToNote, rotationToTimbre, snapYToNote } from '../audio/mapping.ts';
 import {
+  STAMP_TRIGGER_TILT,
   clampSize,
+  clearDragTilt,
   dragToEnvelopeValue,
+  getDragTilt,
+  hardSnapTrigger,
   hitTestADSRCorner,
   isInClippedCorner,
+  setDragTilt,
+  snapTriggerTilt,
   voiceRotation,
 } from '../shapes.ts';
 import type { SelectionManager, SigilStore, UndoManager } from '../state.ts';
@@ -469,7 +475,16 @@ export class CanvasInteractionController {
         return;
       }
 
-      if (!hasTimbre(voice.waveform)) {
+      if (voice.waveform === 'stamp') {
+        const angleDelta = angle - this.interaction.initAngle;
+        const rawTilt = this.interaction.initRotation + angleDelta;
+        const { tilt, trigger } = snapTriggerTilt(rawTilt);
+        setDragTilt(voice.id, tilt);
+        this.store.updateVoice(this.interaction.shapeId, {
+          size: newSize,
+          trigger: trigger as 0 | 1 | 2,
+        });
+      } else if (!hasTimbre(voice.waveform)) {
         this.store.updateVoice(this.interaction.shapeId, { size: newSize });
       } else {
         const angleDelta = angle - this.interaction.initAngle;
@@ -532,10 +547,10 @@ export class CanvasInteractionController {
       const degDelta = (normAngle * 180) / Math.PI;
 
       if (voice.waveform === 'stamp') {
-        // Stamp: snap trigger based on accumulated angle from origin
-        const baseTilt = [-5, 0, 5][this.interaction.origin.trigger] ?? 0;
-        const newTilt = baseTilt + degDelta;
-        const trigger = newTilt <= -2.5 ? 0 : newTilt >= 2.5 ? 2 : 1;
+        const baseTilt = STAMP_TRIGGER_TILT[this.interaction.origin.trigger] ?? 0;
+        const rawTilt = baseTilt + degDelta;
+        const { tilt, trigger } = snapTriggerTilt(rawTilt);
+        setDragTilt(voice.id, tilt);
         updates.trigger = trigger as 0 | 1 | 2;
       } else if (hasTimbre(voice.waveform)) {
         const entry = get(voice.waveform);
@@ -561,6 +576,14 @@ export class CanvasInteractionController {
 
     if (this.interaction.mode === 'pinch-rotate') {
       if (e.pointerId === this.interaction.pointerA || e.pointerId === this.interaction.pointerB) {
+        const voice = this.store.getVoice(this.interaction.shapeId);
+        if (voice?.waveform === 'stamp') {
+          const rawTilt = getDragTilt(voice.id);
+          clearDragTilt(voice.id);
+          if (rawTilt !== undefined) {
+            this.store.updateVoice(voice.id, { trigger: hardSnapTrigger(rawTilt) });
+          }
+        }
         this.interaction = IDLE;
         this.pendingTouchDeselect = null;
         this.requestRender();
@@ -584,6 +607,18 @@ export class CanvasInteractionController {
         this.store.updateVoice(voice.id, {
           y: hardSnapYToNote(voice.y),
         });
+      }
+    }
+
+    // Clear stamp drag tilt on resize release
+    if (this.interaction.mode === 'resizing') {
+      const voice = this.selection.getSelectedVoice();
+      if (voice?.waveform === 'stamp') {
+        const rawTilt = getDragTilt(voice.id);
+        clearDragTilt(voice.id);
+        if (rawTilt !== undefined) {
+          this.store.updateVoice(voice.id, { trigger: hardSnapTrigger(rawTilt) });
+        }
       }
     }
 
