@@ -14,7 +14,7 @@ const CANVAS_SIZE = 800;
 function makeVoice(overrides = {}) {
   return {
     effect: undefined,
-    fill: { h: 200, l: 50, mode: 'solid', s: 80 },
+    fill: { h: 200, c: 0.2, l: 0.5, mode: 'solid' },
     id: 'test1',
     size: 0.12,
     waveform: 'sine',

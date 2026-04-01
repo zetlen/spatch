@@ -52,9 +52,9 @@ function formatState(data: SigilData): string {
   for (const v of data.voices) {
     const timbre = 'timbre' in v ? ` timbre:${v.timbre.toFixed(2)}` : '';
     let fill: string;
-    if (v.fill.mode === 'solid') fill = `solid h:${v.fill.h} s:${v.fill.s} l:${v.fill.l}`;
+    if (v.fill.mode === 'solid') fill = `solid h:${v.fill.h} c:${v.fill.c} l:${v.fill.l}`;
     else
-      fill = `linear h:${v.fill.h}\u2192${v.fill.h2} s:${v.fill.s}\u2192${v.fill.s2} l:${v.fill.l}\u2192${v.fill.l2}`;
+      fill = `linear h:${v.fill.h}\u2192${v.fill.h2} c:${v.fill.c}\u2192${v.fill.c2} l:${v.fill.l}\u2192${v.fill.l2}`;
     const border = v.border
       ? `${v.border.color}${v.border.double ? '\u00d72' : ''} t:${v.border.thickness.toFixed(2)}`
       : '\u2014';

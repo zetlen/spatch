@@ -30,7 +30,6 @@ function getSilentBuffer(ctx: AudioContext): AudioBuffer {
 const player: VoicePlayer = {
   oscillatorType: 'sine',
   shapeAreaCoeff: 1.2,
-  formantMaxQ: 4,
   gainExponent: 2.5,
   buildAudioGraph(ctx: AudioContext, initVoice: Voice, shared: AudioSharedNodes): AudioVoice {
     const initStample = getStample(getStampIndex(initVoice));

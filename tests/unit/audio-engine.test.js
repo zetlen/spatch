@@ -148,7 +148,7 @@ function makeVoice(id, waveform = 'sine', overrides = {}) {
   const base = {
     border: undefined,
     effect: undefined,
-    fill: { h: 200, l: 50, mode: 'solid', s: 80 },
+    fill: { h: 200, c: 0.2, l: 0.5, mode: 'solid' },
     id,
     size: 0.12,
     waveform,
@@ -730,7 +730,7 @@ describe('AudioEngine — diphthong sweep', () => {
 
   test('linear fill voice gets hasSweep=true after play', async () => {
     const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 120, s2: 60, l2: 70, gradAngle: 0 },
+      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 120, c2: 0.18, l2: 0.7, gradAngle: 0 },
     });
     await startWith([voice]);
 
@@ -740,7 +740,7 @@ describe('AudioEngine — diphthong sweep', () => {
 
   test('solid fill voice gets hasSweep=false after play', async () => {
     const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'solid', h: 200, s: 80, l: 50 },
+      fill: { mode: 'solid', h: 200, c: 0.2, l: 0.5 },
     });
     await startWith([voice]);
 
@@ -750,14 +750,14 @@ describe('AudioEngine — diphthong sweep', () => {
 
   test('linear fill change retrigs sweep without voice rebuild', async () => {
     const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 120, s2: 60, l2: 70, gradAngle: 0 },
+      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 120, c2: 0.18, l2: 0.7, gradAngle: 0 },
     });
     await startWith([voice]);
 
     const originalVoice = engine.activeVoices[0];
 
     const updated = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 120, s2: 60, l2: 70, gradAngle: 90 },
+      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 120, c2: 0.18, l2: 0.7, gradAngle: 90 },
     });
     engine.update(makeSigilState([updated]), TEST_REVERB);
 
@@ -769,14 +769,14 @@ describe('AudioEngine — diphthong sweep', () => {
 
   test('linear fill color change retrigs sweep', async () => {
     const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 120, s2: 60, l2: 70, gradAngle: 0 },
+      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 120, c2: 0.18, l2: 0.7, gradAngle: 0 },
     });
     await startWith([voice]);
 
     const originalVoice = engine.activeVoices[0];
 
     const updated = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, s: 80, l: 50, h2: 200, s2: 60, l2: 70, gradAngle: 0 },
+      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 200, c2: 0.18, l2: 0.7, gradAngle: 0 },
     });
     engine.update(makeSigilState([updated]), TEST_REVERB);
 
@@ -785,16 +785,16 @@ describe('AudioEngine — diphthong sweep', () => {
     expect(sameVoice.hasSweep).toBe(true);
   });
 
-  test('solid fill hue change updates formant smoothly (no rebuild)', async () => {
+  test('solid fill hue change updates filter smoothly (no rebuild)', async () => {
     const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'solid', h: 200, s: 80, l: 50 },
+      fill: { mode: 'solid', h: 200, c: 0.2, l: 0.5 },
     });
     await startWith([voice]);
 
     const originalVoice = engine.activeVoices[0];
 
     const updated = makeVoice('a', 'sine', {
-      fill: { mode: 'solid', h: 100, s: 80, l: 50 },
+      fill: { mode: 'solid', h: 100, c: 0.2, l: 0.5 },
     });
     engine.update(makeSigilState([updated]), TEST_REVERB);
 

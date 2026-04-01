@@ -39,7 +39,6 @@ function oscGain(i: number, timbre: number): number {
 const player: VoicePlayer = {
   oscillatorType: 'sawtooth',
   shapeAreaCoeff: (3 * Math.PI) / 8,
-  formantMaxQ: 8,
   gainExponent: 1.4,
   buildAudioGraph(ctx: AudioContext, initVoice: Voice, shared: AudioSharedNodes): AudioVoice {
     const initTimbre = 'timbre' in initVoice ? (initVoice.timbre as number) : 0;

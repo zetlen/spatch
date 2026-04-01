@@ -10,7 +10,6 @@ import type { AudioSharedNodes, AudioVoice, VoicePlayer } from '../types.ts';
 const player: VoicePlayer = {
   oscillatorType: 'sine',
   shapeAreaCoeff: Math.PI,
-  formantMaxQ: 4,
   gainExponent: 1,
   buildAudioGraph(ctx: AudioContext, initVoice: Voice, shared: AudioSharedNodes): AudioVoice {
     const initFreq = yToFrequency(initVoice.y);

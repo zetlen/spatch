@@ -211,7 +211,7 @@ export class SigilStore {
   updateFill(id: string, fill: Fill): void {
     const voice = this.getVoice(id);
     if (voice?.waveform === 'stamp' && fill.mode === 'linear') {
-      fill = { mode: 'solid', h: fill.h, s: fill.s, l: fill.l };
+      fill = { mode: 'solid', h: fill.h, c: fill.c, l: fill.l };
     }
     this.updateVoice(id, { fill });
   }

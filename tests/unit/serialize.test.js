@@ -18,7 +18,7 @@ function makeVoice(overrides = {}) {
   return {
     border: undefined,
     effect: undefined,
-    fill: { h: 200, l: 50, mode: 'solid', s: 80 },
+    fill: { h: 200, c: 0.2, l: 0.5, mode: 'solid' },
     id: 'test1',
     size: 0.5,
     waveform: 'sine',
@@ -116,11 +116,11 @@ describe('v2 serializeState / deserializeState round-trip', () => {
 
   test('all fill modes survive round-trip', () => {
     const solidVoice = makeVoice({
-      fill: { h: 120, l: 60, mode: 'solid', s: 50 },
+      fill: { h: 120, c: 0.15, l: 0.6, mode: 'solid' },
       x: 0.1,
     });
     const linearVoice = makeVoice({
-      fill: { gradAngle: 90, h: 100, h2: 200, l: 40, l2: 60, mode: 'linear', s: 50, s2: 70 },
+      fill: { gradAngle: 90, h: 100, c: 0.15, l: 0.4, h2: 200, c2: 0.2, l2: 0.6, mode: 'linear' },
       x: 0.3,
     });
 
@@ -219,7 +219,16 @@ describe('v2 format structure', () => {
     const state = makeState({
       voices: [
         makeVoice({
-          fill: { gradAngle: 90, h: 100, h2: 200, l: 40, l2: 60, mode: 'linear', s: 50, s2: 70 },
+          fill: {
+            gradAngle: 90,
+            h: 100,
+            c: 0.15,
+            l: 0.4,
+            h2: 200,
+            c2: 0.2,
+            l2: 0.6,
+            mode: 'linear',
+          },
         }),
       ],
     });

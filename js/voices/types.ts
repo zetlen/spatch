@@ -15,8 +15,8 @@ import type { Voice, VoiceBase, WaveformType } from '../types.ts';
 export interface AudioSharedNodes {
   ctx: AudioContext;
   gain: GainNode;
-  formantF1: BiquadFilterNode;
-  formantF2: BiquadFilterNode;
+  f1: BiquadFilterNode;
+  f2: BiquadFilterNode;
   formantMixer: GainNode;
   brightness: BiquadFilterNode;
   panner: StereoPannerNode;
@@ -36,8 +36,8 @@ export interface AudioVoice {
   gain: GainNode;
   outputNode: StereoPannerNode;
   panner: StereoPannerNode;
-  formantF1: BiquadFilterNode;
-  formantF2: BiquadFilterNode;
+  f1: BiquadFilterNode;
+  f2: BiquadFilterNode;
   formantMixer: GainNode;
   brightness: BiquadFilterNode;
   warmthShaper: WaveShaperNode | undefined;
@@ -78,7 +78,6 @@ export interface VoiceUI {
 export interface VoicePlayer {
   readonly oscillatorType: OscillatorType;
   readonly shapeAreaCoeff: number;
-  readonly formantMaxQ: number;
   readonly gainExponent: number;
   buildAudioGraph(ctx: AudioContext, voice: Voice, shared: AudioSharedNodes): AudioVoice;
 }

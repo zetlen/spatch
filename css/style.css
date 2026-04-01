@@ -227,7 +227,7 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 2px;
-  background: hsl(200, 80%, 50%);
+  background: oklch(0.55 0.17 237);
   pointer-events: none;
 }
 

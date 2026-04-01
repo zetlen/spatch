@@ -9,7 +9,6 @@ const stample: Stample = {
   referencePitch: 550,
   shapeAreaCoeff: 0.8,
   gainExponent: 1,
-  formantMaxQ: 4,
   handles: { n: [35, 10], e: [85, 10], s: [90, 220], w: [30, 220] },
 };
 

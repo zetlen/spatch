@@ -181,18 +181,18 @@ function setupDemoSpatch(ctx: StepContext): void {
   ctx.store.updateVoice(ctx.demo.tri!, {
     size: ctx.nc(0.12),
     timbre: ctx.nc(0.4),
-    fill: { mode: 'solid', h: 200, s: 70, l: 55 },
+    fill: { mode: 'solid', h: 200, c: 0.21, l: 0.55 },
   });
   ctx.addVoice('sq', 'pulse', 0.5, Y_G4);
   ctx.store.updateVoice(ctx.demo.sq!, {
     size: ctx.nc(0.15),
     timbre: ctx.nc(0.25),
-    fill: { mode: 'solid', h: 340, s: 75, l: 50 },
+    fill: { mode: 'solid', h: 340, c: 0.22, l: 0.5 },
   });
   ctx.addVoice('circ', 'sine', 0.5, Y_C5);
   ctx.store.updateVoice(ctx.demo.circ!, {
     size: ctx.nc(0.14),
-    fill: { mode: 'solid', h: 50, s: 80, l: 60 },
+    fill: { mode: 'solid', h: 50, c: 0.24, l: 0.6 },
   });
   ctx.selection.clear();
   ctx.render();
@@ -216,7 +216,7 @@ function isolateShape(ctx: StepContext, shape: 'sine' | 'pulse' | 'blend' | 'ast
 /** Set up a single large square with a gradient fill. */
 function setupGradientSquare(
   ctx: StepContext,
-  fill: { h: number; s: number; l: number; h2: number; s2: number; l2: number; gradAngle: number },
+  fill: { h: number; c: number; l: number; h2: number; c2: number; l2: number; gradAngle: number },
 ): void {
   ctx.stop();
   ctx.clearVoices();
@@ -423,7 +423,7 @@ function playJumpSequence(ctx: StepContext): void {
   const bassProps: Partial<Voice> = {
     size: normalizedCoord(0.7),
     timbre: normalizedCoord(0.492),
-    fill: { mode: 'solid', h: 0, s: 100, l: 55 },
+    fill: { mode: 'solid', h: 0, c: 0.3, l: 0.55 },
     effect: 'stripes',
     border: { color: 'black', double: true, thickness: normalizedCoord(0.143) },
   } as Partial<Voice>;
@@ -435,7 +435,7 @@ function playJumpSequence(ctx: StepContext): void {
   // Melody voice config (3 light gray astroids — created on first chord, not upfront)
   const melodyProps: Partial<Voice> = {
     timbre: normalizedCoord(0.476),
-    fill: { mode: 'solid', h: 0, s: 0, l: 79 },
+    fill: { mode: 'solid', h: 0, c: 0, l: 0.79 },
   } as Partial<Voice>;
 
   ctx.selection.clear();
@@ -632,16 +632,16 @@ const steps: TutorialStep[] = [
     punchOut: ['#fill-swatch', '#canvas-wrap'],
     text: 'Colors are vowels.',
     play: [
-      { h: 0, s: 80, l: 50 },
-      { h: 50, s: 80, l: 60 },
-      { h: 200, s: 70, l: 55 },
-      { h: 280, s: 60, l: 40 },
-      { h: 120, s: 90, l: 70 },
-    ].map((c, i) => (ctx: StepContext) => {
+      { h: 0, c: 0.24, l: 0.5 },
+      { h: 50, c: 0.24, l: 0.6 },
+      { h: 200, c: 0.21, l: 0.55 },
+      { h: 280, c: 0.18, l: 0.4 },
+      { h: 120, c: 0.27, l: 0.7 },
+    ].map((colorSpec, i) => (ctx: StepContext) => {
       if (i === 0) {
         setupDemoSpatch(ctx);
       }
-      const fill = { mode: 'solid' as const, ...c };
+      const fill = { mode: 'solid' as const, ...colorSpec };
       for (const k of ['tri', 'sq', 'circ']) {
         if (ctx.demo[k]) {
           ctx.store.updateVoice(ctx.demo[k]!, { fill });
@@ -657,17 +657,17 @@ const steps: TutorialStep[] = [
     punchOut: ['#fill-swatch', '#canvas-wrap'],
     text: 'Gradients are diphthongs.',
     play: [
-      [240, 75, 50, 0, 75, 50, 0],
-      [180, 75, 45, 60, 80, 60, 0],
-      [240, 75, 50, 0, 75, 50, 180],
-      [180, 75, 45, 60, 80, 60, 180],
-    ].map(([h, s, l, h2, s2, l2, angle]) => (ctx: StepContext) => {
+      [240, 0.22, 0.5, 0, 0.22, 0.5, 0],
+      [180, 0.22, 0.45, 60, 0.24, 0.6, 0],
+      [240, 0.22, 0.5, 0, 0.22, 0.5, 180],
+      [180, 0.22, 0.45, 60, 0.24, 0.6, 180],
+    ].map(([h, c, l, h2, c2, l2, angle]) => (ctx: StepContext) => {
       setupGradientSquare(ctx, {
         h: h!,
-        s: s!,
+        c: c!,
         l: l!,
         h2: h2!,
-        s2: s2!,
+        c2: c2!,
         l2: l2!,
         gradAngle: angle!,
       });

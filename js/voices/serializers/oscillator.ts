@@ -2,8 +2,8 @@
 //
 // Handles: sine, pulse, blend, astroid.
 // Register layout (per design doc):
-//   CP1 (4 chars): Fill color 1 — H(9) + S(7) + L(8)
-//   CP2 (5 chars): Fill color 2 + gradient angle — angle(3) + H(9) + S(7) + L(8)
+//   CP1 (4 chars): Fill color 1 — H(9) + C(7) + L(8)
+//   CP2 (5 chars): Fill color 2 + gradient angle — angle(3) + H(9) + C(7) + L(8)
 //                  Present only for gradient fills.
 //   SP1 (1 char): Y — note index 0-36
 //   MP1 (2 chars): X — pan 0-4095
@@ -40,36 +40,36 @@ const THICKNESS_STEPS = 7; // 8 steps: 0-7
 
 // ---- Color packing ----
 
-function packColor(h: number, s: number, l: number): string {
-  const val = (Math.round(h) << 14) | (Math.round(s) << 7) | Math.round(l);
+function packColor(h: number, c: number, l: number): string {
+  const val = (Math.round(h) << 14) | (Math.round(c * 320) << 7) | Math.round(l * 255);
   return encodeInt(val, 4);
 }
 
-function unpackColor(str: string, idx: number): { h: number; s: number; l: number } {
+function unpackColor(str: string, idx: number): { h: number; c: number; l: number } {
   const val = decodeInt(str, idx, 4);
   return {
     h: (val >> 14) & 0x1ff,
-    s: (val >> 7) & 0x7f,
-    l: val & 0x7f,
+    c: ((val >> 7) & 0x7f) / 320,
+    l: (val & 0xff) / 255,
   };
 }
 
-function packGradientColor(angle: number, h: number, s: number, l: number): string {
+function packGradientColor(angle: number, h: number, c: number, l: number): string {
   const angleBits = Math.round(angle / 45) & 7;
-  const colorBits = (Math.round(h) << 14) | (Math.round(s) << 7) | Math.round(l);
+  const colorBits = (Math.round(h) << 14) | (Math.round(c * 320) << 7) | Math.round(l * 255);
   return encodeInt((angleBits << 23) | colorBits, 5);
 }
 
 function unpackGradientColor(
   str: string,
   idx: number,
-): { angle: number; h: number; s: number; l: number } {
+): { angle: number; h: number; c: number; l: number } {
   const val = decodeInt(str, idx, 5);
   return {
     angle: ((val >> 23) & 7) * 45,
     h: (val >> 14) & 0x1ff,
-    s: (val >> 7) & 0x7f,
-    l: val & 0x7f,
+    c: ((val >> 7) & 0x7f) / 320,
+    l: (val & 0xff) / 255,
   };
 }
 
@@ -140,12 +140,12 @@ export function createOscillatorSerializer(): VoiceSerializer {
       let out = '';
 
       // CP1: fill color 1
-      out += packColor(voice.fill.h, voice.fill.s, voice.fill.l);
+      out += packColor(voice.fill.h, voice.fill.c, voice.fill.l);
 
       // CP2: fill color 2 + angle (gradient only)
       if (voice.fill.mode === 'linear') {
         const f = voice.fill as LinearFill;
-        out += packGradientColor(f.gradAngle, f.h2, f.s2, f.l2);
+        out += packGradientColor(f.gradAngle, f.h2, f.c2, f.l2);
       }
 
       // SP1: Y note index
@@ -188,17 +188,17 @@ export function createOscillatorSerializer(): VoiceSerializer {
           mode: 'linear',
           gradAngle: c2.angle,
           h: c1.h,
-          s: c1.s,
+          c: c1.c,
           l: c1.l,
           h2: c2.h,
-          s2: c2.s,
+          c2: c2.c,
           l2: c2.l,
         } satisfies LinearFill;
       } else {
         fill = {
           mode: 'solid',
           h: c1.h,
-          s: c1.s,
+          c: c1.c,
           l: c1.l,
         } satisfies SolidFill;
       }

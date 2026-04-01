@@ -37,7 +37,6 @@ export interface ResolvedStample {
   referencePitch: number;
   shapeAreaCoeff: number;
   gainExponent: number;
-  formantMaxQ: number;
   hull: string;
   handlePoints: HandlePoints;
 }
@@ -203,7 +202,6 @@ function resolve(s: {
   referencePitch: number;
   shapeAreaCoeff: number;
   gainExponent: number;
-  formantMaxQ: number;
   hull?: string;
   handles?: { n: [number, number]; e: [number, number]; s: [number, number]; w: [number, number] };
 }): ResolvedStample {
@@ -224,7 +222,6 @@ function resolve(s: {
     referencePitch: s.referencePitch,
     shapeAreaCoeff: s.shapeAreaCoeff,
     gainExponent: s.gainExponent,
-    formantMaxQ: s.formantMaxQ,
     hull,
     handlePoints,
   };

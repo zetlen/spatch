@@ -6,11 +6,11 @@ import {
   yToPlaybackRate,
 } from '../../js/audio/mapping.ts';
 import {
-  applyFormantFilter,
-  computeFormantQ,
-  hueToFormants,
+  applyColorParams,
+  hueToF1,
+  chromaToF2,
   lightnessToCutoff,
-} from '../../js/audio/formants.ts';
+} from '../../js/audio/filters.ts';
 
 describe('yToFrequency', () => {
   test('y=0 (top) returns highest chromatic note (G5)', () => {
@@ -174,211 +174,118 @@ describe('snapYToNote', () => {
 });
 
 describe('lightnessToCutoff', () => {
-  test('lightness 0 (black) returns ~300 Hz', () => {
-    const freq = lightnessToCutoff(0);
-    expect(freq).toBeCloseTo(300, -1); // Within 10 Hz
+  test('lightness 0 (black) returns ~500 Hz', () => {
+    expect(lightnessToCutoff(0)).toBeCloseTo(500, -1);
   });
 
-  test('lightness 50 (mid) returns ~1900 Hz', () => {
-    const freq = lightnessToCutoff(50);
-    // Geometric midpoint of 300–12000: 300 * sqrt(40) ≈ 1897
-    expect(freq).toBeCloseTo(1897, -2); // Within 100 Hz
+  test('lightness 0.5 (mid) returns geometric midpoint', () => {
+    const f = lightnessToCutoff(0.5);
+    expect(f).toBeGreaterThan(1500);
+    expect(f).toBeLessThan(2500);
   });
 
-  test('lightness 100 (white) returns ~12000 Hz', () => {
-    const freq = lightnessToCutoff(100);
-    expect(freq).toBeCloseTo(12_000, -2); // Within 100 Hz
+  test('lightness 1 (white) returns ~8000 Hz', () => {
+    expect(lightnessToCutoff(1)).toBeCloseTo(8000, -2);
   });
 
   test('monotonically increasing', () => {
     let prev = lightnessToCutoff(0);
-    for (let l = 1; l <= 100; l++) {
-      const freq = lightnessToCutoff(l);
-      expect(freq).toBeGreaterThan(prev);
-      prev = freq;
-    }
-  });
-
-  test('always returns positive frequency', () => {
-    for (let l = 0; l <= 100; l++) {
-      expect(lightnessToCutoff(l)).toBeGreaterThan(0);
+    for (let l = 0.01; l <= 1; l += 0.01) {
+      const f = lightnessToCutoff(l);
+      expect(f).toBeGreaterThanOrEqual(prev);
+      prev = f;
     }
   });
 });
 
-describe('computeFormantQ', () => {
-  test('returns base Q of 1 at saturation 0', () => {
-    expect(computeFormantQ(0, 'pulse')).toBeCloseTo(1, 2);
+describe('hueToF1', () => {
+  test('hue 0 maps to ~270 Hz (closed vowel)', () => {
+    expect(hueToF1(0)).toBeCloseTo(270, -1);
   });
 
-  test('higher saturation increases Q', () => {
-    const qLow = computeFormantQ(20, 'pulse');
-    const qHigh = computeFormantQ(80, 'pulse');
-    expect(qHigh).toBeGreaterThan(qLow);
+  test('hue 359 maps to ~730 Hz (open vowel)', () => {
+    const f = hueToF1(359);
+    expect(f).toBeGreaterThan(700);
   });
 
-  test('sine waveform caps Q lower than pulse', () => {
-    const qSine = computeFormantQ(100, 'sine');
-    const qPulse = computeFormantQ(100, 'pulse');
-    expect(qSine).toBeLessThan(qPulse);
-  });
-
-  test('sine max Q is 5 at full saturation (default vibe)', () => {
-    expect(computeFormantQ(100, 'sine')).toBeCloseTo(5, 2);
-  });
-
-  test('pulse max Q is 9 at full saturation (default vibe)', () => {
-    expect(computeFormantQ(100, 'pulse')).toBeCloseTo(9, 2);
-  });
-});
-
-describe('hueToFormants', () => {
-  test('returns anchor values at exact anchor hues', () => {
-    // Hue=0 → /a/: F1=730, F2=1090
-    const a = hueToFormants(0);
-    expect(a.f1).toBeCloseTo(730, 0);
-    expect(a.f2).toBeCloseTo(1090, 0);
-
-    // Hue=120 → /i/: F1=270, F2=2290
-    const i = hueToFormants(120);
-    expect(i.f1).toBeCloseTo(270, 0);
-    expect(i.f2).toBeCloseTo(2290, 0);
-  });
-
-  test('interpolates smoothly between anchors', () => {
-    // Hue=30 should be halfway between /a/ (F1=730) and /e/ (F1=530)
-    const mid = hueToFormants(30);
-    expect(mid.f1).toBeCloseTo(630, 0); // (730+530)/2
-    expect(mid.f2).toBeCloseTo(1465, 0); // (1090+1840)/2
-  });
-
-  test('wraps around at 360°', () => {
-    const h0 = hueToFormants(0);
-    const h360 = hueToFormants(360);
-    expect(h360.f1).toBeCloseTo(h0.f1, 0);
-    expect(h360.f2).toBeCloseTo(h0.f2, 0);
-  });
-
-  test('negative hues wrap correctly', () => {
-    const h350 = hueToFormants(350);
-    const hNeg10 = hueToFormants(-10);
-    expect(hNeg10.f1).toBeCloseTo(h350.f1, 0);
-    expect(hNeg10.f2).toBeCloseTo(h350.f2, 0);
+  test('monotonically increasing across 0-359', () => {
+    let prev = hueToF1(0);
+    for (let h = 1; h <= 359; h++) {
+      const f = hueToF1(h);
+      expect(f).toBeGreaterThanOrEqual(prev);
+      prev = f;
+    }
   });
 
   test('all hues produce positive frequencies', () => {
-    for (let h = 0; h < 360; h += 5) {
-      const f = hueToFormants(h);
-      expect(f.f1).toBeGreaterThan(0);
-      expect(f.f2).toBeGreaterThan(0);
-    }
-  });
-
-  test('F1 and F2 vary continuously across the hue range', () => {
-    // No abrupt jumps — adjacent hues should produce similar frequencies
-    let prevF1 = hueToFormants(0).f1;
-    let prevF2 = hueToFormants(0).f2;
-    for (let h = 1; h < 360; h++) {
-      const f = hueToFormants(h);
-      // Max change between adjacent degrees should be modest
-      expect(Math.abs(f.f1 - prevF1)).toBeLessThan(20);
-      expect(Math.abs(f.f2 - prevF2)).toBeLessThan(30);
-      prevF1 = f.f1;
-      prevF2 = f.f2;
+    for (let h = 0; h <= 360; h += 5) {
+      expect(hueToF1(h)).toBeGreaterThan(0);
     }
   });
 });
 
-// ---- applyFormantFilter tests ----
+describe('chromaToF2', () => {
+  test('zero chroma maps to ~840 Hz (back vowel)', () => {
+    expect(chromaToF2(0)).toBeCloseTo(840, -1);
+  });
 
-function createMockBiquad(freq = 350, q = 1) {
-  return { frequency: { value: freq }, Q: { value: q }, type: 'bandpass' };
+  test('max chroma (0.4) maps to ~2290 Hz (front vowel)', () => {
+    expect(chromaToF2(0.4)).toBeCloseTo(2290, -1);
+  });
+
+  test('higher chroma increases F2', () => {
+    expect(chromaToF2(0.3)).toBeGreaterThan(chromaToF2(0.1));
+  });
+});
+
+// ---- applyColorParams tests ----
+
+function createMockBiquad(freq = 500) {
+  return { frequency: { value: freq }, Q: { value: 3 }, type: 'bandpass' };
 }
 
-describe('applyFormantFilter', () => {
-  test('solid fill sets F1/F2 frequencies from hue', () => {
+function createMockLowpass(freq = 4000) {
+  return { frequency: { value: freq }, Q: { value: Math.SQRT1_2 }, type: 'lowpass' };
+}
+
+describe('applyColorParams', () => {
+  test('solid fill sets F1 from hue', () => {
     const f1 = createMockBiquad();
     const f2 = createMockBiquad();
-    const brightness = createMockBiquad(1000);
-    const fill = { mode: 'solid', h: 0, s: 80, l: 50 };
-    applyFormantFilter(f1, f2, brightness, fill, 'pulse');
-    // Hue 0 → F1 ≈ 730, F2 ≈ 1090 (from FORMANT_ANCHORS[0])
-    expect(f1.frequency.value).toBeCloseTo(730, -1);
-    expect(f2.frequency.value).toBeCloseTo(1090, -1);
+    const brightness = createMockLowpass();
+    applyColorParams(f1, f2, brightness, { mode: 'solid', h: 0, c: 0.2, l: 0.5 });
+    expect(f1.frequency.value).toBeCloseTo(270, -1);
   });
 
-  test('saturation affects Q', () => {
-    const f1Low = createMockBiquad();
+  test('solid fill sets F2 from chroma', () => {
+    const f1 = createMockBiquad();
     const f2Low = createMockBiquad();
-    const bLow = createMockBiquad();
-    applyFormantFilter(f1Low, f2Low, bLow, { mode: 'solid', h: 0, s: 10, l: 50 }, 'pulse');
-
-    const f1High = createMockBiquad();
     const f2High = createMockBiquad();
-    const bHigh = createMockBiquad();
-    applyFormantFilter(f1High, f2High, bHigh, { mode: 'solid', h: 0, s: 90, l: 50 }, 'pulse');
-
-    expect(f1High.Q.value).toBeGreaterThan(f1Low.Q.value);
+    const b1 = createMockLowpass();
+    const b2 = createMockLowpass();
+    applyColorParams(f1, f2Low, b1, { mode: 'solid', h: 0, c: 0.1, l: 0.5 });
+    applyColorParams(createMockBiquad(), f2High, b2, { mode: 'solid', h: 0, c: 0.3, l: 0.5 });
+    expect(f2High.frequency.value).toBeGreaterThan(f2Low.frequency.value);
   });
 
-  test('lightness affects brightness cutoff', () => {
-    const f1Dark = createMockBiquad();
-    const f2Dark = createMockBiquad();
-    const bDark = createMockBiquad();
-    applyFormantFilter(f1Dark, f2Dark, bDark, { mode: 'solid', h: 0, s: 50, l: 10 }, 'pulse');
+  test('solid fill sets brightness cutoff from lightness', () => {
+    const bDark = createMockLowpass();
+    applyColorParams(createMockBiquad(), createMockBiquad(), bDark, {
+      mode: 'solid',
+      h: 0,
+      c: 0.15,
+      l: 0.1,
+    });
 
-    const f1Light = createMockBiquad();
-    const f2Light = createMockBiquad();
-    const bLight = createMockBiquad();
-    applyFormantFilter(f1Light, f2Light, bLight, { mode: 'solid', h: 0, s: 50, l: 90 }, 'pulse');
+    const bLight = createMockLowpass();
+    applyColorParams(createMockBiquad(), createMockBiquad(), bLight, {
+      mode: 'solid',
+      h: 0,
+      c: 0.15,
+      l: 0.9,
+    });
 
     expect(bLight.frequency.value).toBeGreaterThan(bDark.frequency.value);
-  });
-
-  test('linear fill sets formants to sweep start color (non-reversed)', () => {
-    const f1 = createMockBiquad();
-    const f2 = createMockBiquad();
-    const b = createMockBiquad();
-    // GradAngle 0 is non-reversed → formants match color 1
-    const fill = { mode: 'linear', h: 0, s: 80, l: 30, h2: 120, s2: 80, l2: 70, gradAngle: 0 };
-    applyFormantFilter(f1, f2, b, fill, 'pulse');
-
-    const solidC1 = createMockBiquad();
-    const solidC1f2 = createMockBiquad();
-    const solidC1b = createMockBiquad();
-    applyFormantFilter(
-      solidC1,
-      solidC1f2,
-      solidC1b,
-      { mode: 'solid', h: 0, s: 80, l: 30 },
-      'pulse',
-    );
-
-    expect(f1.frequency.value).toBe(solidC1.frequency.value);
-    expect(b.frequency.value).toBe(solidC1b.frequency.value);
-  });
-
-  test('linear fill sets formants to sweep start color (reversed)', () => {
-    const f1 = createMockBiquad();
-    const f2 = createMockBiquad();
-    const b = createMockBiquad();
-    // GradAngle 180 is reversed → formants match color 2
-    const fill = { mode: 'linear', h: 0, s: 80, l: 30, h2: 120, s2: 80, l2: 70, gradAngle: 180 };
-    applyFormantFilter(f1, f2, b, fill, 'pulse');
-
-    const solidC2 = createMockBiquad();
-    const solidC2f2 = createMockBiquad();
-    const solidC2b = createMockBiquad();
-    applyFormantFilter(
-      solidC2,
-      solidC2f2,
-      solidC2b,
-      { mode: 'solid', h: 120, s: 80, l: 70 },
-      'pulse',
-    );
-
-    expect(f1.frequency.value).toBe(solidC2.frequency.value);
-    expect(b.frequency.value).toBe(solidC2b.frequency.value);
   });
 });
 

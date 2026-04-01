@@ -65,20 +65,20 @@ export type FillMode = 'solid' | 'linear';
 
 interface FillBase {
   h: number;
-  s: number;
+  c: number;
   l: number;
 }
 
-/** A single-color fill with HSL components. */
+/** A single-color fill with OKLCH components. */
 export interface SolidFill extends FillBase {
   mode: 'solid';
 }
 
-/** A linear gradient fill with two HSL color stops and a gradient angle. */
+/** A linear gradient fill with two OKLCH color stops and a gradient angle. */
 export interface LinearFill extends FillBase {
   mode: 'linear';
   h2: number;
-  s2: number;
+  c2: number;
   l2: number;
   gradAngle: number;
 }
@@ -90,10 +90,10 @@ export type Fill = SolidFill | LinearFill;
 export interface FillDraft {
   mode: FillMode;
   h: number;
-  s: number;
+  c: number;
   l: number;
   h2: number;
-  s2: number;
+  c2: number;
   l2: number;
   gradAngle: number;
 }
@@ -104,7 +104,7 @@ export interface FillDraft {
  * @returns A FillDraft with all fields populated
  */
 export function fillToFillDraft(fill: Fill): FillDraft {
-  const base = { gradAngle: 0, h: fill.h, h2: 180, l: fill.l, l2: 45, s: fill.s, s2: 80 };
+  const base = { gradAngle: 0, h: fill.h, h2: 180, l: fill.l, l2: 0.55, c: fill.c, c2: 0.15 };
   switch (fill.mode) {
     case 'solid': {
       return { ...base, mode: 'solid' };
@@ -116,7 +116,7 @@ export function fillToFillDraft(fill: Fill): FillDraft {
         h2: fill.h2,
         l2: fill.l2,
         mode: 'linear',
-        s2: fill.s2,
+        c2: fill.c2,
       };
     }
   }
@@ -130,7 +130,7 @@ export function fillToFillDraft(fill: Fill): FillDraft {
 export function fillDraftToFill(draft: FillDraft): Fill {
   switch (draft.mode) {
     case 'solid': {
-      return { h: draft.h, l: draft.l, mode: 'solid', s: draft.s };
+      return { h: draft.h, l: draft.l, mode: 'solid', c: draft.c };
     }
     case 'linear': {
       return {
@@ -140,8 +140,8 @@ export function fillDraftToFill(draft: FillDraft): Fill {
         l: draft.l,
         l2: draft.l2,
         mode: 'linear',
-        s: draft.s,
-        s2: draft.s2,
+        c: draft.c,
+        c2: draft.c2,
       };
     }
   }

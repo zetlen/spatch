@@ -11,13 +11,13 @@ import { createEffect } from '../patterns.ts';
 import { type BlendMode, type Envelope, type SigilData, type Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
 import {
-  applyFormantFilter,
-  computeFormantQ,
-  hueToFormants,
+  applyColorParams,
+  chromaToF2,
+  hueToF1,
   isSweepReversed,
   lightnessToCutoff,
-  scheduleFormantSweep,
-} from './formants.ts';
+  scheduleColorSweep,
+} from './filters.ts';
 import { Mixer } from './mixer.ts';
 import { Master } from './master.ts';
 import type { ReverbConfig } from './master-types.ts';
@@ -164,19 +164,16 @@ export class AudioEngine {
       const av = this.activeVoices[i]!;
       if (voice.fill.mode === 'linear') {
         const rev = isSweepReversed(voice.fill.gradAngle);
-        const startF = hueToFormants(rev ? voice.fill.h2 : voice.fill.h);
-        const startQ = computeFormantQ(rev ? voice.fill.s2 : voice.fill.s, voice.waveform);
-        const startCutoff = lightnessToCutoff(rev ? voice.fill.l2 : voice.fill.l);
-        av.formantF1.frequency.setValueAtTime(startF.f1, now);
-        av.formantF1.Q.setValueAtTime(startQ, now);
-        av.formantF2.frequency.setValueAtTime(startF.f2, now);
-        av.formantF2.Q.setValueAtTime(startQ * 0.7, now);
-        av.brightness.frequency.setValueAtTime(startCutoff, now);
+        const startH = rev ? voice.fill.h2 : voice.fill.h;
+        const startC = rev ? voice.fill.c2 : voice.fill.c;
+        const startL = rev ? voice.fill.l2 : voice.fill.l;
+        av.f1.frequency.setValueAtTime(hueToF1(startH), now);
+        av.f2.frequency.setValueAtTime(chromaToF2(startC), now);
+        av.brightness.frequency.setValueAtTime(lightnessToCutoff(startL), now);
 
-        scheduleFormantSweep(
-          { f1: av.formantF1, f2: av.formantF2, brightness: av.brightness },
+        scheduleColorSweep(
+          { f1: av.f1, f2: av.f2, brightness: av.brightness },
           voice.fill,
-          voice.waveform,
           sweepStart,
           decay,
         );
@@ -271,23 +268,16 @@ export class AudioEngine {
         // Schedule diphthong sweep for new linear-fill voices added mid-playback
         if (voice.fill.mode === 'linear') {
           const rev = isSweepReversed(voice.fill.gradAngle);
-          const startF = hueToFormants(rev ? voice.fill.h2 : voice.fill.h);
-          const startQ = computeFormantQ(rev ? voice.fill.s2 : voice.fill.s, voice.waveform);
-          const startCutoff = lightnessToCutoff(rev ? voice.fill.l2 : voice.fill.l);
-          audioVoice.formantF1.frequency.setValueAtTime(startF.f1, now);
-          audioVoice.formantF1.Q.setValueAtTime(startQ, now);
-          audioVoice.formantF2.frequency.setValueAtTime(startF.f2, now);
-          audioVoice.formantF2.Q.setValueAtTime(startQ * 0.7, now);
-          audioVoice.brightness.frequency.setValueAtTime(startCutoff, now);
+          const startH = rev ? voice.fill.h2 : voice.fill.h;
+          const startC = rev ? voice.fill.c2 : voice.fill.c;
+          const startL = rev ? voice.fill.l2 : voice.fill.l;
+          audioVoice.f1.frequency.setValueAtTime(hueToF1(startH), now);
+          audioVoice.f2.frequency.setValueAtTime(chromaToF2(startC), now);
+          audioVoice.brightness.frequency.setValueAtTime(lightnessToCutoff(startL), now);
           const midDecay = Math.max(0.01, this._playEnvelope?.decay ?? 0.2);
-          scheduleFormantSweep(
-            {
-              f1: audioVoice.formantF1,
-              f2: audioVoice.formantF2,
-              brightness: audioVoice.brightness,
-            },
+          scheduleColorSweep(
+            { f1: audioVoice.f1, f2: audioVoice.f2, brightness: audioVoice.brightness },
             voice.fill,
-            voice.waveform,
             now,
             midDecay,
           );
@@ -354,27 +344,22 @@ export class AudioEngine {
         fillKey !== audioVoice.currentFillKey &&
         voice.fill.mode === 'linear'
       ) {
-        audioVoice.formantF1.frequency.cancelScheduledValues(now);
-        audioVoice.formantF1.Q.cancelScheduledValues(now);
-        audioVoice.formantF2.frequency.cancelScheduledValues(now);
-        audioVoice.formantF2.Q.cancelScheduledValues(now);
+        audioVoice.f1.frequency.cancelScheduledValues(now);
+        audioVoice.f2.frequency.cancelScheduledValues(now);
         audioVoice.brightness.frequency.cancelScheduledValues(now);
 
         const rev = isSweepReversed(voice.fill.gradAngle);
-        const startF = hueToFormants(rev ? voice.fill.h2 : voice.fill.h);
-        const startQ = computeFormantQ(rev ? voice.fill.s2 : voice.fill.s, voice.waveform);
-        const startCutoff = lightnessToCutoff(rev ? voice.fill.l2 : voice.fill.l);
-        audioVoice.formantF1.frequency.setValueAtTime(startF.f1, now);
-        audioVoice.formantF1.Q.setValueAtTime(startQ, now);
-        audioVoice.formantF2.frequency.setValueAtTime(startF.f2, now);
-        audioVoice.formantF2.Q.setValueAtTime(startQ * 0.7, now);
-        audioVoice.brightness.frequency.setValueAtTime(startCutoff, now);
+        const startH = rev ? voice.fill.h2 : voice.fill.h;
+        const startC = rev ? voice.fill.c2 : voice.fill.c;
+        const startL = rev ? voice.fill.l2 : voice.fill.l;
+        audioVoice.f1.frequency.setValueAtTime(hueToF1(startH), now);
+        audioVoice.f2.frequency.setValueAtTime(chromaToF2(startC), now);
+        audioVoice.brightness.frequency.setValueAtTime(lightnessToCutoff(startL), now);
 
         const retrigDecay = Math.max(0.01, this._playEnvelope?.decay ?? 0.2);
-        scheduleFormantSweep(
-          { f1: audioVoice.formantF1, f2: audioVoice.formantF2, brightness: audioVoice.brightness },
+        scheduleColorSweep(
+          { f1: audioVoice.f1, f2: audioVoice.f2, brightness: audioVoice.brightness },
           voice.fill,
-          voice.waveform,
           now,
           retrigDecay,
         );
@@ -382,13 +367,7 @@ export class AudioEngine {
       }
 
       if (!audioVoice.hasSweep) {
-        applyFormantFilter(
-          audioVoice.formantF1,
-          audioVoice.formantF2,
-          audioVoice.brightness,
-          voice.fill,
-          voice.waveform,
-        );
+        applyColorParams(audioVoice.f1, audioVoice.f2, audioVoice.brightness, voice.fill);
       }
 
       // Update octave oscillator frequency if border is present

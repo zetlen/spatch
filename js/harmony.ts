@@ -12,6 +12,7 @@ import {
   type Voice,
   normalizedCoord,
 } from './types.ts';
+import { clampChromaToSRGB } from './colors.ts';
 import { type SigilStore, type UndoManager } from './state.ts';
 import { STAMPLE_COUNT } from './stamples/index.ts';
 import { SCENES } from './scenes/index.ts';
@@ -155,14 +156,20 @@ export function harmonizeWithScale(
 
 /** Create a random linear gradient fill with two distinct hues and a random angle. */
 function createRandomLinearFill(): Fill {
+  const h1 = Math.floor(Math.random() * 360);
+  const h2 = Math.floor(Math.random() * 360);
+  const rawC1 = 0.08 + Math.random() * 0.17;
+  const rawC2 = 0.08 + Math.random() * 0.17;
+  const l1 = 0.4 + Math.random() * 0.3;
+  const l2 = 0.4 + Math.random() * 0.3;
   return {
     mode: 'linear',
-    h: Math.floor(Math.random() * 360),
-    s: 70 + Math.floor(Math.random() * 20),
-    l: 45 + Math.floor(Math.random() * 15),
-    h2: Math.floor(Math.random() * 360),
-    s2: 70 + Math.floor(Math.random() * 20),
-    l2: 45 + Math.floor(Math.random() * 15),
+    h: h1,
+    c: clampChromaToSRGB(h1, rawC1, l1),
+    l: l1,
+    h2: h2,
+    c2: clampChromaToSRGB(h2, rawC2, l2),
+    l2: l2,
     gradAngle: Math.floor(Math.random() * 8) * 45,
   };
 }

@@ -1,113 +1,88 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  clampChromaToSRGB,
   getSolidFillColor,
   getSwatchColor,
-  hexToHsl,
-  hslToHex,
-  hslToString,
+  oklchToString,
 } from '../../js/colors.ts';
 
-describe('hslToString', () => {
-  test('formats HSL values correctly', () => {
-    expect(hslToString(200, 80, 50)).toBe('hsl(200, 80%, 50%)');
+describe('oklchToString', () => {
+  test('formats OKLCH values correctly', () => {
+    expect(oklchToString(200, 0.2, 0.5)).toBe('oklch(0.5 0.2 200)');
   });
 
   test('handles zero values', () => {
-    expect(hslToString(0, 0, 0)).toBe('hsl(0, 0%, 0%)');
+    expect(oklchToString(0, 0, 0)).toBe('oklch(0 0 0)');
   });
 
-  test('handles max values', () => {
-    expect(hslToString(360, 100, 100)).toBe('hsl(360, 100%, 100%)');
+  test('handles max hue', () => {
+    expect(oklchToString(360, 0.3, 1)).toBe('oklch(1 0.3 360)');
+  });
+});
+
+describe('clampChromaToSRGB', () => {
+  test('returns 0 for zero chroma', () => {
+    expect(clampChromaToSRGB(0, 0, 0.5)).toBe(0);
+  });
+
+  test('returns input chroma when already in gamut', () => {
+    // Low chroma values are always in gamut
+    const result = clampChromaToSRGB(200, 0.05, 0.5);
+    expect(result).toBeCloseTo(0.05, 2);
+  });
+
+  test('clamps high chroma that would be out of sRGB gamut', () => {
+    // Very high chroma should be clamped
+    const result = clampChromaToSRGB(200, 1.0, 0.5);
+    expect(result).toBeLessThan(1.0);
+    expect(result).toBeGreaterThan(0);
+  });
+
+  test('returns negative zero as 0', () => {
+    expect(clampChromaToSRGB(0, -0.1, 0.5)).toBe(0);
   });
 });
 
 describe('getSwatchColor', () => {
-  test('solid fill returns hsl string', () => {
-    const fill = { h: 200, l: 50, mode: 'solid', s: 80 };
-    expect(getSwatchColor(fill)).toBe('hsl(200, 80%, 50%)');
+  test('solid fill returns oklch string', () => {
+    const fill = { h: 200, c: 0.2, l: 0.5, mode: 'solid' };
+    expect(getSwatchColor(fill)).toBe('oklch(0.5 0.2 200)');
   });
 
   test('linear fill returns linear-gradient string', () => {
     const fill = {
       gradAngle: 45,
       h: 320,
+      c: 0.25,
+      l: 0.55,
       h2: 180,
-      l: 55,
-      l2: 45,
+      c2: 0.2,
+      l2: 0.45,
       mode: 'linear',
-      s: 90,
-      s2: 80,
     };
     const result = getSwatchColor(fill);
     expect(result).toContain('linear-gradient(');
     expect(result).toContain('135deg');
   });
-
-  // Unknown fill mode test removed: Fill is now a discriminated union,
-  // So only valid modes can be constructed.
 });
 
 describe('getSolidFillColor', () => {
-  test('returns hsl string for solid fill', () => {
-    const fill = { h: 200, l: 50, mode: 'solid', s: 80 };
-    expect(getSolidFillColor(fill)).toBe('hsl(200, 80%, 50%)');
+  test('returns oklch string for solid fill', () => {
+    const fill = { h: 200, c: 0.2, l: 0.5, mode: 'solid' };
+    expect(getSolidFillColor(fill)).toBe('oklch(0.5 0.2 200)');
   });
 
-  test('returns first color hsl for linear fill', () => {
-    const fill = { gradAngle: 45, h: 320, h2: 180, l: 55, l2: 40, mode: 'linear', s: 90, s2: 70 };
-    expect(getSolidFillColor(fill)).toBe('hsl(320, 90%, 55%)');
-  });
-});
-
-describe('hslToHex / hexToHsl round-trip', () => {
-  test('pure red round-trips', () => {
-    const hex = hslToHex(0, 100, 50);
-    expect(hex).toBe('#ff0000');
-    const [h, s, l] = hexToHsl(hex);
-    expect(h).toBe(0);
-    expect(s).toBe(100);
-    expect(l).toBe(50);
-  });
-
-  test('pure green round-trips', () => {
-    const hex = hslToHex(120, 100, 50);
-    expect(hex).toBe('#00ff00');
-    const [h, s, l] = hexToHsl(hex);
-    expect(h).toBe(120);
-    expect(s).toBe(100);
-    expect(l).toBe(50);
-  });
-
-  test('pure blue round-trips', () => {
-    const hex = hslToHex(240, 100, 50);
-    expect(hex).toBe('#0000ff');
-    const [h, s, l] = hexToHsl(hex);
-    expect(h).toBe(240);
-    expect(s).toBe(100);
-    expect(l).toBe(50);
-  });
-
-  test('white round-trips', () => {
-    const hex = hslToHex(0, 0, 100);
-    expect(hex).toBe('#ffffff');
-    const [_h, s, l] = hexToHsl(hex);
-    expect(s).toBe(0);
-    expect(l).toBe(100);
-  });
-
-  test('black round-trips', () => {
-    const hex = hslToHex(0, 0, 0);
-    expect(hex).toBe('#000000');
-    const [_h, s, l] = hexToHsl(hex);
-    expect(s).toBe(0);
-    expect(l).toBe(0);
-  });
-
-  test('mid-range color round-trips', () => {
-    const hex = hslToHex(200, 80, 50);
-    const [h, s, l] = hexToHsl(hex);
-    expect(h).toBe(200);
-    expect(s).toBe(80);
-    expect(l).toBe(50);
+  test('returns first color oklch for linear fill', () => {
+    const fill = {
+      gradAngle: 45,
+      h: 320,
+      c: 0.25,
+      l: 0.55,
+      h2: 180,
+      c2: 0.2,
+      l2: 0.45,
+      mode: 'linear',
+    };
+    expect(getSolidFillColor(fill)).toBe('oklch(0.55 0.25 320)');
   });
 });

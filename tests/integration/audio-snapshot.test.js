@@ -31,7 +31,7 @@ async function annotateState(page) {
     for (const v of voices) {
       const fill =
         v.fill.mode === 'solid'
-          ? `hsl(${v.fill.h},${v.fill.s}%,${v.fill.l}%)`
+          ? `oklch(${v.fill.l.toFixed(2)} ${v.fill.c.toFixed(3)} ${Math.round(v.fill.h)})`
           : `grad(${v.fill.h}→${v.fill.h2})`;
       const oct = v.border
         ? `oct:${v.border.color === 'white' ? '+' : '-'}${v.border.double ? 2 : 1}`
@@ -429,8 +429,10 @@ test.describe('Audio waveform snapshots', () => {
         globalThis.__testStore.updateVoice(voices[0].id, { timbre: 0 });
       });
       const png = await captureAudio(page);
+      // Astroid's 6-oscillator supersaw is sensitive to cross-platform audio
+      // differences (macOS vs CI Docker WebKit). Slightly wider tolerance.
       expect(Buffer.from(png, 'base64')).toMatchSnapshot('astroid-timbre-0.png', {
-        maxDiffPixelRatio: 0.05,
+        maxDiffPixelRatio: 0.08,
       });
     });
 

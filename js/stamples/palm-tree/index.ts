@@ -9,7 +9,6 @@ const stample: Stample = {
   referencePitch: 277,
   shapeAreaCoeff: 1.2,
   gainExponent: 1,
-  formantMaxQ: 4,
 };
 
 export default stample;

@@ -9,7 +9,6 @@ export interface Stample {
   referencePitch: number;
   shapeAreaCoeff: number;
   gainExponent: number;
-  formantMaxQ: number;
   /** Optional SVG path string overriding the stamp's own path for selection
    *  marching ants and hit-testing. If omitted, the path `d` attribute is
    *  extracted from the stamp SVG automatically. Useful when the stamp path

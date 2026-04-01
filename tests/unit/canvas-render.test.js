@@ -43,7 +43,7 @@ function makeSineVoice(overrides = {}) {
     x: normalizedCoord(0.5),
     y: normalizedCoord(0.5),
     size: normalizedCoord(0.2),
-    fill: { mode: 'solid', h: 200, s: 80, l: 50 },
+    fill: { mode: 'solid', h: 200, c: 0.2, l: 0.5 },
     effect: undefined,
     border: undefined,
     ...overrides,
@@ -57,7 +57,7 @@ function makePulseVoice(overrides = {}) {
     x: normalizedCoord(0.3),
     y: normalizedCoord(0.3),
     size: normalizedCoord(0.15),
-    fill: { mode: 'solid', h: 120, s: 70, l: 45 },
+    fill: { mode: 'solid', h: 120, c: 0.21, l: 0.45 },
     effect: undefined,
     border: undefined,
     timbre: normalizedCoord(0),
@@ -72,7 +72,7 @@ function makeBlendVoice(overrides = {}) {
     x: normalizedCoord(0.7),
     y: normalizedCoord(0.7),
     size: normalizedCoord(0.18),
-    fill: { mode: 'solid', h: 30, s: 90, l: 55 },
+    fill: { mode: 'solid', h: 30, c: 0.27, l: 0.55 },
     effect: undefined,
     border: undefined,
     timbre: normalizedCoord(0),
@@ -330,17 +330,17 @@ describe('canvas render — fill rendering', () => {
     }
   });
 
-  test('solid fill sets fill attribute to hsl color', () => {
+  test('solid fill sets fill attribute to oklch color', () => {
     const svg = createSVG();
     const voice = makeSineVoice({
-      fill: { mode: 'solid', h: 200, s: 80, l: 50 },
+      fill: { mode: 'solid', h: 200, c: 0.2, l: 0.5 },
     });
     const state = makeState({ voices: [voice] });
     render(svg, state, new Set(), undefined);
 
     const circle = svg.querySelector('g[data-layer="voices"] circle');
     const fill = circle.getAttribute('fill');
-    expect(fill).toBe('hsl(200, 80%, 50%)');
+    expect(fill).toBe('oklch(0.5 0.2 200)');
   });
 
   test('linear fill creates a linearGradient in defs', () => {
@@ -350,11 +350,11 @@ describe('canvas render — fill rendering', () => {
       fill: {
         mode: 'linear',
         h: 200,
-        s: 80,
-        l: 50,
+        c: 0.2,
+        l: 0.5,
         h2: 100,
-        s2: 60,
-        l2: 40,
+        c2: 0.18,
+        l2: 0.4,
         gradAngle: 0,
       },
     });
@@ -378,11 +378,11 @@ describe('canvas render — fill rendering', () => {
       fill: {
         mode: 'linear',
         h: 200,
-        s: 80,
-        l: 50,
+        c: 0.2,
+        l: 0.5,
         h2: 100,
-        s2: 60,
-        l2: 40,
+        c2: 0.18,
+        l2: 0.4,
         gradAngle: 0,
       },
     });
@@ -395,7 +395,7 @@ describe('canvas render — fill rendering', () => {
     // Switch to solid
     const solidVoice = {
       ...voice,
-      fill: { mode: 'solid', h: 200, s: 80, l: 50 },
+      fill: { mode: 'solid', h: 200, c: 0.2, l: 0.5 },
     };
     const state2 = makeState({ voices: [solidVoice] });
     render(svg, state2, new Set(), undefined);

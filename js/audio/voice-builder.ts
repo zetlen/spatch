@@ -6,7 +6,7 @@
 
 import type { AudioEffect, Fill, PatternType, Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
-import { applyFormantFilter } from './formants.ts';
+import { applyColorParams, FORMANT_MIX, FORMANT_Q } from './filters.ts';
 import type { Mixer } from './mixer.ts';
 import { get } from '../voices/registry.ts';
 import type { AudioSharedNodes } from '../voices/types.ts';
@@ -25,10 +25,9 @@ export function fillToKey(fill: Fill): string | undefined {
   if (fill.mode !== 'linear') {
     return undefined;
   }
-  return `${fill.h}:${fill.s}:${fill.l}:${fill.h2}:${fill.s2}:${fill.l2}:${fill.gradAngle}`;
+  return `${fill.h}:${fill.c}:${fill.l}:${fill.h2}:${fill.c2}:${fill.l2}:${fill.gradAngle}`;
 }
 
-const FORMANT_MIX = 0.7;
 const BRIGHTNESS_Q = Math.SQRT1_2;
 const WARMTH = 1.5;
 
@@ -37,16 +36,15 @@ const WARMTH = 1.5;
 /**
  * Build the complete Web Audio graph for a single voice.
  *
- * Creates shared plumbing (gain, formant filters, stereo panner, pattern/blend
- * effects, border octave doubling), then delegates waveform-specific oscillator
- * construction to the waveform strategy's `buildAudioGraph` method.
+ * Creates shared plumbing (gain, dual formant bandpass filters, brightness
+ * lowpass, stereo panner, pattern/blend effects, border octave doubling),
+ * then delegates waveform-specific oscillator construction to the waveform
+ * strategy's `buildAudioGraph` method.
  *
- * @param ctx - The active AudioContext
- * @param voice - Voice data from the sigil store
- * @param masterGain - The master gain node to connect the voice output to
- * @param mixer - Mixer providing gain, pan, and border octave calculations
- * @param createPatternEffect - Factory for pattern-driven audio effects
- * @returns A fully wired AudioVoice ready to be started
+ * Signal chain:
+ *   primary osc → [voice processing] → gain → F1 bandpass ──┐
+ *                                           → F2 bandpass ──┤→ mixer → brightness → [effect] → panner → master
+ *   border osc → borderGain → gain   (sibling of primary, same downstream chain)
  */
 export function buildVoice(
   ctx: AudioContext,
@@ -59,24 +57,26 @@ export function buildVoice(
 
   const freq = yToFrequency(voice.y);
 
-  // Dual formant filter bank + brightness shelf
-  const formantF1 = new BiquadFilterNode(ctx, { type: 'bandpass' });
-  const formantF2 = new BiquadFilterNode(ctx, { type: 'bandpass' });
+  // Dual formant filters: hue → F1 (vowel height), chroma → F2 (vowel frontness)
+  const f1 = new BiquadFilterNode(ctx, { type: 'bandpass', Q: FORMANT_Q });
+  const f2 = new BiquadFilterNode(ctx, { type: 'bandpass', Q: FORMANT_Q });
   const formantMixer = new GainNode(ctx, { gain: FORMANT_MIX });
+
+  // Lightness → brightness lowpass (wide, gentle)
   const brightness = new BiquadFilterNode(ctx, { type: 'lowpass', Q: BRIGHTNESS_Q });
 
-  applyFormantFilter(formantF1, formantF2, brightness, voice.fill, voice.waveform);
+  applyColorParams(f1, f2, brightness, voice.fill);
 
   const panner = new StereoPannerNode(ctx, { pan: mixer.xToPan(voice.x) });
 
-  // Wire: gain -> F1 -> mixer -> brightness -> [effect] -> panner -> master
-  //       Gain -> F2 -> mixer
-  //       [border osc -> borderGain -> gain]  (sibling of primary, same chain)
+  // Wire: gain → F1 → mixer → brightness → [effect] → panner → master
+  //       gain → F2 → mixer
+  //       [border osc → borderGain → gain]  (sibling of primary, same chain)
   // FM synthesis for blend modes is handled at the engine level (cross-voice routing).
-  gain.connect(formantF1);
-  gain.connect(formantF2);
-  formantF1.connect(formantMixer);
-  formantF2.connect(formantMixer);
+  gain.connect(f1);
+  gain.connect(f2);
+  f1.connect(formantMixer);
+  f2.connect(formantMixer);
   formantMixer.connect(brightness);
 
   let lastNode: AudioNode = brightness;
@@ -95,8 +95,6 @@ export function buildVoice(
   panner.connect(masterGain);
 
   // Octave doubling: border adds an oscillator at shifted frequency.
-  // White = up, black = down. Single = 1 octave, double = 2 octaves.
-  // Thickness scales the doubled voice gain.
   let octaveOsc: OscillatorNode | undefined;
   let octaveGainNode: GainNode | undefined;
   if (voice.border) {
@@ -104,7 +102,6 @@ export function buildVoice(
     const direction = voice.border.color === 'white' ? 1 : -1;
     const octaveFreq = freq * 2 ** (direction * octaveShift);
 
-    // Match oscillator type to voice waveform (#83)
     octaveOsc = new OscillatorNode(ctx, {
       type: get(voice.waveform).player.oscillatorType,
       frequency: octaveFreq,
@@ -114,8 +111,6 @@ export function buildVoice(
       gain: mixer.borderOctaveGain(voice.border.thickness, voice.border.color, voice.border.double),
     });
     octaveOsc.connect(octaveGainNode);
-    // Connect to voice gain so border traverses the same chain as the primary
-    // Oscillator: gain → F1/F2 → mixer → brightness → effect → panner → master.
     octaveGainNode.connect(gain);
   }
 
@@ -126,8 +121,8 @@ export function buildVoice(
   const shared: AudioSharedNodes = {
     ctx,
     gain,
-    formantF1,
-    formantF2,
+    f1,
+    f2,
     formantMixer,
     brightness,
     panner,

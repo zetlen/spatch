@@ -73,11 +73,11 @@ describe('SigilStore updateVoice / updateFill / updateEnvelope', () => {
       gradAngle: 0,
       h: 200,
       h2: 100,
-      l: 50,
-      l2: 40,
+      l: 0.5,
+      l2: 0.4,
       mode: 'linear',
-      s: 80,
-      s2: 60,
+      c: 0.24,
+      c2: 0.18,
     });
 
     const updated = store.getVoice(voice.id);

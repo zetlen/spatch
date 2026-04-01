@@ -72,8 +72,8 @@ js/
     sample-loader.ts Two-layer cache: fetchSample (bytes) + decodeSample (AudioBuffer)
     mapping.ts       Audio mapping (pitch, timbre, formants)
     node-utils.ts    Pure audio utilities (no waveform imports)
-    voice-builder.ts Voice audio graph plumbing (formants, effects, borders)
-    formants.ts      Formant filter bank for fill-driven vowel synthesis
+    voice-builder.ts Voice audio graph plumbing (filters, effects, borders)
+    filters.ts       Color-to-audio mapping (hue→F1, chroma→F2, lightness→lowpass)
   voices/
     types.ts         Delegate interfaces (VoiceUI, VoicePlayer, VoiceSerializer),
                      AudioVoice, AudioSharedNodes
@@ -111,7 +111,7 @@ js/
     vibe-tuner.ts    Hidden reverb tuner side drawer (behind URL param)
   harmony.ts         Randomize + harmonize (9 scales)
   shapes.ts          Resize/rotate math, ADSR corner conversion
-  colors.ts          Color conversions (HSL↔RGB↔Hex), SVG gradient helpers
+  colors.ts          Color conversions (OKLCH, gamut clamping), SVG gradient helpers
   patterns.ts        8×8 bitmap pattern tiles, effect factories (visual + audio co-located)
   effects.ts         FM_PARAMS table, blend-mode FM synthesis, center-distance overlap
   overlap.ts         Rasterized pixel-faithful shape overlap detection (OffscreenCanvas)
@@ -233,7 +233,7 @@ maps to both visual and audio:
 | `x` | horizontal position | stereo pan |
 | `y` | vertical position | pitch (chromatic, G2–G5, magnetic snap drag, hard snap release) |
 | `size` | shape area | gain |
-| `fill` | color/gradient | formant filter (hue→vowel, sat→Q, light→brightness) |
+| `fill` | color/gradient | 2D formant (hue→F1 vowel height, chroma→F2 frontness, light→brightness) |
 | `effect` | 8×8 bitmap pattern overlay | effect chain (chorus, tremolo, flanger, phaser, wah-wah, overdrive, bitcrush) |
 | `timbre` | rotation (pulse/blend/astroid) | waveform param (periodic: 90° square/astroid, 120° triangle) |
 | `stamp` | silhouette SVG (stamp only) | sample selection (pitch via playback rate) |
@@ -279,6 +279,28 @@ Privileges revoked after any `await`. See `audio/engine.ts:_init()` and
 1. **Comments match code.** Update or remove stale comments near changed code.
 2. **Documentation is current.** Update CLAUDE.md if behavior described here changed.
 
+### Pre-Push
+
+**MANDATORY.** Before every `git push`, run the full CI check suite locally:
+
+```bash
+bun run fmt            # format all files
+bun run lint           # lint all files (not just staged)
+bun run check          # typecheck
+bun run test:unit      # unit tests
+bun run test:e2e       # integration tests (updates snapshot baselines if needed)
+```
+
+If any step fails, fix it before pushing. Do NOT rely on lefthook pre-commit
+hooks alone — they only check files staged in each individual commit. If any
+commit in the branch used `--no-verify` (e.g., during a multi-step refactor
+where intermediate states don't compile), files from those commits will have
+skipped formatting, linting, and typechecking entirely. The full-project
+commands above catch everything the per-commit hooks miss.
+
+If `test:e2e` audio snapshot tests fail due to intentional audio changes, update
+baselines with `bun run test:e2e -- --update-snapshots` and commit the new PNGs.
+
 ### Pre-PR
 
 1. **No orphaned comments.** Remove comments referencing reverted/intermediate
@@ -288,6 +310,18 @@ Privileges revoked after any `await`. See `audio/engine.ts:_init()` and
 3. **No dead or tautological tests.** Tests for removed functionality must be
    removed/rewritten — not left to pass vacuously.
 4. **CLAUDE.md is accurate.** Re-read every section; fix stale descriptions.
+5. **Audio profile regression check.** If the PR changes the audio signal chain,
+   filter mapping, formant parameters, or any cross-cutting audio concern, run
+   the frequency profiling script on both `main` and the PR branch and compare:
+   ```bash
+   bun run dev &
+   node scripts/audio-profile.js pr-branch
+   # switch to main, restart dev server
+   node scripts/audio-profile.js control
+   ```
+   Compare the 6-band summary. The relative levels (parenthesized dB values)
+   should not shift by more than ~5 dB from `main` unless the change is
+   intentional. See the script header comment for interpretation guidance.
 
 ### Failing Tests
 
@@ -312,7 +346,7 @@ When a test fails:
    - `ui.ts`: SVG rendering (`createSvgElement`, `updateSvgElement`,
      `selectionHandles`) implementing `VoiceUI`.
    - `player.ts`: Audio graph (`buildAudioGraph`) implementing `VoicePlayer`.
-     Set `oscillatorType`, `shapeAreaCoeff`, `formantMaxQ`, `gainExponent`.
+     Set `oscillatorType`, `shapeAreaCoeff`, `gainExponent`.
    - `index.ts`: Registry entry wiring UI + Player + serializer.
      Use `oscillatorSerializer` for oscillator voices, `sampleSerializer` for
      sample-based voices. Set `createVoice` factory with waveform-specific
@@ -361,7 +395,6 @@ const stample: Stample = {
   referencePitch: 1200,
   shapeAreaCoeff: 1.2,
   gainExponent: 1.0,
-  formantMaxQ: 4,
   hull: 'M 630,576 C 621,839 ... Z',  // SVG path (M/L/C/Z); numbers are alternating x,y
 };
 export default stample;
@@ -391,8 +424,8 @@ Update `Border` in `types.ts`, `canvas/render.ts` (visual),
 ### Add a new fill mode
 
 Add Fill variant in `types.ts`, update `fillToFillDraft`/`fillDraftToFill`,
-`colors.ts`, `toolbar/fill-panel.ts`, `audio/mapping.ts` formant mapping,
-`serialize.ts`. Every fill field must affect the formant filter.
+`colors.ts`, `toolbar/fill-panel.ts`, `audio/filters.ts` color-to-audio mapping,
+`serialize.ts`. Every fill field must affect the audio mapping (F1, F2, or brightness).
 
 ### Modify scene reverb behavior
 

@@ -10,7 +10,7 @@ function makeVoice(overrides = {}) {
   return {
     border: undefined,
     effect: undefined,
-    fill: { h: 200, l: 50, mode: 'solid', s: 80 },
+    fill: { h: 200, c: 0.2, l: 0.5, mode: 'solid' },
     id: 'test1',
     size: 0.5,
     waveform: 'sine',
@@ -63,8 +63,10 @@ describe('OscillatorSerializer', () => {
       expect(unpacked.waveform).toBe('sine');
       expect(unpacked.fill.mode).toBe('solid');
       expect(unpacked.fill.h).toBe(200);
-      expect(unpacked.fill.s).toBe(80);
-      expect(unpacked.fill.l).toBe(50);
+      // Chroma round-trips as round(c*320)/320
+      expect(unpacked.fill.c).toBeCloseTo(0.2, 2);
+      // Lightness round-trips as round(l*255)/255
+      expect(unpacked.fill.l).toBeCloseTo(0.5, 2);
       expect(unpacked.effect).toBeUndefined();
       expect(unpacked.border).toBeUndefined();
       // IDs are regenerated
@@ -113,12 +115,12 @@ describe('OscillatorSerializer', () => {
         fill: {
           gradAngle: 90,
           h: 100,
+          c: 0.15,
+          l: 0.4,
           h2: 200,
-          l: 40,
-          l2: 60,
+          c2: 0.2,
+          l2: 0.6,
           mode: 'linear',
-          s: 50,
-          s2: 70,
         },
       });
       const packed = serializer.pack(voice);
@@ -127,11 +129,11 @@ describe('OscillatorSerializer', () => {
       expect(unpacked.fill.mode).toBe('linear');
       expect(unpacked.fill.gradAngle).toBe(90);
       expect(unpacked.fill.h).toBe(100);
-      expect(unpacked.fill.s).toBe(50);
-      expect(unpacked.fill.l).toBe(40);
+      expect(unpacked.fill.c).toBeCloseTo(0.15, 2);
+      expect(unpacked.fill.l).toBeCloseTo(0.4, 2);
       expect(unpacked.fill.h2).toBe(200);
-      expect(unpacked.fill.s2).toBe(70);
-      expect(unpacked.fill.l2).toBe(60);
+      expect(unpacked.fill.c2).toBeCloseTo(0.2, 2);
+      expect(unpacked.fill.l2).toBeCloseTo(0.6, 2);
     });
 
     test('all effects survive', () => {
@@ -173,7 +175,7 @@ describe('OscillatorSerializer', () => {
 
     test('gradient voice has gradientWidth chars', () => {
       const voice = makeVoice({
-        fill: { gradAngle: 45, h: 100, h2: 200, l: 40, l2: 60, mode: 'linear', s: 50, s2: 70 },
+        fill: { gradAngle: 45, h: 100, c: 0.15, l: 0.4, h2: 200, c2: 0.2, l2: 0.6, mode: 'linear' },
       });
       expect(serializer.pack(voice)).toHaveLength(serializer.gradientWidth);
     });
@@ -207,16 +209,41 @@ describe('OscillatorSerializer', () => {
 
     test('hue preserved exactly (9 bits, integer)', () => {
       for (const h of [0, 180, 360]) {
-        const voice = makeVoice({ fill: { h, l: 50, mode: 'solid', s: 80 } });
+        const voice = makeVoice({ fill: { h, c: 0.2, l: 0.5, mode: 'solid' } });
         const unpacked = serializer.unpack(serializer.pack(voice), 'sine');
         expect(unpacked.fill.h).toBe(h);
       }
     });
 
+    test('chroma quantizes to 7 bits (c*320 rounded)', () => {
+      const c = 0.2;
+      const voice = makeVoice({ fill: { h: 200, c, l: 0.5, mode: 'solid' } });
+      const unpacked = serializer.unpack(serializer.pack(voice), 'sine');
+      // Expected: round(0.2 * 320) / 320 = 64/320 = 0.2 (exact)
+      expect(unpacked.fill.c).toBeCloseTo(c, 2);
+    });
+
+    test('lightness quantizes to 8 bits (l*255 rounded)', () => {
+      const l = 0.5;
+      const voice = makeVoice({ fill: { h: 200, c: 0.2, l, mode: 'solid' } });
+      const unpacked = serializer.unpack(serializer.pack(voice), 'sine');
+      // Expected: round(0.5 * 255) / 255 ≈ 128/255 ≈ 0.502
+      expect(unpacked.fill.l).toBeCloseTo(l, 2);
+    });
+
     test('gradient angle preserved exactly (3 bits, 45° steps)', () => {
       for (const angle of [0, 45, 90, 135, 180, 225, 270, 315]) {
         const voice = makeVoice({
-          fill: { gradAngle: angle, h: 100, h2: 200, l: 40, l2: 60, mode: 'linear', s: 50, s2: 70 },
+          fill: {
+            gradAngle: angle,
+            h: 100,
+            c: 0.15,
+            l: 0.4,
+            h2: 200,
+            c2: 0.2,
+            l2: 0.6,
+            mode: 'linear',
+          },
         });
         const unpacked = serializer.unpack(serializer.pack(voice), 'sine');
         expect(unpacked.fill.gradAngle).toBe(angle);
@@ -227,7 +254,7 @@ describe('OscillatorSerializer', () => {
   describe('edge cases', () => {
     test('all-zero voice clamps size to MIN_SIZE', () => {
       const voice = makeVoice({
-        fill: { h: 0, l: 0, mode: 'solid', s: 0 },
+        fill: { h: 0, c: 0, l: 0, mode: 'solid' },
         size: 0,
         x: 0,
         y: 0,
@@ -242,8 +269,9 @@ describe('OscillatorSerializer', () => {
     });
 
     test('max-value voice', () => {
+      // Max representable chroma is 127/320 ≈ 0.397 (7-bit field)
       const voice = makeVoice({
-        fill: { h: 360, l: 100, mode: 'solid', s: 100 },
+        fill: { h: 350, c: 0.35, l: 0.95, mode: 'solid' },
         size: 1,
         x: 1,
         y: 1,
@@ -252,7 +280,7 @@ describe('OscillatorSerializer', () => {
       expect(unpacked.x).toBeCloseTo(1, 1);
       expect(unpacked.y).toBeCloseTo(1, 1);
       expect(unpacked.size).toBeCloseTo(1, 1);
-      expect(unpacked.fill.h).toBe(360);
+      expect(unpacked.fill.h).toBe(350);
     });
   });
 });
@@ -291,7 +319,7 @@ describe('SampleSerializer', () => {
 
   test('gradient fill is coerced to solid on unpack', () => {
     const voice = makeVoice({
-      fill: { gradAngle: 180, h: 50, h2: 300, l: 30, l2: 70, mode: 'linear', s: 90, s2: 40 },
+      fill: { gradAngle: 180, h: 50, c: 0.25, l: 0.3, h2: 300, c2: 0.1, l2: 0.7, mode: 'linear' },
       stamp: 3,
       waveform: 'stamp',
     });
