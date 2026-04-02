@@ -247,8 +247,10 @@ in code comments (`types.ts`, `effects.ts`, `voice-builder.ts`, `shapes.ts`,
 **Serialization policy**: v2 register-based format. Perceptually quantized
 (6-bit spatial, 3-bit envelope, 3-bit border). Header packs version (1 char),
 scene+blend (1 char: blend 2b | scene 4b), envelope (2 chars). Version byte
-enables future evolution. v1 URLs are not migrated. **No backwards
-compatibility until v1.**
+enables future evolution. **Backwards compatibility is required.** Any
+format change must bump the version byte and add an unpacker for the
+previous version so existing URLs continue to work. The `unpackState`
+function should dispatch on the version byte, not reject unknown versions.
 
 ## Code Conventions
 
