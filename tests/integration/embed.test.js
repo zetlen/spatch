@@ -2,11 +2,20 @@ import { expect, test } from '@playwright/test';
 import path from 'path';
 
 test.describe('Embed viewer', () => {
-  test('shows error without data', async ({ page }) => {
+  test('blank embed is ready for postMessage commands', async ({ page }) => {
     await page.goto('/embed/');
+    const embed = page.locator('#embed');
+    await expect(embed).toHaveClass(/ready/, { timeout: 5000 });
+    // No error message — blank start is a valid mode
+    const msg = page.locator('.error-msg');
+    await expect(msg).toHaveCount(0);
+  });
+
+  test('shows error with invalid data', async ({ page }) => {
+    await page.goto('/embed/!!!invalid!!!');
     const msg = page.locator('.error-msg');
     await expect(msg).toBeVisible();
-    await expect(msg).toHaveText('No sigil data found.');
+    await expect(msg).toHaveText('Invalid sigil data.');
   });
 
   test('renders sigil from valid path', async ({ page }) => {
@@ -79,6 +88,48 @@ test.describe('Embed viewer', () => {
 
     const embedBox = await embed.boundingBox();
     expect(Math.abs(embedBox.width - embedBox.height)).toBeLessThan(2);
+  });
+
+  test('postMessage load renders voices in blank embed', async ({ page }) => {
+    // Create a sigil in the main app to get valid serialized data
+    await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
+    await page.goto('/');
+    await page.waitForSelector('#sigil-canvas');
+
+    await page.click('[data-tool="circle"]');
+    const canvas = page.locator('#sigil-canvas');
+    const box = await canvas.boundingBox();
+    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
+      timeout: 3000,
+    });
+    const data = await page.evaluate(() => globalThis.location.pathname.slice(3));
+
+    // Open a page that creates a blank embed iframe and sends a load command
+    await page.goto('/');
+    await page.evaluate((sigilData) => {
+      const iframe = document.createElement('iframe');
+      iframe.id = 'test-embed';
+      iframe.src = '/embed/';
+      iframe.style.cssText = 'width:300px;height:300px;border:none;';
+      document.body.replaceChildren(iframe);
+
+      // Wait for ready, then send load
+      window.addEventListener('message', (e) => {
+        if (e.data?.source === 'spatch' && e.data.type === 'ready') {
+          iframe.contentWindow.postMessage(
+            { source: 'spatch', type: 'load', data: sigilData },
+            location.origin,
+          );
+        }
+      });
+    }, data);
+
+    // Check that the embed rendered the voice
+    const iframe = page.frameLocator('#test-embed');
+    const shapes = iframe.locator('svg#c [data-voice-id]');
+    await expect(shapes).toHaveCount(1, { timeout: 5000 });
   });
 
   test('old hash embed URLs are migrated to path URLs', async ({ page }) => {
