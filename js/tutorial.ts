@@ -1540,8 +1540,16 @@ export function initTutorial(deps: TutorialDeps): TutorialHandle {
     depressTarget();
   });
 
-  overlay.addEventListener('pointerup', (e) => {
+  overlay.addEventListener('pointerup', () => {
     releaseTarget();
+  });
+
+  // Advance on click, not pointerup. iOS Safari only qualifies
+  // touchend/click/keydown as user-activation events for AudioContext.resume()
+  // and HTMLMediaElement.play(). pointerup is NOT qualifying — calling
+  // audio.play() from pointerup fails to resume the keep-alive <audio>
+  // element and may leave the AudioContext suspended.
+  overlay.addEventListener('click', (e) => {
     if (overlay.classList.contains('tutorial-locked')) {
       return;
     }
