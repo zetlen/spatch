@@ -350,27 +350,35 @@ g.muted {
   transition: opacity 0.2s;
 }
 
-body.is-editing .tutorial-btn {
-  opacity: 0.3;
-  pointer-events: auto;
-}
-
 body.is-editing.has-voices .share-btn,
 body.is-editing.has-voices .splash-btn {
   opacity: 0.3;
   pointer-events: auto;
 }
 
-body.is-editing .tutorial-btn:hover,
 body.is-editing.has-voices .share-btn:hover,
 body.is-editing.has-voices .splash-btn:hover {
   opacity: 0.7;
 }
 
+/* Tutorial button — bare icon in bottom toolbar */
 .tutorial-btn {
-  top: auto;
-  right: 8px;
-  bottom: 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  touch-action: manipulation;
+}
+.tutorial-btn:hover {
+  color: var(--text-primary);
+}
+.tutorial-btn.bounce {
+  animation: logo-bounce 0.4s cubic-bezier(0.2, 0, 0.7, 1);
 }
 
 .splash-btn {

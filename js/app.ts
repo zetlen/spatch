@@ -461,7 +461,8 @@ async function loadTutorial() {
   return tutorial;
 }
 
-qel('#btn-tutorial').addEventListener('click', async () => {
+const tutorialBtn = qel('#btn-tutorial');
+tutorialBtn.addEventListener('click', async () => {
   if (tutorial?.isVisible) {
     tutorial.hide();
     return;
@@ -472,6 +473,36 @@ qel('#btn-tutorial').addEventListener('click', async () => {
   const t = tutorial ?? (await loadTutorial());
   t.show();
 });
+
+// First-visit hint: bounce the tutorial button once after the toolbar
+// becomes visible, matching the logo bounce animation. Uses the same
+// localStorage key as the tutorial intro sequence.
+if (!localStorage.getItem('spatch-tutorial-seen')) {
+  const doBounce = () => {
+    tutorialBtn.classList.add('bounce');
+    tutorialBtn.addEventListener('animationend', () => tutorialBtn.classList.remove('bounce'), {
+      once: true,
+    });
+  };
+
+  if (document.body.classList.contains('is-editing')) {
+    // Toolbar already visible (homepage or seen URL) — bounce after a beat
+    // so it's noticeable rather than lost in the initial paint.
+    setTimeout(doBounce, 600);
+  } else {
+    // Splash active — bounce when the toolbar fades in.
+    const botBar = qel('#toolbar-bottom');
+    botBar.addEventListener(
+      'transitionend',
+      (e) => {
+        if (e.propertyName === 'opacity') {
+          doBounce();
+        }
+      },
+      { once: true },
+    );
+  }
+}
 
 // Cross-wire: each overlay dismisses the others when opening
 credits.onShow = () => {
