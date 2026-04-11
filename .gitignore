@@ -8,3 +8,9 @@ test-results/
 .DS_Store
 .superpowers/
 .worktrees/
+.venv/
+__pycache__/
+.python-version
+pyproject.toml
+uv.lock
+main.py

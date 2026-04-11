@@ -63,6 +63,12 @@ export class PlaybackController {
   private overlayInnerRadius = 0;
   private overlayLatchStart = 0;
   private overlayMaxDist = 0;
+  // Offset from viewport origin to the overlay's coordinate origin.
+  // Chrome treats container-type:size as a containing block for position:fixed
+  // children (overlay coords = stage-relative); Safari does not (overlay coords
+  // = viewport-relative). Measured at show-time so it works on both.
+  private overlayOffsetX = 0;
+  private overlayOffsetY = 0;
 
   constructor(deps: {
     audio: AudioEngine;
@@ -452,8 +458,19 @@ export class PlaybackController {
   }
 
   private showRadialOverlay(): void {
-    const cx = this.overlayCenterX;
-    const cy = this.overlayCenterY;
+    // Show overlay (opacity: 0 but laid out) so we can measure its position.
+    this.radialOverlay.classList.remove('hidden');
+
+    // Measure the overlay's actual viewport position. Chrome treats
+    // container-type:size as a containing block for position:fixed children
+    // (overlay origin = #stage origin); Safari does not (overlay origin =
+    // viewport origin). Measuring at show-time handles both correctly.
+    const overlayRect = this.radialOverlay.getBoundingClientRect();
+    this.overlayOffsetX = overlayRect.left;
+    this.overlayOffsetY = overlayRect.top;
+
+    const cx = this.overlayCenterX - this.overlayOffsetX;
+    const cy = this.overlayCenterY - this.overlayOffsetY;
     const latchStart = this.overlayLatchStart;
 
     // Reset floating zone icon (hidden until loop/latch zone entered)
@@ -476,7 +493,6 @@ export class PlaybackController {
     }
 
     this.setOverlayGradient('momentary');
-    this.radialOverlay.classList.remove('hidden');
     requestAnimationFrame(() => {
       this.radialOverlay.classList.add('active');
     });
@@ -499,8 +515,8 @@ export class PlaybackController {
   }
 
   private setOverlayGradient(activeZone: string): void {
-    const cx = this.overlayCenterX;
-    const cy = this.overlayCenterY;
+    const cx = this.overlayCenterX - this.overlayOffsetX;
+    const cy = this.overlayCenterY - this.overlayOffsetY;
     const innerR = this.overlayInnerRadius;
     const latchStart = this.overlayLatchStart;
 
@@ -533,8 +549,8 @@ export class PlaybackController {
         }
 
         const angle = Math.atan2(clientY - this.overlayCenterY, clientX - this.overlayCenterX);
-        const ix = this.overlayCenterX + Math.cos(angle) * dist;
-        const iy = this.overlayCenterY + Math.sin(angle) * dist;
+        const ix = this.overlayCenterX + Math.cos(angle) * dist - this.overlayOffsetX;
+        const iy = this.overlayCenterY + Math.sin(angle) * dist - this.overlayOffsetY;
         this.pointerZoneIcon.style.left = `${ix}px`;
         this.pointerZoneIcon.style.top = `${iy}px`;
         this.pointerZoneIcon.style.opacity = '1';
