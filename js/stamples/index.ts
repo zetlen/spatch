@@ -3,7 +3,7 @@
 // Each stample is a directory under js/stamples/<name>/ containing:
 //   Stamp.svg   — detailed silhouette for rendering
 //   Sample.mp3  — audio sample
-//   Index.ts    — exports a Stample object (metadata, hull path, imports)
+//   Index.ts    — exports a Stample object (metadata, imports)
 //
 // This module collects them into a registry array, mirroring the pattern
 // Used by js/scenes/index.ts.
@@ -11,6 +11,7 @@
 import palmTree from './palm-tree';
 import energyDome from './energy-dome';
 import champagne from './champagne';
+import rowr from './rowr';
 
 export type { Stample } from './stample-types';
 
@@ -36,7 +37,7 @@ export interface ResolvedStample {
   sampleUrl: string;
   referencePitch: number;
   shapeAreaCoeff: number;
-  gainExponent: number;
+  gain: number;
   hull: string;
   handlePoints: HandlePoints;
 }
@@ -44,7 +45,9 @@ export interface ResolvedStample {
 function parseSvg(raw: string): StampleSvg {
   const vbMatch = raw.match(/viewBox="([^"]+)"/);
   const viewBox = vbMatch ? vbMatch[1]! : '0 0 100 100';
-  const openEnd = raw.indexOf('>');
+  // Skip past any XML declaration / comments / DOCTYPE by anchoring on <svg.
+  const svgOpenIdx = raw.indexOf('<svg');
+  const openEnd = raw.indexOf('>', svgOpenIdx);
   const closeStart = raw.lastIndexOf('</svg>');
   const content = raw.slice(openEnd + 1, closeStart);
   return { viewBox, content };
@@ -201,11 +204,10 @@ function resolve(s: {
   sampleUrl: string;
   referencePitch: number;
   shapeAreaCoeff: number;
-  gainExponent: number;
-  hull?: string;
+  gain?: number;
   handles?: { n: [number, number]; e: [number, number]; s: [number, number]; w: [number, number] };
 }): ResolvedStample {
-  const hull = s.hull ?? extractPathD(s.svgRaw);
+  const hull = extractPathD(s.svgRaw);
   const handlePoints = s.handles
     ? {
         n: { x: s.handles.n[0], y: s.handles.n[1] },
@@ -221,7 +223,7 @@ function resolve(s: {
     sampleUrl: s.sampleUrl,
     referencePitch: s.referencePitch,
     shapeAreaCoeff: s.shapeAreaCoeff,
-    gainExponent: s.gainExponent,
+    gain: s.gain ?? 1,
     hull,
     handlePoints,
   };
@@ -231,6 +233,7 @@ export const STAMPLES: readonly ResolvedStample[] = [
   resolve(palmTree),
   resolve(energyDome),
   resolve(champagne),
+  resolve(rowr),
 ];
 
 export const STAMPLE_COUNT = STAMPLES.length;

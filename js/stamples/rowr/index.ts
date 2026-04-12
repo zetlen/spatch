@@ -3,12 +3,13 @@ import svgRaw from './stamp.svg?raw';
 import sampleUrl from './sample.mp3';
 
 const stample: Stample = {
-  name: 'Glass Bell',
+  name: 'Rowr',
   svgRaw,
   sampleUrl,
-  referencePitch: 550,
-  shapeAreaCoeff: 0.8,
-  handles: { n: [35, 10], e: [85, 10], s: [90, 220], w: [30, 220] },
+  referencePitch: 277,
+  shapeAreaCoeff: 1.8,
+  gain: 3,
+  handles: { n: [832, 746], e: [1331, 886], s: [923, 1699], w: [454, 1306] },
 };
 
 export default stample;

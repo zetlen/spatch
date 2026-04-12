@@ -45,7 +45,8 @@ const player: VoicePlayer = {
       loop: false,
       playbackRate: initRate,
     });
-    source.connect(shared.gain);
+    const sampleGain = new GainNode(ctx, { gain: initStample.gain });
+    source.connect(sampleGain).connect(shared.gain);
 
     // Silent FM oscillator: participates in FM routing but produces no audible output.
     const fmOsc = new OscillatorNode(ctx, { type: 'sine', frequency: initFreq });

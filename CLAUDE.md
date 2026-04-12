@@ -396,8 +396,8 @@ const stample: Stample = {
   sampleUrl,
   referencePitch: 1200,
   shapeAreaCoeff: 1.2,
-  gainExponent: 1.0,
-  hull: 'M 630,576 C 621,839 ... Z',  // SVG path (M/L/C/Z); numbers are alternating x,y
+  gain: 1,            // optional; linear output-gain multiplier (default 1)
+  handles: { n: [x, y], e: [x, y], s: [x, y], w: [x, y] },  // optional; auto-detected if omitted
 };
 export default stample;
 ```
