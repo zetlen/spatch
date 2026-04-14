@@ -517,13 +517,10 @@ share.onShow = () => {
 // ---- Pause audio when tab is hidden ----
 
 document.addEventListener('visibilitychange', () => {
-  if (!audio.audioCtx) {
-    return;
-  }
   if (document.hidden) {
-    audio.audioCtx.suspend();
+    audio.suspend();
   } else {
-    audio.audioCtx.resume();
+    audio.resume();
   }
 });
 

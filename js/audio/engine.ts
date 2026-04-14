@@ -428,6 +428,25 @@ export class AudioEngine {
     }
   }
 
+  /** Suspend audio when the page becomes hidden.
+   *  Pauses both the AudioContext and the keep-alive <audio> element
+   *  so iOS Safari fully releases the media session. */
+  suspend(): void {
+    this.audioCtx?.suspend();
+    this._audioEl?.pause();
+  }
+
+  /** Resume audio when the page becomes visible again. */
+  resume(): void {
+    if (!this.audioCtx) {
+      return;
+    }
+    this.audioCtx.resume();
+    if (this._audioEl && this._audioEl.paused && this.isPlaying) {
+      this._audioEl.play().catch(() => {});
+    }
+  }
+
   setSoloVoice(id: string | undefined): void {
     this._soloVoiceId = id;
   }
