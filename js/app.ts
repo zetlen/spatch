@@ -49,7 +49,7 @@ if ('__audioCapture' in globalThis) {
   (globalThis as Record<string, unknown>).__testAudio = audio;
 }
 
-prefetchStampSamples();
+const stampSamplesReady = prefetchStampSamples();
 initStampSymbols(svgCanvas);
 
 // Pre-warm AudioContext on first user gesture. iOS Safari only allows audio
@@ -353,7 +353,7 @@ bindKeyboardShortcuts({
 });
 
 playback.bindEvents();
-splash.bindEvents();
+stampSamplesReady.then(() => splash.bindEvents());
 
 // ---- Auto-save to URL (debounced) ----
 

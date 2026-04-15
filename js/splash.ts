@@ -13,6 +13,7 @@ import type { AudioEngine } from './audio/engine.ts';
 import { qel } from './dom.ts';
 import type { PlaybackController } from './playback.ts';
 import type { SigilStore } from './state.ts';
+import { decodeStampSamples } from './voices/stamp/lifecycle.ts';
 
 // ---- Seen storage ----
 
@@ -188,14 +189,22 @@ export class SplashController {
     // And those are the only events that can unlock audio.
   }
 
-  private onPointerUp(): void {
+  private async onPointerUp(): Promise<void> {
     if (!this.splashPointerDown) {
       return;
     }
     this.splashPointerDown = false;
 
     // IOS Safari only unlocks audio from touchend/click — NOT pointerup.
+    // warmUp() must run synchronously in the gesture handler to unlock
+    // the AudioContext; awaits after this point are safe.
     this.audio.warmUp();
+
+    // Decode stamp samples before playback — bytes were prefetched at page
+    // load, so this is just the AudioBuffer decode step.
+    if (this.audio.audioCtx) {
+      await decodeStampSamples(this.audio.audioCtx).catch(() => {});
+    }
 
     if (this.state === 'landscape') {
       this.playAndRelease();

@@ -18,11 +18,12 @@ export function getDefaultStampleIndex(): number {
   return defaultStampleIndex;
 }
 
-/** Prefetch all stamp sample bytes (tiny files, no AudioContext needed). */
-export function prefetchStampSamples(): void {
-  for (const stample of STAMPLES) {
-    fetchSample(stample.sampleUrl);
-  }
+/** Prefetch all stamp sample bytes (tiny files, no AudioContext needed).
+ *  Returns a promise that resolves when all bytes are cached. */
+export function prefetchStampSamples(): Promise<void> {
+  return Promise.all(STAMPLES.map((stample) => fetchSample(stample.sampleUrl))).then(
+    () => undefined,
+  );
 }
 
 /** Decode all prefetched stamp samples into AudioBuffers. Call once an
