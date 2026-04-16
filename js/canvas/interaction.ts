@@ -475,8 +475,12 @@ export class CanvasInteractionController {
         return;
       }
 
+      // Normalize angle delta to [-180, 180] to prevent jumps at the
+      // atan2 ±180° discontinuity (two fingers near horizontal).
+      const rawDelta = angle - this.interaction.initAngle;
+      const angleDelta = (((rawDelta % 360) + 540) % 360) - 180;
+
       if (voice.waveform === 'stamp') {
-        const angleDelta = angle - this.interaction.initAngle;
         const rawTilt = this.interaction.initRotation + angleDelta;
         const { tilt, trigger } = snapTriggerTilt(rawTilt);
         setDragTilt(voice.id, tilt);
@@ -487,7 +491,6 @@ export class CanvasInteractionController {
       } else if (!hasTimbre(voice.waveform)) {
         this.store.updateVoice(this.interaction.shapeId, { size: newSize });
       } else {
-        const angleDelta = angle - this.interaction.initAngle;
         const newRotation = (((this.interaction.initRotation + angleDelta) % 360) + 360) % 360;
         const timbre = rotationToTimbre(newRotation, voice.waveform);
         this.store.updateVoice(this.interaction.shapeId, {
