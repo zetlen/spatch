@@ -277,264 +277,408 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
     engine.audioCtx = createStubAudioContext();
   });
 
-  async function startWith(voices) {
-    const state = makeSigilState(voices);
+  async function startWith(voices, blend = 'screen') {
+    const state = makeSigilState(voices, blend);
     await engine.play(state, state.envelope, TEST_REVERB);
     return state;
   }
 
   test('voices are built during play', async () => {
-    const voiceA = makeVoice('a');
-    await startWith([voiceA]);
-
+    await startWith([makeVoice('a')]);
     expect(engine.activeVoices.length).toBe(1);
     expect(engine.activeVoices[0].shapeId).toBe('a');
   });
 
-  test('global blend change triggers FM rebuild', async () => {
-    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    await startWith([voiceA, voiceB]);
+  test('global blend change triggers cross-connection rebuild', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices);
+    expect(engine._crossConnections.size).toBe(0);
 
-    // No FM with screen blend
-    expect(engine._fmConnections.size).toBe(0);
-
-    // Change to multiply — should create FM connections
-    engine.update(makeSigilState([voiceA, voiceB], 'multiply'), TEST_REVERB);
-
-    expect(engine._fmConnections.size).toBeGreaterThan(0);
+    engine.update(makeSigilState(voices, 'multiply'), TEST_REVERB);
+    expect(engine._crossConnections.size).toBeGreaterThan(0);
   });
 
   test('all blend modes can be applied without error', async () => {
-    const blends = ['screen', 'multiply', 'exclusion', 'difference'];
-    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    for (const blend of blends) {
-      await startWith([voiceA, voiceB]);
-      engine.update(makeSigilState([voiceA, voiceB], blend), TEST_REVERB);
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    for (const blend of ['screen', 'multiply', 'exclusion', 'difference']) {
+      await startWith(voices);
+      engine.update(makeSigilState(voices, blend), TEST_REVERB);
       expect(engine.activeVoices.length).toBe(2);
       engine.stop();
     }
   });
 
-  test('overlapping voices create FM connections with non-screen blend', async () => {
-    // Two voices at the same position — should have overlap
-    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const voiceB = makeVoice('b', 'pulse', { x: 0.5, y: 0.5, size: 0.2 });
-    await engine.play(
-      makeSigilState([voiceA, voiceB], 'multiply'),
-      {
-        attack: 0.1,
-        decay: 0.2,
-        release: 0.4,
-        sustain: 0.7,
-      },
+  test('each blend mode creates the correct connection type', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    for (const [blend, expectedType] of [
+      ['multiply', 'fm'],
+      ['exclusion', 'ring'],
+      ['difference', 'rawfm'],
+    ]) {
+      await startWith(voices, blend);
+      expect(engine._crossConnections.size).toBe(1);
+      expect([...engine._crossConnections.values()][0].type).toBe(expectedType);
+      engine.stop();
+    }
+  });
+
+  test('non-overlapping voices have dormant cross-connections (zero gains)', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 }),
+      makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 }),
+    ];
+    await startWith(voices, 'multiply');
+    expect(engine._crossConnections.size).toBe(1);
+    const conn = [...engine._crossConnections.values()][0];
+    expect(conn.type).toBe('fm');
+    expect(conn.aToB.depthGain.gain.value).toBe(0);
+    expect(conn.bToA.depthGain.gain.value).toBe(0);
+  });
+
+  test('screen blend creates no cross-connections even when overlapping', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices);
+    expect(engine._crossConnections.size).toBe(0);
+  });
+
+  test('FM connections go dormant when voices separate', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'multiply');
+    const conn = [...engine._crossConnections.values()][0];
+    expect(conn.aToB.depthGain.gain.value).toBeGreaterThan(0);
+
+    const moved = [
+      makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 }),
+      makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 }),
+    ];
+    engine.update(makeSigilState(moved, 'multiply'), TEST_REVERB);
+    expect(engine._crossConnections.size).toBe(1);
+    expect(conn.aToB.depthGain.gain.value).toBe(0);
+    expect(conn.bToA.depthGain.gain.value).toBe(0);
+  });
+
+  test('ring mod connections go dormant when voices separate', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'exclusion');
+    const conn = [...engine._crossConnections.values()][0];
+    expect(conn.pair.shadowAmpAtoB.gain.value).toBeGreaterThan(0);
+
+    const moved = [
+      makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 }),
+      makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 }),
+    ];
+    engine.update(makeSigilState(moved, 'exclusion'), TEST_REVERB);
+    expect(engine._crossConnections.size).toBe(1);
+    expect(conn.pair.overlapSource.offset.value).toBeCloseTo(0);
+    expect(conn.pair.shadowAmpAtoB.gain.value).toBeCloseTo(0);
+  });
+
+  test('voices have a sine shadow oscillator that tracks pitch', async () => {
+    await startWith([makeVoice('a', 'pulse', { x: 0.5, y: 0.5, size: 0.2 })]);
+    const shadow = engine.activeVoices[0].getShadowNode();
+    expect(shadow).toBeDefined();
+    expect(shadow.type).toBe('sine');
+    const origFreq = shadow.frequency.value;
+
+    engine.update(
+      makeSigilState([makeVoice('a', 'pulse', { x: 0.5, y: 0.3, size: 0.2 })]),
       TEST_REVERB,
     );
+    expect(shadow.frequency.value).not.toBeCloseTo(origFreq, 0);
+  });
 
-    // FM connections are internal, but we can verify voices were built successfully
+  test('cross-connection count equals n*(n-1)/2 for all voice pairs', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.05 }),
+      makeVoice('c', 'sine', { x: 0.9, y: 0.9, size: 0.05 }),
+    ];
+    await startWith(voices, 'multiply');
+    expect(engine._crossConnections.size).toBe(3);
+  });
+
+  test('ring mod uses ConstantSourceNode for base gain reduction', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'exclusion');
+    const conn = [...engine._crossConnections.values()][0];
+    expect(conn.pair.overlapSource.offset.value).toBeLessThan(0);
+    expect(conn.pair.shadowAmpAtoB.gain.value).toBeGreaterThan(0);
+    expect(conn.pair.shadowAmpBtoA.gain.value).toBeGreaterThan(0);
+  });
+
+  test('voice add/remove reconciles cross-connections', async () => {
+    const [a, b, c] = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('c', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith([a, b], 'multiply');
+    expect(engine._crossConnections.size).toBe(1);
+
+    // Add voice → 3 pairs
+    engine.update(makeSigilState([a, b, c], 'multiply'), TEST_REVERB);
+    expect(engine._crossConnections.size).toBe(3);
+
+    // Remove voice → 1 pair
+    engine.update(makeSigilState([a, b], 'multiply'), TEST_REVERB);
+    expect(engine._crossConnections.size).toBe(1);
+  });
+
+  test('all voices have outputGain node', async () => {
+    await startWith([makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 })]);
+    const av = engine.activeVoices[0];
+    expect(av.outputGain).toBeDefined();
+    expect(av.outputGain.gain.value).toBe(1);
+  });
+
+  test('FM is bidirectional: aToB and bToA both active with overlap', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'multiply');
+    const conn = [...engine._crossConnections.values()][0];
+    expect(conn.aToB.depthGain.gain.value).toBeGreaterThan(0);
+    expect(conn.bToA.depthGain.gain.value).toBeGreaterThan(0);
+  });
+
+  test('ring mod offset tracks overlap as -overlap', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    // Full overlap → offset = -1 (pure ring mod)
+    await startWith(voices, 'exclusion');
+    const conn = [...engine._crossConnections.values()][0];
+    expect(conn.pair.overlapSource.offset.value).toBeCloseTo(-1);
+
+    // Move to no overlap → offset = 0 (full dry signal)
+    engine.update(
+      makeSigilState(
+        [
+          makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 }),
+          makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 }),
+        ],
+        'exclusion',
+      ),
+      TEST_REVERB,
+    );
+    expect(conn.pair.overlapSource.offset.value).toBeCloseTo(0);
+  });
+
+  test('sequential blend mode switches mid-play without stop', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'multiply');
+    expect([...engine._crossConnections.values()][0].type).toBe('fm');
+
+    engine.update(makeSigilState(voices, 'exclusion'), TEST_REVERB);
+    expect(engine._crossConnections.size).toBe(1);
+    expect([...engine._crossConnections.values()][0].type).toBe('ring');
+
+    engine.update(makeSigilState(voices, 'difference'), TEST_REVERB);
+    expect([...engine._crossConnections.values()][0].type).toBe('rawfm');
+
+    engine.update(makeSigilState(voices, 'multiply'), TEST_REVERB);
+    expect([...engine._crossConnections.values()][0].type).toBe('fm');
+
+    engine.update(makeSigilState(voices, 'screen'), TEST_REVERB);
+    expect(engine._crossConnections.size).toBe(0);
+
     expect(engine.activeVoices.length).toBe(2);
   });
 
-  test('non-overlapping voices do not create FM connections', async () => {
-    // Voices far apart — no overlap
-    const voiceA = makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 });
-    const voiceB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 });
-    await engine.play(
-      makeSigilState([voiceA, voiceB], 'multiply'),
-      {
-        attack: 0.1,
-        decay: 0.2,
-        release: 0.4,
-        sustain: 0.7,
-      },
-      TEST_REVERB,
-    );
-
-    expect(engine.activeVoices.length).toBe(2);
-    // No FM connections should exist (internal map is empty)
-    expect(engine._fmConnections.size).toBe(0);
+  test('engine.stop() clears all cross-connections', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'multiply');
+    expect(engine._crossConnections.size).toBe(1);
+    engine.stop();
+    expect(engine._crossConnections.size).toBe(0);
   });
 
-  test('screen blend creates no FM even when overlapping', async () => {
-    // Screen is the default — no FM modulation regardless of overlap
-    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    await startWith([voiceA, voiceB]);
+  test('rawfm uses voice modulator node, not shadow oscillator', async () => {
+    const voices = [
+      makeVoice('a', 'pulse', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'pulse', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'difference');
+    const [a, b] = engine.activeVoices;
+    // Modulator (the voice's primary oscillator) is distinct from shadow (sine helper)
+    expect(a.getModulatorNode()).not.toBe(a.getShadowNode());
+    expect(b.getModulatorNode()).not.toBe(b.getShadowNode());
 
-    expect(engine.activeVoices.length).toBe(2);
-    // Screen has maxIndex: 0, so no FM connections should be created
-    expect(engine._fmConnections.size).toBe(0);
+    const conn = [...engine._crossConnections.values()][0];
+    expect(conn.type).toBe('rawfm');
+    // Lowpass filters are present on the modulator path
+    expect(conn.aToB.lowpass).toBeDefined();
+    expect(conn.bToA.lowpass).toBeDefined();
   });
 
-  test('FM connections are cleaned up when voices separate', async () => {
-    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    await engine.play(
-      makeSigilState([voiceA, voiceB], 'multiply'),
-      {
-        attack: 0.1,
-        decay: 0.2,
-        release: 0.4,
-        sustain: 0.7,
-      },
-      TEST_REVERB,
-    );
+  test('shadow oscillator is sine for every waveform type', async () => {
+    const voices = [
+      makeVoice('s', 'sine', { x: 0.2, y: 0.5, size: 0.1 }),
+      makeVoice('p', 'pulse', { x: 0.4, y: 0.5, size: 0.1 }),
+      makeVoice('b', 'blend', { x: 0.6, y: 0.5, size: 0.1 }),
+    ];
+    await startWith(voices);
+    for (const av of engine.activeVoices) {
+      const shadow = av.getShadowNode();
+      expect(shadow).toBeDefined();
+      expect(shadow.type).toBe('sine');
+      expect(shadow.frequency.value).toBeGreaterThan(0);
+    }
+  });
 
-    // Should have FM connection from overlap
-    expect(engine._fmConnections.size).toBeGreaterThan(0);
+  test('removing one voice from a 3-voice cluster preserves remaining pair', async () => {
+    const [a, b, c] = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('c', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith([a, b, c], 'multiply');
+    expect(engine._crossConnections.size).toBe(3);
+    const acConn = engine._crossConnections.get('a:c');
+    expect(acConn).toBeDefined();
 
-    // Move voices apart
-    const updatedA = makeVoice('a', 'sine', { x: 0.1, y: 0.1, size: 0.05 });
-    const updatedB = makeVoice('b', 'sine', { x: 0.9, y: 0.9, size: 0.05 });
-    engine.update(makeSigilState([updatedA, updatedB], 'multiply'), TEST_REVERB);
-
-    // FM connections should be torn down
-    expect(engine._fmConnections.size).toBe(0);
+    // Remove b → only a:c should remain, and it should be the SAME object
+    engine.update(makeSigilState([a, c], 'multiply'), TEST_REVERB);
+    expect(engine._crossConnections.size).toBe(1);
+    expect(engine._crossConnections.get('a:c')).toBe(acConn);
   });
 });
 
 describe('AudioEngine — border / octave doubling', () => {
   let engine;
-
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
   });
-
   async function startWith(voices) {
-    const state = makeSigilState(voices);
-    await engine.play(state, state.envelope, TEST_REVERB);
-    return state;
+    const s = makeSigilState(voices);
+    await engine.play(s, s.envelope, TEST_REVERB);
   }
+  const WB = { color: 'white', double: false, thickness: 0.5 };
 
-  test('voice without border has null octaveOsc', async () => {
-    const voice = makeVoice('a', 'sine', { border: undefined });
-    await startWith([voice]);
-
-    const audioVoice = engine.activeVoices[0];
-    expect(audioVoice.octaveOsc).toBeUndefined();
-    expect(audioVoice.currentBorder).toBeUndefined();
-  });
-
-  test('voice with border has octaveOsc', async () => {
-    const voice = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.5 },
-    });
-    await startWith([voice]);
-
-    const audioVoice = engine.activeVoices[0];
-    expect(audioVoice.octaveOsc).not.toBeUndefined();
-    expect(audioVoice.currentBorder).toBe('white:0');
+  test('border presence/absence sets octaveOsc', async () => {
+    await startWith([makeVoice('a', 'sine', { border: undefined })]);
+    expect(engine.activeVoices[0].octaveOsc).toBeUndefined();
+    expect(engine.activeVoices[0].currentBorder).toBeUndefined();
+    engine.stop();
+    await startWith([makeVoice('a', 'sine', { border: WB })]);
+    expect(engine.activeVoices[0].octaveOsc).not.toBeUndefined();
+    expect(engine.activeVoices[0].currentBorder).toBe('white:0');
   });
 
   test('border change triggers voice rebuild', async () => {
-    const voice = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.5 },
-    });
-    await startWith([voice]);
-
-    const originalVoice = engine.activeVoices[0];
-
-    // Change border color
-    const updated = makeVoice('a', 'sine', {
-      border: { color: 'black', double: false, thickness: 0.5 },
-    });
-    engine.update(makeSigilState([updated]), TEST_REVERB);
-
-    const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(newVoice).not.toBe(originalVoice);
-    expect(newVoice.currentBorder).toBe('black:0');
+    await startWith([makeVoice('a', 'sine', { border: WB })]);
+    const orig = engine.activeVoices[0];
+    engine.update(
+      makeSigilState([
+        makeVoice('a', 'sine', { border: { color: 'black', double: false, thickness: 0.5 } }),
+      ]),
+      TEST_REVERB,
+    );
+    const nv = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(nv).not.toBe(orig);
+    expect(nv.currentBorder).toBe('black:0');
   });
 
-  test('adding border triggers voice rebuild', async () => {
-    const voice = makeVoice('a', 'sine', { border: undefined });
-    await startWith([voice]);
-
-    const originalVoice = engine.activeVoices[0];
-
-    // Add border
-    const updated = makeVoice('a', 'sine', {
-      border: { color: 'white', double: true, thickness: 0.7 },
-    });
-    engine.update(makeSigilState([updated]), TEST_REVERB);
-
-    const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(newVoice).not.toBe(originalVoice);
-    expect(newVoice.octaveOsc).not.toBeUndefined();
-    expect(newVoice.currentBorder).toBe('white:1');
-  });
-
-  test('removing border triggers voice rebuild', async () => {
-    const voice = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.5 },
-    });
-    await startWith([voice]);
-
-    // Remove border
-    const updated = makeVoice('a', 'sine', { border: undefined });
-    engine.update(makeSigilState([updated]), TEST_REVERB);
-
-    const newVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(newVoice.octaveOsc).toBeUndefined();
-    expect(newVoice.currentBorder).toBeUndefined();
+  test('adding/removing border triggers voice rebuild', async () => {
+    await startWith([makeVoice('a', 'sine', { border: undefined })]);
+    const orig = engine.activeVoices[0];
+    engine.update(
+      makeSigilState([
+        makeVoice('a', 'sine', { border: { color: 'white', double: true, thickness: 0.7 } }),
+      ]),
+      TEST_REVERB,
+    );
+    const added = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(added).not.toBe(orig);
+    expect(added.octaveOsc).not.toBeUndefined();
+    expect(added.currentBorder).toBe('white:1');
+    engine.update(makeSigilState([makeVoice('a', 'sine', { border: undefined })]), TEST_REVERB);
+    const removed = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(removed.octaveOsc).toBeUndefined();
   });
 
   test('thickness change updates gain smoothly without rebuild', async () => {
-    const voice = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.3 },
-    });
-    await startWith([voice]);
-
-    const originalVoice = engine.activeVoices[0];
-
-    // Change only thickness
-    const updated = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.8 },
-    });
-    engine.update(makeSigilState([updated]), TEST_REVERB);
-
-    // Same voice object — NOT rebuilt
-    const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(sameVoice).toBe(originalVoice);
+    await startWith([
+      makeVoice('a', 'sine', { border: { color: 'white', double: false, thickness: 0.3 } }),
+    ]);
+    const orig = engine.activeVoices[0];
+    engine.update(
+      makeSigilState([
+        makeVoice('a', 'sine', { border: { color: 'white', double: false, thickness: 0.8 } }),
+      ]),
+      TEST_REVERB,
+    );
+    expect(engine.activeVoices.find((v) => v.shapeId === 'a')).toBe(orig);
   });
 
-  test('octave gain is relative — tracks thickness, not size', async () => {
-    const voice = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.3 },
-      size: 0.3,
-    });
-    await startWith([voice]);
-
-    const audioVoice = engine.activeVoices[0];
-    const initialOctaveGain = audioVoice.octaveGainNode.gain.value;
-
-    // Increase size — octaveGainNode stays the same (voice gain handles size)
-    const sizeChanged = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.3 },
-      size: 0.7,
-    });
-    engine.update(makeSigilState([sizeChanged]), TEST_REVERB);
-    expect(audioVoice.octaveGainNode.gain.value).toBeCloseTo(initialOctaveGain);
-
-    // Increase thickness — octaveGainNode increases
-    const thickerBorder = makeVoice('a', 'sine', {
-      border: { color: 'white', double: false, thickness: 0.8 },
-      size: 0.7,
-    });
-    engine.update(makeSigilState([thickerBorder]), TEST_REVERB);
-    expect(audioVoice.octaveGainNode.gain.value).toBeGreaterThan(initialOctaveGain);
+  test('octave gain tracks thickness, not size', async () => {
+    await startWith([
+      makeVoice('a', 'sine', {
+        border: { color: 'white', double: false, thickness: 0.3 },
+        size: 0.3,
+      }),
+    ]);
+    const av = engine.activeVoices[0];
+    const initGain = av.octaveGainNode.gain.value;
+    engine.update(
+      makeSigilState([
+        makeVoice('a', 'sine', {
+          border: { color: 'white', double: false, thickness: 0.3 },
+          size: 0.7,
+        }),
+      ]),
+      TEST_REVERB,
+    );
+    expect(av.octaveGainNode.gain.value).toBeCloseTo(initGain);
+    engine.update(
+      makeSigilState([
+        makeVoice('a', 'sine', {
+          border: { color: 'white', double: false, thickness: 0.8 },
+          size: 0.7,
+        }),
+      ]),
+      TEST_REVERB,
+    );
+    expect(av.octaveGainNode.gain.value).toBeGreaterThan(initGain);
   });
 
   test('border works with all waveform types', async () => {
     const border = { color: 'white', double: false, thickness: 0.5 };
-    const voices = [
+    await startWith([
       makeVoice('circ', 'sine', { border }),
       makeVoice('sq', 'pulse', { border }),
       makeVoice('tri', 'blend', { border }),
-    ];
-    await startWith(voices);
-
+    ]);
     for (const av of engine.activeVoices) {
       expect(av.octaveOsc).not.toBeUndefined();
     }
@@ -543,99 +687,62 @@ describe('AudioEngine — border / octave doubling', () => {
 
 describe('AudioEngine — master reverb', () => {
   let engine;
-
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
   });
-
   async function startWith(voices, reverb = TEST_REVERB) {
-    const state = makeSigilState(voices);
-    await engine.play(state, state.envelope, reverb);
-    return state;
+    const s = makeSigilState(voices);
+    await engine.play(s, s.envelope, reverb);
+    return s;
   }
 
-  test('play with empty ir creates no convolver', async () => {
+  test('convolver requires both ir and reverbMix', async () => {
     await startWith([makeVoice('a')], TEST_REVERB);
-
-    // Master's internal _reverbConvolver should not be set for empty ir
     expect(engine.master._reverbConvolver).toBeUndefined();
-    expect(engine.master._reverbWet).toBeUndefined();
-  });
-
-  test('play with ir and reverbMix creates convolver and wet gain', async () => {
+    engine.stop();
+    await startWith([makeVoice('a')], { ir: '', reverbMix: 0.5 });
+    expect(engine.master._reverbConvolver).toBeUndefined();
+    engine.stop();
     await startWith([makeVoice('a')], { ir: 'test.m4a', reverbMix: 0.5 });
-
     expect(engine.master._reverbConvolver).not.toBeUndefined();
     expect(engine.master._reverbWet).not.toBeUndefined();
   });
 
-  test('play with reverbMix but no ir creates no convolver', async () => {
-    await startWith([makeVoice('a')], { ir: '', reverbMix: 0.5 });
-
-    expect(engine.master._reverbConvolver).toBeUndefined();
-    expect(engine.master._reverbWet).toBeUndefined();
-  });
-
   test('reverb wet gain matches reverbMix', async () => {
     await startWith([makeVoice('a')], { ir: 'test.m4a', reverbMix: 0.75 });
-
     expect(engine.master._reverbWet.gain.value).toBe(0.75);
   });
 
-  test('cleanup nulls reverb nodes', async () => {
+  test('cleanup nulls reverb and EQ nodes', async () => {
     await startWith([makeVoice('a')], { ir: 'test.m4a', reverbMix: 0.5 });
-
     expect(engine.master._reverbConvolver).not.toBeUndefined();
-
     engine.stop();
-
     expect(engine.master._reverbConvolver).toBeUndefined();
     expect(engine.master._reverbWet).toBeUndefined();
+    expect(engine.master._eqLow).toBeUndefined();
   });
 
-  test('master uses fixed compressor params', async () => {
+  test('master uses fixed compressor and gain params', async () => {
     await startWith([makeVoice('a')]);
-
-    // Compressor params are fixed constants from VIBE_DEFAULTS
     expect(engine.master._compressor.threshold.value).toBe(-10);
     expect(engine.master._compressor.knee.value).toBe(18);
     expect(engine.master._compressor.ratio.value).toBe(3);
-  });
-
-  test('master uses fixed gain value', async () => {
-    await startWith([makeVoice('a')]);
-
     expect(engine.master.input.gain.value).toBe(0.5);
   });
 
-  test('3-band EQ nodes are created with fixed values', async () => {
+  test('3-band EQ nodes are created with flat response', async () => {
     await startWith([makeVoice('a')]);
-
     expect(engine.master._eqLow).not.toBeUndefined();
-    expect(engine.master._eqMid).not.toBeUndefined();
-    expect(engine.master._eqHigh).not.toBeUndefined();
-    // EQ gains are all 0 by default (flat response)
     expect(engine.master._eqLow.gain.value).toBe(0);
     expect(engine.master._eqMid.gain.value).toBe(0);
     expect(engine.master._eqHigh.gain.value).toBe(0);
   });
 
-  test('cleanup nulls EQ nodes', async () => {
-    await startWith([makeVoice('a')]);
-
-    engine.stop();
-
-    expect(engine.master._eqLow).toBeUndefined();
-    expect(engine.master._eqMid).toBeUndefined();
-    expect(engine.master._eqHigh).toBeUndefined();
-  });
-
-  test('play with preloaded IR buffer sets convolver buffer synchronously', async () => {
+  test('preloaded IR buffer sets convolver buffer synchronously', async () => {
     const irBuffer = { duration: 1.5, length: 66_150 };
-    const state = makeSigilState([makeVoice('a')]);
-    await engine.play(state, state.envelope, { ir: 'preloaded.m4a', reverbMix: 0.6 }, { irBuffer });
-
+    const s = makeSigilState([makeVoice('a')]);
+    await engine.play(s, s.envelope, { ir: 'preloaded.m4a', reverbMix: 0.6 }, { irBuffer });
     expect(engine.master._reverbConvolver).not.toBeUndefined();
     expect(engine.master._reverbConvolver.buffer).toBe(irBuffer);
   });
@@ -643,7 +750,6 @@ describe('AudioEngine — master reverb', () => {
 
 describe('AudioEngine — reverb tail cleanup delay', () => {
   let engine;
-
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
@@ -652,10 +758,7 @@ describe('AudioEngine — reverb tail cleanup delay', () => {
   test('release without reverb uses normal cleanup delay', async () => {
     const state = makeSigilState([makeVoice('a')]);
     await engine.play(state, state.envelope, TEST_REVERB);
-
     engine.release(state.envelope);
-
-    // After releaseTime + 100ms, cleanup should have fired
     const releaseMs = state.envelope.release * 1000 + 150;
     await new Promise((r) => setTimeout(r, releaseMs));
     expect(engine.isPlaying).toBe(false);
@@ -670,25 +773,21 @@ describe('AudioEngine — getLevel()', () => {
     expect(engine.getLevel()).toBe(0);
   });
 
-  test('returns 0 for silent buffer', async () => {
+  test('returns 0 for silent buffer and after stop', async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-
     const state = makeSigilState([makeVoice('a')]);
     await engine.play(state, state.envelope, TEST_REVERB);
-
-    // Stub fills buffer with zeros by default
+    expect(engine.getLevel()).toBe(0);
+    engine.stop();
     expect(engine.getLevel()).toBe(0);
   });
 
   test('returns correct RMS for known signal', async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
-
     const state = makeSigilState([makeVoice('a')]);
     await engine.play(state, state.envelope, TEST_REVERB);
-
-    // Inject a known buffer: all 0.5 → RMS = 0.5
     const buf = new Float32Array(256);
     buf.fill(0.5);
     engine.master._analyserBuf = buf;
@@ -697,190 +796,121 @@ describe('AudioEngine — getLevel()', () => {
         arr[i] = buf[i];
       }
     };
-
-    const level = engine.getLevel();
-    expect(level).toBeCloseTo(0.5, 5);
-  });
-
-  test('returns 0 after stop', async () => {
-    engine = new AudioEngine();
-    engine.audioCtx = createStubAudioContext();
-
-    const state = makeSigilState([makeVoice('a')]);
-    await engine.play(state, state.envelope, TEST_REVERB);
-    engine.stop();
-
-    expect(engine.getLevel()).toBe(0);
+    expect(engine.getLevel()).toBeCloseTo(0.5, 5);
   });
 });
 
 describe('AudioEngine — diphthong sweep', () => {
   let engine;
-
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
   });
-
   async function startWith(voices) {
-    const state = makeSigilState(voices);
-    await engine.play(state, state.envelope, TEST_REVERB);
-    return state;
+    const s = makeSigilState(voices);
+    await engine.play(s, s.envelope, TEST_REVERB);
+    return s;
   }
+  const LIN = { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 120, c2: 0.18, l2: 0.7, gradAngle: 0 };
 
-  test('linear fill voice gets hasSweep=true after play', async () => {
-    const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 120, c2: 0.18, l2: 0.7, gradAngle: 0 },
-    });
-    await startWith([voice]);
-
-    const audioVoice = engine.activeVoices[0];
-    expect(audioVoice.hasSweep).toBe(true);
-  });
-
-  test('solid fill voice gets hasSweep=false after play', async () => {
-    const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'solid', h: 200, c: 0.2, l: 0.5 },
-    });
-    await startWith([voice]);
-
-    const audioVoice = engine.activeVoices[0];
-    expect(audioVoice.hasSweep).toBe(false);
+  test('hasSweep reflects fill mode', async () => {
+    await startWith([makeVoice('a', 'sine', { fill: LIN })]);
+    expect(engine.activeVoices[0].hasSweep).toBe(true);
+    engine.stop();
+    await startWith([makeVoice('a', 'sine', { fill: { mode: 'solid', h: 200, c: 0.2, l: 0.5 } })]);
+    expect(engine.activeVoices[0].hasSweep).toBe(false);
   });
 
   test('linear fill change retrigs sweep without voice rebuild', async () => {
-    const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 120, c2: 0.18, l2: 0.7, gradAngle: 0 },
-    });
-    await startWith([voice]);
-
-    const originalVoice = engine.activeVoices[0];
-
-    const updated = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 120, c2: 0.18, l2: 0.7, gradAngle: 90 },
-    });
-    engine.update(makeSigilState([updated]), TEST_REVERB);
-
-    const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(sameVoice).toBe(originalVoice);
-    expect(sameVoice.hasSweep).toBe(true);
-    expect(sameVoice.currentFillKey).toContain('90');
+    await startWith([makeVoice('a', 'sine', { fill: LIN })]);
+    const orig = engine.activeVoices[0];
+    engine.update(
+      makeSigilState([makeVoice('a', 'sine', { fill: { ...LIN, gradAngle: 90 } })]),
+      TEST_REVERB,
+    );
+    const same = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(same).toBe(orig);
+    expect(same.hasSweep).toBe(true);
+    expect(same.currentFillKey).toContain('90');
   });
 
   test('linear fill color change retrigs sweep', async () => {
-    const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 120, c2: 0.18, l2: 0.7, gradAngle: 0 },
-    });
-    await startWith([voice]);
-
-    const originalVoice = engine.activeVoices[0];
-
-    const updated = makeVoice('a', 'sine', {
-      fill: { mode: 'linear', h: 0, c: 0.24, l: 0.5, h2: 200, c2: 0.18, l2: 0.7, gradAngle: 0 },
-    });
-    engine.update(makeSigilState([updated]), TEST_REVERB);
-
-    const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(sameVoice).toBe(originalVoice);
-    expect(sameVoice.hasSweep).toBe(true);
+    await startWith([makeVoice('a', 'sine', { fill: LIN })]);
+    const orig = engine.activeVoices[0];
+    engine.update(
+      makeSigilState([makeVoice('a', 'sine', { fill: { ...LIN, h2: 200 } })]),
+      TEST_REVERB,
+    );
+    expect(engine.activeVoices.find((v) => v.shapeId === 'a')).toBe(orig);
   });
 
   test('solid fill hue change updates filter smoothly (no rebuild)', async () => {
-    const voice = makeVoice('a', 'sine', {
-      fill: { mode: 'solid', h: 200, c: 0.2, l: 0.5 },
-    });
-    await startWith([voice]);
-
-    const originalVoice = engine.activeVoices[0];
-
-    const updated = makeVoice('a', 'sine', {
-      fill: { mode: 'solid', h: 100, c: 0.2, l: 0.5 },
-    });
-    engine.update(makeSigilState([updated]), TEST_REVERB);
-
-    const sameVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(sameVoice).toBe(originalVoice);
+    await startWith([makeVoice('a', 'sine', { fill: { mode: 'solid', h: 200, c: 0.2, l: 0.5 } })]);
+    const orig = engine.activeVoices[0];
+    engine.update(
+      makeSigilState([makeVoice('a', 'sine', { fill: { mode: 'solid', h: 100, c: 0.2, l: 0.5 } })]),
+      TEST_REVERB,
+    );
+    expect(engine.activeVoices.find((v) => v.shapeId === 'a')).toBe(orig);
   });
 });
 
 describe('AudioEngine — solo mode', () => {
   let engine;
-
   beforeEach(async () => {
     engine = new AudioEngine();
     engine.audioCtx = createStubAudioContext();
   });
-
   async function startWith(voices) {
-    const state = makeSigilState(voices);
-    await engine.play(state, state.envelope, TEST_REVERB);
-    return state;
+    const s = makeSigilState(voices);
+    await engine.play(s, s.envelope, TEST_REVERB);
+    return s;
   }
 
   test('setSoloVoice mutes non-solo voices on next update', async () => {
-    const voiceA = makeVoice('a', 'sine', { size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', { size: 0.2 });
-    const state = await startWith([voiceA, voiceB]);
-
+    const [a, b] = [makeVoice('a', 'sine', { size: 0.2 }), makeVoice('b', 'sine', { size: 0.2 })];
+    const state = await startWith([a, b]);
     engine.setSoloVoice('a');
     engine.update(state, TEST_REVERB);
-
-    const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
-    const avB = engine.activeVoices.find((v) => v.shapeId === 'b');
-    expect(avA.gain.gain.value).toBeGreaterThan(0);
-    expect(avB.gain.gain.value).toBe(0);
+    expect(engine.activeVoices.find((v) => v.shapeId === 'a').gain.gain.value).toBeGreaterThan(0);
+    expect(engine.activeVoices.find((v) => v.shapeId === 'b').gain.gain.value).toBe(0);
   });
 
   test('setSoloVoice(undefined) unmutes all voices', async () => {
-    const voiceA = makeVoice('a', 'sine', { size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', { size: 0.2 });
-    const state = await startWith([voiceA, voiceB]);
-
+    const [a, b] = [makeVoice('a', 'sine', { size: 0.2 }), makeVoice('b', 'sine', { size: 0.2 })];
+    const state = await startWith([a, b]);
     engine.setSoloVoice('a');
     engine.update(state, TEST_REVERB);
     engine.setSoloVoice(undefined);
     engine.update(state, TEST_REVERB);
-
-    const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
-    const avB = engine.activeVoices.find((v) => v.shapeId === 'b');
-    expect(avA.gain.gain.value).toBeGreaterThan(0);
-    expect(avB.gain.gain.value).toBeGreaterThan(0);
+    expect(engine.activeVoices.find((v) => v.shapeId === 'a').gain.gain.value).toBeGreaterThan(0);
+    expect(engine.activeVoices.find((v) => v.shapeId === 'b').gain.gain.value).toBeGreaterThan(0);
   });
 
   test('solo voice that does not exist unmutes all', async () => {
-    const voiceA = makeVoice('a', 'sine', { size: 0.2 });
-    const state = await startWith([voiceA]);
-
+    const state = await startWith([makeVoice('a', 'sine', { size: 0.2 })]);
     engine.setSoloVoice('nonexistent');
     engine.update(state, TEST_REVERB);
-
-    const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
-    expect(avA.gain.gain.value).toBeGreaterThan(0);
+    expect(engine.activeVoices.find((v) => v.shapeId === 'a').gain.gain.value).toBeGreaterThan(0);
   });
 
-  test('FM connections stay active when voice is soloed', async () => {
-    const voiceA = makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 });
-    const state = makeSigilState([voiceA, voiceB], 'multiply');
+  test('cross-connections stay active when voice is soloed', async () => {
+    const [a, b] = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    const state = makeSigilState([a, b], 'multiply');
     await engine.play(state, state.envelope, TEST_REVERB);
-
     engine.setSoloVoice('a');
     engine.update(state, TEST_REVERB);
-
-    // FM connections should still exist despite voice B being muted
-    expect(engine._fmConnections.size).toBeGreaterThan(0);
+    expect(engine._crossConnections.size).toBeGreaterThan(0);
   });
 
   test('solo respects initial play — muted voices start at gain 0', async () => {
-    const voiceA = makeVoice('a', 'sine', { size: 0.2 });
-    const voiceB = makeVoice('b', 'sine', { size: 0.2 });
-
+    const [a, b] = [makeVoice('a', 'sine', { size: 0.2 }), makeVoice('b', 'sine', { size: 0.2 })];
     engine.setSoloVoice('a');
-    await startWith([voiceA, voiceB]);
-
-    const avA = engine.activeVoices.find((v) => v.shapeId === 'a');
-    const avB = engine.activeVoices.find((v) => v.shapeId === 'b');
-    expect(avA.gain.gain.value).toBeGreaterThan(0);
-    expect(avB.gain.gain.value).toBe(0);
+    await startWith([a, b]);
+    expect(engine.activeVoices.find((v) => v.shapeId === 'a').gain.gain.value).toBeGreaterThan(0);
+    expect(engine.activeVoices.find((v) => v.shapeId === 'b').gain.gain.value).toBe(0);
   });
 });

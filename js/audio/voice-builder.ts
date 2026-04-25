@@ -6,6 +6,7 @@
 
 import type { AudioEffect, Fill, PatternType, Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
+import { safeStop } from './node-utils.ts';
 import { applyColorParams, FORMANT_MIX, FORMANT_Q } from './filters.ts';
 import type { Mixer } from './mixer.ts';
 import { get } from '../voices/registry.ts';
@@ -92,7 +93,9 @@ export function buildVoice(
   }
 
   lastNode.connect(panner);
-  panner.connect(masterGain);
+  const outputGain = new GainNode(ctx, { gain: 1 });
+  panner.connect(outputGain);
+  outputGain.connect(masterGain);
 
   // Octave doubling: border adds an oscillator at shifted frequency.
   let octaveOsc: OscillatorNode | undefined;
@@ -126,6 +129,7 @@ export function buildVoice(
     formantMixer,
     brightness,
     panner,
+    outputGain,
     octaveOsc,
     octaveGainNode,
     effectDispose,
@@ -135,5 +139,29 @@ export function buildVoice(
     warmth: WARMTH,
   };
 
-  return get(voice.waveform).player.buildAudioGraph(ctx, voice, shared);
+  const shadow = new OscillatorNode(ctx, { type: 'sine', frequency: freq });
+
+  const audioVoice = get(voice.waveform).player.buildAudioGraph(ctx, voice, shared);
+
+  const origStart = audioVoice.start;
+  audioVoice.start = (time: number) => {
+    origStart.call(audioVoice, time);
+    shadow.start(time);
+  };
+
+  const origStop = audioVoice.stop;
+  audioVoice.stop = (time: number) => {
+    origStop.call(audioVoice, time);
+    safeStop(shadow);
+  };
+
+  const origUpdate = audioVoice.updateParams;
+  audioVoice.updateParams = (v: Voice, now: number) => {
+    origUpdate.call(audioVoice, v, now);
+    shadow.frequency.setValueAtTime(yToFrequency(v.y), now);
+  };
+
+  audioVoice.getShadowNode = () => shadow;
+
+  return audioVoice;
 }

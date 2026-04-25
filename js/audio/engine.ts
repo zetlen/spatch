@@ -1,12 +1,19 @@
 // Engine.ts — Web Audio engine: AudioEngine class
 //
 // Owns AudioContext lifecycle, voice map, play/stop/release orchestration,
-// FM cross-voice routing, and solo mode.
+// cross-voice modulation routing (FM, ring mod, raw FM), and solo mode.
 //
 // All signal processing after the voice summing point is delegated to Master.
 // Per-voice gain/pan/border calculations are delegated to Mixer.
 
-import { computeOverlap, FM_PARAMS, computeFMDepth } from '../effects.ts';
+import {
+  BLEND_CONFIG,
+  computeFMDepth,
+  computeOverlap,
+  FM_MODULATOR_LPF_HZ,
+  FM_MODULATOR_LPF_Q,
+  type BlendConfig,
+} from '../effects.ts';
 import { createEffect } from '../patterns.ts';
 import { type BlendMode, type Envelope, type SigilData, type Voice } from '../types.ts';
 import { yToFrequency } from './mapping.ts';
@@ -27,11 +34,25 @@ export interface PlayOptions {
   irBuffer?: AudioBuffer;
 }
 
-/** A cross-voice FM connection: top voice modulates bottom voice's frequency. */
-interface FMConnection {
+interface FMPair {
   depthGain: GainNode;
-  feedbackGain: GainNode | undefined;
 }
+
+interface FMPairFiltered {
+  lowpass: BiquadFilterNode;
+  depthGain: GainNode;
+}
+
+interface RingPair {
+  overlapSource: ConstantSourceNode;
+  shadowAmpAtoB: GainNode;
+  shadowAmpBtoA: GainNode;
+}
+
+type CrossConnection =
+  | { type: 'fm'; aToB: FMPair; bToA: FMPair }
+  | { type: 'ring'; pair: RingPair }
+  | { type: 'rawfm'; aToB: FMPairFiltered; bToA: FMPairFiltered };
 
 // ---- Audio Engine ----
 
@@ -40,7 +61,7 @@ export class AudioEngine {
   activeVoices: AudioVoice[] = [];
   readonly mixer = new Mixer();
   readonly master = new Master();
-  private _fmConnections = new Map<string, FMConnection>();
+  private _crossConnections = new Map<string, CrossConnection>();
   isPlaying: boolean = false;
   private _sessionId: number = 0;
   private _streamDest: MediaStreamAudioDestinationNode | undefined;
@@ -151,9 +172,11 @@ export class AudioEngine {
       this.activeVoices.push(audioVoice);
     }
 
-    // Sync FM connections (only created for overlapping pairs)
-    this._syncFMConnections(sigilState.voices, sigilState.blend);
+    // Build cross-connections for all voice pairs upfront.
+    // Set _lastBlend first so _syncCrossConnections reads the correct config.
     this._lastBlend = sigilState.blend;
+    this._buildAllCrossConnections(sigilState.voices, sigilState.blend);
+    this._syncCrossConnections(sigilState.voices);
 
     this._playEnvelope = envelope;
 
@@ -394,13 +417,18 @@ export class AudioEngine {
       }
     }
 
-    // Global blend change or voice add/remove — full FM rebuild
-    if (sigilState.blend !== this._lastBlend || voicesChanged) {
-      this._disposeFMConnections();
-      this._syncFMConnections(sigilState.voices, sigilState.blend);
+    // Global blend change — full cross-connection rebuild
+    if (sigilState.blend !== this._lastBlend) {
+      this._disposeAllCrossConnections();
+      this._buildAllCrossConnections(sigilState.voices, sigilState.blend);
+      this._syncCrossConnections(sigilState.voices);
       this._lastBlend = sigilState.blend;
+    } else if (voicesChanged) {
+      // Voice add/remove — reconcile connections for current pairs
+      this._reconcileCrossConnections(sigilState.voices, sigilState.blend);
+      this._syncCrossConnections(sigilState.voices);
     } else if (movedVoiceIds.size > 0) {
-      this._syncFMConnections(sigilState.voices, sigilState.blend, movedVoiceIds);
+      this._syncCrossConnections(sigilState.voices, movedVoiceIds);
     }
   }
 
@@ -451,147 +479,302 @@ export class AudioEngine {
     this._soloVoiceId = id;
   }
 
-  /** Tear down all FM connections. */
-  private _disposeFMConnections(): void {
-    for (const conn of this._fmConnections.values()) {
-      this._disposeFMConnection(conn);
+  /** Tear down all cross-connections. */
+  private _disposeAllCrossConnections(): void {
+    for (const conn of this._crossConnections.values()) {
+      this._disposeCrossConnection(conn);
     }
-    this._fmConnections.clear();
+    this._crossConnections.clear();
   }
 
-  /** Tear down a single FM connection, silencing it first to avoid clicks. */
-  private _disposeFMConnection(conn: FMConnection): void {
-    conn.depthGain.gain.value = 0;
-    safeDisconnect(conn.depthGain);
-    if (conn.feedbackGain) {
-      conn.feedbackGain.gain.value = 0;
-      safeDisconnect(conn.feedbackGain);
+  /** Tear down a single cross-connection, silencing it first to avoid clicks. */
+  private _disposeCrossConnection(conn: CrossConnection): void {
+    switch (conn.type) {
+      case 'fm': {
+        conn.aToB.depthGain.gain.value = 0;
+        safeDisconnect(conn.aToB.depthGain);
+        conn.bToA.depthGain.gain.value = 0;
+        safeDisconnect(conn.bToA.depthGain);
+        break;
+      }
+      case 'ring': {
+        const { pair } = conn;
+        pair.overlapSource.offset.value = 0;
+        safeDisconnect(pair.overlapSource);
+        try {
+          pair.overlapSource.stop();
+        } catch {}
+        pair.shadowAmpAtoB.gain.value = 0;
+        safeDisconnect(pair.shadowAmpAtoB);
+        pair.shadowAmpBtoA.gain.value = 0;
+        safeDisconnect(pair.shadowAmpBtoA);
+        break;
+      }
+      case 'rawfm': {
+        conn.aToB.depthGain.gain.value = 0;
+        safeDisconnect(conn.aToB.depthGain);
+        safeDisconnect(conn.aToB.lowpass);
+        conn.bToA.depthGain.gain.value = 0;
+        safeDisconnect(conn.bToA.depthGain);
+        safeDisconnect(conn.bToA.lowpass);
+        break;
+      }
     }
   }
 
   /**
-   * Lazily create, update, and tear down FM connections based on current overlap.
-   * Connections are only created when overlap > 0 — non-overlapping voices have
-   * NO nodes attached to their frequency AudioParams, keeping the audio graph clean.
-   *
-   * When `movedVoiceIds` is provided, only pairs involving a moved voice are
-   * recomputed — unchanged pairs retain their existing connection and depth.
-   * Pass undefined (or omit) for a full sweep (initial play, voice add/remove).
+   * Build cross-connections for ALL voice pairs upfront.
+   * Called on play() and blend mode change. Screen mode skips (no connections).
    */
-  private _syncFMConnections(
-    voices: readonly Voice[],
-    blend: BlendMode,
-    movedVoiceIds?: Set<string>,
-  ): void {
+  private _buildAllCrossConnections(voices: readonly Voice[], blend: BlendMode): void {
     const ctx = this.audioCtx;
     if (!ctx) {
       return;
     }
 
+    const blendCfg = BLEND_CONFIG[blend];
+    if (blendCfg.type === 'none') {
+      return;
+    }
+
     const audioById = new Map(this.activeVoices.map((v) => [v.shapeId, v]));
-    const activeKeys = new Set<string>();
 
     for (let i = 0; i < voices.length; i++) {
       for (let j = i + 1; j < voices.length; j++) {
-        const carrierData = voices[i]!;
-        const modulatorData = voices[j]!;
-
-        // Skip FM for blend modes with no modulation (e.g. screen) —
-        // Check before computing overlap to avoid the sqrt
-        const params = FM_PARAMS[blend];
-        if (params.maxIndex <= 0) {
+        const voiceA = voices[i]!;
+        const voiceB = voices[j]!;
+        const audioA = audioById.get(voiceA.id);
+        const audioB = audioById.get(voiceB.id);
+        if (!audioA || !audioB) {
           continue;
         }
-
-        const key = `${modulatorData.id}:${carrierData.id}`;
-
-        // If we know which voices moved, skip pairs where neither voice
-        // Changed position — their overlap and depth are unchanged.
-        if (
-          movedVoiceIds &&
-          !movedVoiceIds.has(carrierData.id) &&
-          !movedVoiceIds.has(modulatorData.id)
-        ) {
-          if (this._fmConnections.has(key)) {
-            activeKeys.add(key);
-          }
-          continue;
-        }
-
-        const overlap = computeOverlap(modulatorData, carrierData);
-
-        if (overlap <= 0) {
-          continue;
-        }
-
-        activeKeys.add(key);
-
-        const carrierAudio = audioById.get(carrierData.id);
-        const modulatorAudio = audioById.get(modulatorData.id);
-        if (!carrierAudio || !modulatorAudio) {
-          continue;
-        }
-
-        let conn = this._fmConnections.get(key);
-        if (!conn) {
-          conn = this._createFMConnection(ctx, blend, modulatorAudio, carrierAudio);
-          this._fmConnections.set(key, conn);
-        }
-
-        // Update depth
-        const modNode = modulatorAudio.getModulatorNode();
-        const modFreq = modNode.frequency.value;
-        const depth = computeFMDepth(overlap, params, modFreq);
-
-        conn.depthGain.gain.value = depth;
-
-        if (conn.feedbackGain) {
-          conn.feedbackGain.gain.value = overlap * params.feedback * modFreq * 0.5;
-        }
-      }
-    }
-
-    // Tear down connections for pairs that no longer overlap
-    for (const [key, conn] of this._fmConnections) {
-      if (!activeKeys.has(key)) {
-        this._disposeFMConnection(conn);
-        this._fmConnections.delete(key);
+        const key = `${voiceA.id}:${voiceB.id}`;
+        const conn = this._createCrossConnection(ctx, blendCfg, audioA, audioB);
+        this._crossConnections.set(key, conn);
       }
     }
   }
 
-  /** Create a single FM connection: modulator oscillator → depth → carrier frequency. */
-  private _createFMConnection(
+  /**
+   * Reconcile cross-connections after voice add/remove.
+   * Removes connections involving deleted voices, adds connections for new voices.
+   */
+  private _reconcileCrossConnections(voices: readonly Voice[], blend: BlendMode): void {
+    const ctx = this.audioCtx;
+    if (!ctx) {
+      return;
+    }
+
+    const blendCfg = BLEND_CONFIG[blend];
+    if (blendCfg.type === 'none') {
+      // Screen mode: ensure no stale connections remain
+      this._disposeAllCrossConnections();
+      return;
+    }
+
+    const audioById = new Map(this.activeVoices.map((v) => [v.shapeId, v]));
+    const voiceIds = new Set(voices.map((v) => v.id));
+
+    // Remove connections involving deleted voices
+    for (const [key, conn] of this._crossConnections) {
+      const [aId, bId] = key.split(':');
+      if (!voiceIds.has(aId!) || !voiceIds.has(bId!)) {
+        this._disposeCrossConnection(conn);
+        this._crossConnections.delete(key);
+      }
+    }
+
+    // Add connections for new voice pairs
+    for (let i = 0; i < voices.length; i++) {
+      for (let j = i + 1; j < voices.length; j++) {
+        const voiceA = voices[i]!;
+        const voiceB = voices[j]!;
+        const key = `${voiceA.id}:${voiceB.id}`;
+        if (this._crossConnections.has(key)) {
+          continue;
+        }
+        const audioA = audioById.get(voiceA.id);
+        const audioB = audioById.get(voiceB.id);
+        if (!audioA || !audioB) {
+          continue;
+        }
+        const conn = this._createCrossConnection(ctx, blendCfg, audioA, audioB);
+        this._crossConnections.set(key, conn);
+      }
+    }
+  }
+
+  /**
+   * Update gain values on all cross-connections based on current overlap.
+   * NO creation or destruction — only value changes.
+   *
+   * When `movedVoiceIds` is provided, only pairs involving a moved voice are
+   * recomputed — unchanged pairs retain their existing gains.
+   */
+  private _syncCrossConnections(voices: readonly Voice[], movedVoiceIds?: Set<string>): void {
+    if (this._crossConnections.size === 0) {
+      return;
+    }
+
+    const blendCfg = BLEND_CONFIG[this._lastBlend];
+    const voiceById = new Map(voices.map((v) => [v.id, v]));
+    const audioById = new Map(this.activeVoices.map((v) => [v.shapeId, v]));
+
+    for (const [key, conn] of this._crossConnections) {
+      const sep = key.indexOf(':');
+      const aId = key.slice(0, sep);
+      const bId = key.slice(sep + 1);
+
+      // Skip pairs where neither voice moved
+      if (movedVoiceIds && !movedVoiceIds.has(aId) && !movedVoiceIds.has(bId)) {
+        continue;
+      }
+
+      const voiceA = voiceById.get(aId);
+      const voiceB = voiceById.get(bId);
+      if (!voiceA || !voiceB) {
+        continue;
+      }
+
+      const audioA = audioById.get(aId);
+      const audioB = audioById.get(bId);
+      if (!audioA || !audioB) {
+        continue;
+      }
+
+      const overlap = computeOverlap(voiceA, voiceB);
+
+      switch (conn.type) {
+        case 'fm': {
+          if (blendCfg.type !== 'fm') {
+            break;
+          }
+          const freqA = audioA.getShadowNode!().frequency.value;
+          const freqB = audioB.getShadowNode!().frequency.value;
+          conn.aToB.depthGain.gain.value = computeFMDepth(overlap, blendCfg.config, freqA);
+          conn.bToA.depthGain.gain.value = computeFMDepth(overlap, blendCfg.config, freqB);
+          break;
+        }
+        case 'ring': {
+          conn.pair.overlapSource.offset.value = -overlap;
+          conn.pair.shadowAmpAtoB.gain.value = overlap;
+          conn.pair.shadowAmpBtoA.gain.value = overlap;
+          break;
+        }
+        case 'rawfm': {
+          if (blendCfg.type !== 'rawfm') {
+            break;
+          }
+          const freqA = audioA.getModulatorNode().frequency.value;
+          const freqB = audioB.getModulatorNode().frequency.value;
+          conn.aToB.depthGain.gain.value = computeFMDepth(overlap, blendCfg.config, freqA);
+          conn.bToA.depthGain.gain.value = computeFMDepth(overlap, blendCfg.config, freqB);
+          break;
+        }
+      }
+    }
+  }
+
+  private _createCrossConnection(
     ctx: AudioContext,
-    blend: BlendMode,
-    modulatorAudio: AudioVoice,
-    carrierAudio: AudioVoice,
-  ): FMConnection {
-    const params = FM_PARAMS[blend];
+    blendCfg: BlendConfig,
+    audioA: AudioVoice,
+    audioB: AudioVoice,
+  ): CrossConnection {
+    switch (blendCfg.type) {
+      case 'fm': {
+        return this._createFMCross(ctx, audioA, audioB);
+      }
+      case 'ring': {
+        return this._createRingCross(ctx, audioA, audioB);
+      }
+      case 'rawfm': {
+        return this._createRawFMCross(ctx, audioA, audioB);
+      }
+      default: {
+        throw new Error('unreachable');
+      }
+    }
+  }
+
+  private _createFMCross(
+    ctx: AudioContext,
+    audioA: AudioVoice,
+    audioB: AudioVoice,
+  ): CrossConnection {
+    const aToB = this._createFMPair(ctx, audioA.getShadowNode!(), audioB);
+    const bToA = this._createFMPair(ctx, audioB.getShadowNode!(), audioA);
+    return { type: 'fm', aToB, bToA };
+  }
+
+  private _createFMPair(ctx: AudioContext, shadow: OscillatorNode, carrier: AudioVoice): FMPair {
     const depthGain = new GainNode(ctx, { gain: 0 });
-    const modulatorNode = modulatorAudio.getModulatorNode();
-    const carrierParams = carrierAudio.getCarrierFrequencyParams();
-
-    modulatorNode.connect(depthGain);
-    for (const freqParam of carrierParams) {
-      depthGain.connect(freqParam);
+    shadow.connect(depthGain);
+    for (const param of carrier.getCarrierFrequencyParams()) {
+      depthGain.connect(param);
     }
+    return { depthGain };
+  }
 
-    // Self-modulation feedback for overlay mode
-    let feedbackGain: GainNode | undefined;
-    if (params.feedback > 0) {
-      feedbackGain = new GainNode(ctx, { gain: 0 });
-      modulatorNode.connect(feedbackGain);
-      feedbackGain.connect(modulatorNode.frequency);
+  private _createRingCross(
+    ctx: AudioContext,
+    audioA: AudioVoice,
+    audioB: AudioVoice,
+  ): CrossConnection {
+    // ConstantSourceNode with offset=-overlap drives both voices' outputGain.gain
+    // reduction. At overlap=0: offset=0, so outputGain stays at base gain 1.
+    // At overlap=1: offset=-1, reducing dry gain to 0 (pure ring mod).
+    const overlapSource = new ConstantSourceNode(ctx, { offset: 0 });
+    overlapSource.connect(audioA.outputGain.gain);
+    overlapSource.connect(audioB.outputGain.gain);
+    overlapSource.start();
+
+    // B's shadow → shadowAmpAtoB → A's outputGain.gain (ring-modulates A)
+    const shadowAmpAtoB = new GainNode(ctx, { gain: 0 });
+    audioB.getShadowNode!().connect(shadowAmpAtoB);
+    shadowAmpAtoB.connect(audioA.outputGain.gain);
+
+    // A's shadow → shadowAmpBtoA → B's outputGain.gain (ring-modulates B)
+    const shadowAmpBtoA = new GainNode(ctx, { gain: 0 });
+    audioA.getShadowNode!().connect(shadowAmpBtoA);
+    shadowAmpBtoA.connect(audioB.outputGain.gain);
+
+    return { type: 'ring', pair: { overlapSource, shadowAmpAtoB, shadowAmpBtoA } };
+  }
+
+  private _createRawFMCross(
+    ctx: AudioContext,
+    audioA: AudioVoice,
+    audioB: AudioVoice,
+  ): CrossConnection {
+    const aToB = this._createRawFMPair(ctx, audioA.getModulatorNode(), audioB);
+    const bToA = this._createRawFMPair(ctx, audioB.getModulatorNode(), audioA);
+    return { type: 'rawfm', aToB, bToA };
+  }
+
+  private _createRawFMPair(
+    ctx: AudioContext,
+    modulator: OscillatorNode,
+    carrier: AudioVoice,
+  ): FMPairFiltered {
+    const lowpass = new BiquadFilterNode(ctx, {
+      type: 'lowpass',
+      frequency: FM_MODULATOR_LPF_HZ,
+      Q: FM_MODULATOR_LPF_Q,
+    });
+    const depthGain = new GainNode(ctx, { gain: 0 });
+    modulator.connect(lowpass);
+    lowpass.connect(depthGain);
+    for (const param of carrier.getCarrierFrequencyParams()) {
+      depthGain.connect(param);
     }
-
-    return { depthGain, feedbackGain };
+    return { lowpass, depthGain };
   }
 
   _cleanup(): void {
     this._sessionId++;
 
-    this._disposeFMConnections();
+    this._disposeAllCrossConnections();
 
     for (const audioVoice of this.activeVoices) {
       this._stopVoice(audioVoice);
@@ -616,6 +799,7 @@ export class AudioEngine {
   _stopVoice(audioVoice: AudioVoice): void {
     audioVoice.stop(0);
     safeDisconnect(audioVoice.outputNode);
+    safeDisconnect(audioVoice.outputGain);
     audioVoice.effectDispose?.();
   }
 

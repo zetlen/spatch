@@ -20,6 +20,9 @@ export interface AudioSharedNodes {
   formantMixer: GainNode;
   brightness: BiquadFilterNode;
   panner: StereoPannerNode;
+  /** Always-present gain node between panner and masterGain.
+   *  Ring mod connects to outputGain.gain as an AudioParam target. */
+  outputGain: GainNode;
   octaveOsc: OscillatorNode | undefined;
   octaveGainNode: GainNode | undefined;
   effectDispose: (() => void) | undefined;
@@ -36,6 +39,9 @@ export interface AudioVoice {
   gain: GainNode;
   outputNode: StereoPannerNode;
   panner: StereoPannerNode;
+  /** Always-present gain node between panner and masterGain.
+   *  Ring mod connects to outputGain.gain as an AudioParam target. */
+  outputGain: GainNode;
   f1: BiquadFilterNode;
   f2: BiquadFilterNode;
   formantMixer: GainNode;
@@ -59,6 +65,7 @@ export interface AudioVoice {
   syncGlobalParams(vibeParams: { warmth: number }, now: number): void;
   getModulatorNode(): OscillatorNode;
   getCarrierFrequencyParams(): AudioParam[];
+  getShadowNode?(): OscillatorNode;
 }
 
 // ---- Delegate interfaces ----

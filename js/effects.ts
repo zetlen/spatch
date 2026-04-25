@@ -6,44 +6,65 @@
 
 import type { BlendMode } from './types.ts';
 
-// ---- FM synthesis parameters per blend mode ----
+// ---- Cross-modulation parameters per blend mode ----
 //
-// When shapes overlap, the top voice's oscillator modulates the bottom voice's
-// Frequency. The blend mode of the top voice determines the FM character.
+// When shapes overlap, voices cross-modulate each other bidirectionally.
+// The blend mode determines the synthesis technique and character.
 
-/** FM behavior parameters for a blend mode. */
-export interface FMParams {
-  /** Maximum modulation index at full overlap. */
+/** FM behavior parameters for sine cross-FM and raw cross-FM modes. */
+export interface FMConfig {
   maxIndex: number;
-  /** Depth scaling: 'linear' = overlap × maxIndex, 'sqrt' = √overlap × maxIndex, 'exponential' = overlap² × maxIndex. */
-  depthCurve: 'linear' | 'sqrt' | 'exponential';
-  /** Self-modulation feedback amount (0–1). Modulator feeds back into its own frequency. */
-  feedback: number;
+  depthCurve: 'linear' | 'sqrt';
 }
 
-/** FM parameters indexed by blend mode. */
-export const FM_PARAMS: Record<BlendMode, FMParams> = {
-  screen: { maxIndex: 0, depthCurve: 'linear', feedback: 0 },
-  multiply: { maxIndex: 0.8, depthCurve: 'sqrt', feedback: 0 },
-  exclusion: { maxIndex: 1.2, depthCurve: 'linear', feedback: 0 },
-  difference: { maxIndex: 1.8, depthCurve: 'linear', feedback: 0.2 },
+/** Ring modulation config. Depth controlled purely by overlap. */
+export type RingConfig = Record<string, never>;
+
+/** Raw cross-FM config (includes lowpass on the modulator). */
+export interface RawFMConfig {
+  maxIndex: number;
+  depthCurve: 'linear' | 'sqrt';
+}
+
+export type BlendConfig =
+  | { type: 'none' }
+  | { type: 'fm'; config: FMConfig }
+  | { type: 'ring'; config: RingConfig }
+  | { type: 'rawfm'; config: RawFMConfig };
+
+/** Cross-modulation config indexed by blend mode. */
+export const BLEND_CONFIG: Record<BlendMode, BlendConfig> = {
+  screen: { type: 'none' },
+  multiply: { type: 'fm', config: { maxIndex: 0.5, depthCurve: 'sqrt' } },
+  exclusion: { type: 'ring', config: {} },
+  difference: { type: 'rawfm', config: { maxIndex: 0.8, depthCurve: 'linear' } },
 };
 
 /** Max frequency deviation in Hz to prevent extreme high-ratio FM from sounding harsh. */
-const MAX_FM_DEVIATION = 2000;
+const MAX_FM_DEVIATION = 600;
+
+/**
+ * Modulator lowpass cutoff, Hz.
+ * Passes the full melodic range (≤~784 Hz fundamentals) and attenuates
+ * 3rd+ harmonics of non-sine modulators, which are the dominant source
+ * of FM harshness.
+ */
+export const FM_MODULATOR_LPF_HZ = 1800;
+
+/** Butterworth Q — flat passband, no resonance peak. */
+export const FM_MODULATOR_LPF_Q = Math.SQRT1_2;
 
 /**
  * Compute the FM depth gain value for a modulator→carrier connection.
  * depth = min(scaledIndex × modulatorFreq, MAX_DEVIATION)
  */
-export function computeFMDepth(overlap: number, params: FMParams, modulatorFreq: number): number {
-  const shaped =
-    params.depthCurve === 'exponential'
-      ? overlap * overlap
-      : params.depthCurve === 'sqrt'
-        ? Math.sqrt(overlap)
-        : overlap;
-  const scaled = shaped * params.maxIndex;
+export function computeFMDepth(
+  overlap: number,
+  config: FMConfig | RawFMConfig,
+  modulatorFreq: number,
+): number {
+  const shaped = config.depthCurve === 'sqrt' ? Math.sqrt(overlap) : overlap;
+  const scaled = shaped * config.maxIndex;
   return Math.min(scaled * modulatorFreq, MAX_FM_DEVIATION);
 }
 
