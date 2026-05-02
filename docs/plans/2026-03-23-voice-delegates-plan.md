@@ -358,10 +358,6 @@ files from `getStrategy(wf).method()` to `registry.get(wf).delegate.method()`.
 - [ ] Replace `getStrategy(wf).withTimbre()` → inline timbre update (the
   registry's `createVoice` knows the field name).
 
-**Modify:** `js/debug/vibe-tuner.ts`
-
-- [ ] Replace `ALL_STRATEGIES` → `registry.all()`.
-
 ### Task 5.6: Delete old WaveformStrategy files
 
 - [ ] Once all consumers are migrated: delete `js/waveforms/types.ts`,

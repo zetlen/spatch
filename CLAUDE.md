@@ -107,8 +107,6 @@ js/
     stage-panel.ts   Scene picker
     stample-panel.ts Stample picker
     dom-helpers.ts   createIconButton, svgEl helpers
-  debug/
-    vibe-tuner.ts    Hidden reverb tuner side drawer (behind URL param)
   harmony.ts         Randomize + harmonize (9 scales)
   shapes.ts          Resize/rotate math, ADSR corner conversion
   colors.ts          Color conversions (OKLCH, gamut clamping), SVG gradient helpers
@@ -433,7 +431,7 @@ Add Fill variant in `types.ts`, update `fillToFillDraft`/`fillDraftToFill`,
 
 Update `ReverbConfig` in `audio/master-types.ts`, `Scene` in
 `scenes/scene-types.ts`, `audio/master.ts` (reverb setup),
-`debug/vibe-tuner.ts` (debug UI), `serialize.ts` (scene index = 1 B64 char).
+`serialize.ts` (scene index = 1 B64 char).
 
 ### Modify mastering behavior
 

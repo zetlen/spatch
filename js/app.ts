@@ -577,19 +577,3 @@ qel('#btn-splash').addEventListener('click', () => {
   }
   splash.enterPreview();
 });
-
-// ---- Debug: Vibe tuner (hidden, activated via ?debug URL param) ----
-
-const debugParam = atob('dmliZWNoZWNr');
-
-if (
-  new URLSearchParams(location.search).has(debugParam) ||
-  location.pathname === `/${debugParam}`
-) {
-  import('./debug/vibe-tuner.ts').then((m) =>
-    m.init({
-      audio,
-      store,
-    }),
-  );
-}

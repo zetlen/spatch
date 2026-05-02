@@ -48,8 +48,7 @@ Split into two layers:
   No AudioContext needed. Deduplicates in-flight requests.
 - `decodeIR(ctx, filename): Promise<AudioBuffer>` — decodes from byte cache,
   caches the decoded buffer.
-- `loadIR(ctx, filename)` becomes composition of both (backwards compatible
-  for debug vibe tuner).
+- `loadIR(ctx, filename)` becomes composition of both.
 
 ### Changes to `js/scenes/index.ts`
 
@@ -94,7 +93,6 @@ transition ends, the layers swap roles and the old one is cleared.
 - Scene definitions (`Scene` type, per-scene `index.ts` files) unchanged.
 - Vite static imports provide hashed URLs at build time.
 - Serialization unchanged — scene index is still 1 B64 char.
-- `loadIR` remains available for debug vibe tuner.
 - Audio unlock strategy (iOS Safari) unchanged — `warmUp()` is still
   synchronous from a qualifying gesture. The readiness gate is upstream
   of the gesture handler.
