@@ -90,7 +90,7 @@ function drawShape(ctx: OffscreenCanvasRenderingContext2D, voice: Voice): void {
     }
 
     case 'stamp': {
-      // Stamp hull path — parse the SVG path `d` string and draw on canvas
+      // Stamp hull path — Path2D handles the full SVG path grammar
       const stampIdx = 'stamp' in voice ? (voice as { stamp: number }).stamp : 0;
       const stample = getStample(stampIdx);
       const vb = stample.svg.viewBox.split(' ').map(Number);
@@ -106,62 +106,15 @@ function drawShape(ctx: OffscreenCanvasRenderingContext2D, voice: Voice): void {
         ctx.rotate(rot);
         ctx.translate(-cx, -cy);
       }
-      drawSvgPath(ctx, stample.hull, scale, tx, ty);
+      ctx.translate(tx, ty);
+      ctx.scale(scale, scale);
+      ctx.fill(new Path2D(stample.hull));
       ctx.restore();
-      break;
+      return; // Already filled; the default path is empty
     }
   }
 
   ctx.fill();
-}
-
-/** Parse a simplified SVG path (M, L, C, Z commands) and draw it on Canvas2D. */
-function drawSvgPath(
-  ctx: OffscreenCanvasRenderingContext2D,
-  d: string,
-  scale: number,
-  tx: number,
-  ty: number,
-): void {
-  const nums: number[] = [];
-  for (const m of d.matchAll(/-?\d+\.?\d*/g)) {
-    nums.push(parseFloat(m[0]));
-  }
-
-  let i = 0;
-  const cmds = d.match(/[MLCZmlcz]/g) ?? [];
-
-  ctx.beginPath();
-  for (const cmd of cmds) {
-    switch (cmd) {
-      case 'M': {
-        ctx.moveTo(nums[i]! * scale + tx, nums[i + 1]! * scale + ty);
-        i += 2;
-        break;
-      }
-      case 'L': {
-        ctx.lineTo(nums[i]! * scale + tx, nums[i + 1]! * scale + ty);
-        i += 2;
-        break;
-      }
-      case 'C': {
-        ctx.bezierCurveTo(
-          nums[i]! * scale + tx,
-          nums[i + 1]! * scale + ty,
-          nums[i + 2]! * scale + tx,
-          nums[i + 3]! * scale + ty,
-          nums[i + 4]! * scale + tx,
-          nums[i + 5]! * scale + ty,
-        );
-        i += 6;
-        break;
-      }
-      case 'Z': {
-        ctx.closePath();
-        break;
-      }
-    }
-  }
 }
 
 // ---- Pairwise overlap check ----

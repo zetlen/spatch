@@ -141,7 +141,8 @@ bun run dev          # Vite dev server with HMR (port 5173)
 bun run preview      # serve production build locally
 bun run test         # unit + integration tests
 bun run test:unit    # unit tests only (bun test)
-bun run test:e2e     # integration tests only (Playwright, needs dev server)
+bun run test:e2e     # integration tests only (Playwright, serves dist/ via
+                     # vite preview — run `bun run build` first to test changes)
 bun run check        # typecheck (tsc --noEmit)
 bun run lint         # lint (oxlint)
 bun run fmt          # format (oxfmt)
