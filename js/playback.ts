@@ -87,6 +87,23 @@ export class PlaybackController {
     this.modeBadge = qel('.play-mode-badge', this.playBtn);
 
     this.createZoneElements();
+
+    // OS interruption (iOS sleep, calls, etc.) — engine has already cleaned
+    // up audio; we just need to sync UI to idle and cancel any pending loop.
+    this.audio.onInterrupted = () => this.handleInterruption();
+  }
+
+  private handleInterruption(): void {
+    this.playGeneration++;
+    if (this.loopTimeoutId != undefined) {
+      clearTimeout(this.loopTimeoutId);
+      this.loopTimeoutId = undefined;
+    }
+    this.ringFill.style.strokeDashoffset = `${PlaybackController.RING_CIRCUMFERENCE}`;
+    this.playBtn.classList.remove('playing', 'latched', 'looping');
+    this.setPlayIcon(false);
+    this.playState = 'idle';
+    this.updatePlayIndicators();
   }
 
   /** Current play mode (idle, latched, or looping). */

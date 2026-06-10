@@ -80,6 +80,15 @@ export class AudioEngine {
     }
     this.audioCtx = new AudioContext();
 
+    // Declare playback intent. Default audioSession.type is 'auto', which lets
+    // iOS guess and transition the context to 'interrupted' on screen lock.
+    // 'playback' tells the OS to leave us alone like the YouTube tab.
+    // Experimental API — feature-detect before setting.
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    if (nav.audioSession) {
+      nav.audioSession.type = 'playback';
+    }
+
     // Classic iOS Safari unlock: play a silent buffer to "warm" the context.
     // This is the most widely battle-tested workaround.
     const silent = new AudioBuffer({ numberOfChannels: 1, length: 1, sampleRate: 22_050 });
@@ -101,7 +110,12 @@ export class AudioEngine {
     this._audioEl.volume = 0; // Must be silent — audio goes through ctx.destination
     this._audioEl.style.display = 'none';
     document.body.append(this._audioEl);
-    this._audioEl.play().catch(() => {});
+    this._tryPlayKeepAlive('init', false);
+
+    // Recovery net for OS-level interruptions outside any DOM event (system
+    // sleep/wake, Bluetooth handoff, phone calls). audioSession.type='playback'
+    // reduces how often we hit this state, but doesn't eliminate it.
+    this.audioCtx.addEventListener('statechange', () => this._handleStateChange());
 
     // Permanent listeners for qualifying gestures (touchend, click) that
     // Resume the keep-alive <audio> if it was paused after a previous stop
@@ -109,12 +123,43 @@ export class AudioEngine {
     // Is called from pointerdown (non-qualifying) — the touchend/click that
     // Follows in the same gesture will resume the element.
     const resumeKeepAlive = () => {
-      if (this._audioEl && this._audioEl.paused && this.isPlaying) {
-        this._audioEl.play().catch(() => {});
-      }
+      this._tryPlayKeepAlive('gesture');
     };
     document.addEventListener('touchend', resumeKeepAlive);
     document.addEventListener('click', resumeKeepAlive);
+  }
+
+  /** Notify owner when an OS interruption forces playback to stop.
+   *  Set by PlaybackController to keep its UI state in sync. */
+  onInterrupted: (() => void) | undefined = undefined;
+
+  /** Handle AudioContext state transitions. iOS transitions to 'interrupted'
+   *  for OS-level audio session takeovers (sleep/wake, calls, headphone
+   *  changes). We can't reliably resume() from here because iOS won't honor
+   *  resume calls outside a user gesture for the interrupted state — so we
+   *  cleanly stop instead and let the next user-initiated play() recover.
+   *  Exposed for unit tests. */
+  _handleStateChange(): void {
+    if (this.audioCtx?.state === 'interrupted') {
+      this.stop();
+      this.onInterrupted?.();
+    }
+  }
+
+  /** Single source of truth for resuming the keep-alive `<audio>` element.
+   *  When `requireIsPlaying` is true (the default), only acts if isPlaying;
+   *  callers in init/play set it false because they're about to enter a
+   *  playing state. Logs failures with a label identifying the call site. */
+  private _tryPlayKeepAlive(label: string, requireIsPlaying = true): void {
+    if (!this._audioEl || !this._audioEl.paused) {
+      return;
+    }
+    if (requireIsPlaying && !this.isPlaying) {
+      return;
+    }
+    this._audioEl.play().catch((error: unknown) => {
+      console.warn(`[audio] keep-alive failed (${label}):`, error);
+    });
   }
 
   /** Call from any user gesture to pre-warm the AudioContext. */
@@ -135,7 +180,9 @@ export class AudioEngine {
     // Don't await resume() — warmUp() already called it synchronously from
     // The user gesture. Awaiting here can hang on iOS Safari if the context
     // Is mid-resume. Fire-and-forget as a fallback only.
-    if (ctx.state === 'suspended') {
+    // 'interrupted' is iOS-specific (OS audio session takeover); resume()
+    // works here because play() is invoked from a user gesture.
+    if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
       ctx.resume();
     }
 
@@ -148,9 +195,7 @@ export class AudioEngine {
     // May fail outside a user gesture (e.g. loop restart) — that's OK,
     // The AudioContext is already running and the permanent touchend/click
     // Listeners in _init() will resume it on the next qualifying gesture.
-    if (this._audioEl && this._audioEl.paused) {
-      this._audioEl.play().catch(() => {});
-    }
+    this._tryPlayKeepAlive('play', false);
 
     // Apply ADSR envelope
     this.master.scheduleEnvelope(ctx, envelope);
@@ -470,9 +515,7 @@ export class AudioEngine {
       return;
     }
     this.audioCtx.resume();
-    if (this._audioEl && this._audioEl.paused && this.isPlaying) {
-      this._audioEl.play().catch(() => {});
-    }
+    this._tryPlayKeepAlive('resume');
   }
 
   setSoloVoice(id: string | undefined): void {
