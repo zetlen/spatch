@@ -137,6 +137,19 @@ export function rotationToTimbre(rotation: number, waveform: WaveformType): numb
   return phase / period;
 }
 
+// ---- Blend (saw/tri crossfade) ----
+
+/**
+ * Convert a timbre value to the saw→tri crossfade position for blend voices.
+ * Monotonic over [0, 1) so every rotation within the triangle's 120° symmetry
+ * period sounds unique (bijection: mirror orientations are visually distinct,
+ * so they must sound distinct). Timbre 1 wraps to 0 because a 120° rotation
+ * renders identically to 0°.
+ */
+export function timbreToBlendMix(timbre: number): number {
+  return timbre % 1;
+}
+
 // ---- Pulse-width modulation ----
 
 // Maximum PWM offset magnitude. At 0.9 the pulse collapses to ~5% duty cycle

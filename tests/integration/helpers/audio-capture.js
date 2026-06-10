@@ -437,5 +437,21 @@ function shimMediaStreamDest(ctx) {
       }
       return drawWaveform(renderBuffer, duration);
     },
+
+    /**
+     * Wait for rendering to complete and return raw channel-0 samples as a
+     * plain array, for direct cross-run PCM comparisons. Use INSTEAD of
+     * finishCapture (both share the single renderResolve slot — awaiting
+     * both before completion would orphan one).
+     * @param {{ offset?: number, length?: number }} opts — in samples
+     */
+    async getRenderedPCM({ offset = 0, length = 8192 } = {}) {
+      if (!renderBuffer) {
+        await new Promise((resolve) => {
+          renderResolve = resolve;
+        });
+      }
+      return Array.from(renderBuffer.getChannelData(0).slice(offset, offset + length));
+    },
   };
 })();

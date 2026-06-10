@@ -110,6 +110,14 @@ This curve:
 
 Circles have no rotation and no timbre parameter.
 
+> **Superseded (2026-06-10, #369):** the symmetric (mirror-collapsing) curve
+> described above violated the bijection it was meant to protect: mirror-image
+> orientations are visually *distinct* images, so collapsing them on the audio
+> side made different-looking states sound identical. Timbre-to-audio mappings
+> are now monotonic over [0, 1) — unique audio for every rotation within the
+> symmetry period — with timbre 1 wrapping to 0 (a full-period rotation renders
+> identically to 0°). See `timbreToBlendMix` in `js/audio/mapping.ts`.
+
 ### Text Decoration
 
 Text decorations keep their vocoder synthesis but are stripped to fields with

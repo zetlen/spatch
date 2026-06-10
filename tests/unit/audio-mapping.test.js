@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   rotationToTimbre,
   snapYToNote,
+  timbreToBlendMix,
   yToFrequency,
   yToPlaybackRate,
 } from '../../js/audio/mapping.ts';
@@ -316,5 +317,24 @@ describe('yToPlaybackRate', () => {
     const refPitch = 440;
     const rate = yToPlaybackRate(0.25, refPitch);
     expect(rate).toBeCloseTo(yToFrequency(0.25) / refPitch);
+  });
+});
+
+describe('timbreToBlendMix', () => {
+  test('is strictly monotonic over [0, 1) — every rotation in the 120° period sounds unique', () => {
+    let prev = -Infinity;
+    for (let i = 0; i < 64; i++) {
+      const mix = timbreToBlendMix(i / 64);
+      expect(mix).toBeGreaterThan(prev);
+      prev = mix;
+    }
+  });
+
+  test('mirror rotations are audibly distinct: timbre 0.25 (30°) ≠ timbre 0.75 (90°)', () => {
+    expect(timbreToBlendMix(0.25)).not.toBe(timbreToBlendMix(0.75));
+  });
+
+  test('timbre 1 wraps to timbre 0 (120° rotation renders identically to 0°)', () => {
+    expect(timbreToBlendMix(1)).toBe(timbreToBlendMix(0));
   });
 });
