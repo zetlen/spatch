@@ -4,7 +4,7 @@
 // Saw/tri blend ratio.
 
 import { safeStop } from '../../audio/node-utils.ts';
-import { timbreToBlendMix, yToFrequency } from '../../audio/mapping.ts';
+import { wrapTimbre, yToFrequency } from '../../audio/mapping.ts';
 import type { Voice } from '../../types.ts';
 import type { AudioSharedNodes, AudioVoice, VoicePlayer } from '../types.ts';
 
@@ -21,7 +21,7 @@ const player: VoicePlayer = {
     const gainSaw = new GainNode(ctx);
     const gainTri = new GainNode(ctx);
 
-    const initMix = timbreToBlendMix(initTimbre);
+    const initMix = wrapTimbre(initTimbre);
     gainTri.gain.value = Math.sin((initMix * Math.PI) / 2);
     gainSaw.gain.value = Math.cos((initMix * Math.PI) / 2);
 
@@ -60,7 +60,7 @@ const player: VoicePlayer = {
         const freq = yToFrequency(voice.y);
         oscSaw.frequency.setValueAtTime(freq, now);
         oscTri.frequency.setValueAtTime(freq, now);
-        const mix = timbreToBlendMix(timbre);
+        const mix = wrapTimbre(timbre);
         gainTri.gain.setValueAtTime(Math.sin((mix * Math.PI) / 2), now);
         gainSaw.gain.setValueAtTime(Math.cos((mix * Math.PI) / 2), now);
       },

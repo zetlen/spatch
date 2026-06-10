@@ -436,11 +436,13 @@ test.describe('Audio waveform snapshots', () => {
       });
     });
 
-    test('single astroid voice at timbre=1 (full spread)', async ({ page }) => {
+    test('single astroid voice at timbre=63/64 (near-full spread)', async ({ page }) => {
+      // Timbre 1 wraps to 0 (90° ≡ 0° for the 4-fold-symmetric astroid), so
+      // the widest representable spread is the last serialization step
       await placeShape(page, 'astroid');
       await page.evaluate(() => {
         const voices = globalThis.__testStore.data.voices;
-        globalThis.__testStore.updateVoice(voices[0].id, { timbre: 1 });
+        globalThis.__testStore.updateVoice(voices[0].id, { timbre: 63 / 64 });
       });
       const png = await captureAudio(page);
       expect(Buffer.from(png, 'base64')).toMatchSnapshot('astroid-timbre-1.png', {

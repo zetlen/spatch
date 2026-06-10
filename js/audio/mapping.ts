@@ -137,27 +137,34 @@ export function rotationToTimbre(rotation: number, waveform: WaveformType): numb
   return phase / period;
 }
 
-// ---- Blend (saw/tri crossfade) ----
+// ---- Timbre wrapping ----
 
 /**
- * Convert a timbre value to the saw→tri crossfade position for blend voices.
- * Monotonic over [0, 1) so every rotation within the triangle's 120° symmetry
- * period sounds unique (bijection: mirror orientations are visually distinct,
- * so they must sound distinct). Timbre 1 wraps to 0 because a 120° rotation
- * renders identically to 0°.
+ * Wrap a timbre value to [0, 1). A full-period rotation renders identically
+ * to 0° (the shape's geometric symmetry), so timbre 1 — reachable via the
+ * serialization round-trip — must produce identical audio to timbre 0.
+ * Timbre-to-audio mappings must be monotonic in the wrapped value so every
+ * rotation within the symmetry period sounds unique (bijection: mirror
+ * orientations are visually distinct, so they must sound distinct).
  */
-export function timbreToBlendMix(timbre: number): number {
+export function wrapTimbre(timbre: number): number {
   return timbre % 1;
 }
 
 // ---- Pulse-width modulation ----
 
 // Maximum PWM offset magnitude. At 0.9 the pulse collapses to ~5% duty cycle
-// And becomes inaudible. 0.75 keeps the minimum at ~12.5% — still a bright,
-// Reedy timbre but clearly audible at every rotation angle.
+// And becomes inaudible. 0.75 keeps the extreme at ~12.5%-equivalent duty —
+// Still a bright, reedy timbre but clearly audible at every rotation angle.
 const MAX_PWM_OFFSET = 0.75;
 
-/** Convert a timbre value [0, 1) to a PWM DC offset for pulse-width modulation. */
+/**
+ * Convert a timbre value to a PWM DC offset. Monotonic over [0, 1): duty
+ * sweeps from a pure 50% square (timbre 0) to the reedy extreme. Duty d and
+ * 1−d have identical magnitude spectra, so the offset must stay on one side
+ * of zero — a sign-symmetric mapping would make mirror rotations sound
+ * identical (#379).
+ */
 export function timbreToPWMOffset(timbre: number): number {
-  return (timbre * 2 - 1) * MAX_PWM_OFFSET;
+  return wrapTimbre(timbre) * MAX_PWM_OFFSET;
 }

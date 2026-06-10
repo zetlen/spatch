@@ -4,7 +4,7 @@
 // Detune/stereo spread and which oscillator pairs are active.
 
 import { makeSaturationCurve, safeStop } from '../../audio/node-utils.ts';
-import { yToFrequency } from '../../audio/mapping.ts';
+import { wrapTimbre, yToFrequency } from '../../audio/mapping.ts';
 import type { Voice } from '../../types.ts';
 import type { AudioSharedNodes, AudioVoice, VoicePlayer } from '../types.ts';
 
@@ -41,7 +41,9 @@ const player: VoicePlayer = {
   shapeAreaCoeff: (3 * Math.PI) / 8,
   gainExponent: 1.4,
   buildAudioGraph(ctx: AudioContext, initVoice: Voice, shared: AudioSharedNodes): AudioVoice {
-    const initTimbre = 'timbre' in initVoice ? (initVoice.timbre as number) : 0;
+    // Wrapped: timbre 1 renders at 90° ≡ 0° for the 4-fold-symmetric astroid,
+    // so it must sound like timbre 0 (full spread is approached, not reached).
+    const initTimbre = wrapTimbre('timbre' in initVoice ? (initVoice.timbre as number) : 0);
     const initFreq = yToFrequency(initVoice.y);
 
     const oscs = Array.from(
@@ -112,7 +114,7 @@ const player: VoicePlayer = {
         }
       },
       updateParams(voice: Voice, now: number) {
-        const timbre = 'timbre' in voice ? (voice.timbre as number) : 0;
+        const timbre = wrapTimbre('timbre' in voice ? (voice.timbre as number) : 0);
         const freq = yToFrequency(voice.y);
         const gains = Array.from({ length: OSC_COUNT }, (_, i) => oscGain(i, timbre));
         const total = gains.reduce((a, b) => a + b, 0) || 1;
