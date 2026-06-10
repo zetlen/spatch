@@ -95,14 +95,23 @@ function packState(state: SigilData): string {
   return out;
 }
 
+// Dispatch on the version byte. When the format evolves, bump SCHEMA_VERSION,
+// add a case for the new unpacker, and KEEP the old one — existing URLs must
+// continue to work.
 function unpackState(str: string): SigilData {
-  let idx = 0;
-
-  // Version (1 char)
-  const version = decodeInt(str, idx++, 1);
-  if (version !== SCHEMA_VERSION) {
-    throw new Error(`Unsupported schema version: ${version}`);
+  const version = decodeInt(str, 0, 1);
+  switch (version) {
+    case SCHEMA_VERSION: {
+      return unpackStateV2(str);
+    }
+    default: {
+      throw new Error(`Unsupported schema version: ${version}`);
+    }
   }
+}
+
+function unpackStateV2(str: string): SigilData {
+  let idx = 1; // Version byte consumed by the dispatcher
 
   // Scene + blend (1 char): [blend(2b) | scene(4b)]
   const sceneBlendChar = decodeInt(str, idx++, 1);
@@ -148,8 +157,13 @@ export function serializeState(state: SigilData): string {
   return packState(state);
 }
 
+const B64_VALID = /^[A-Za-z0-9\-_]+$/;
+
+// Validate here, at the single entry point: decodeInt silently maps unknown
+// characters to 0, so unvalidated input (embed hash, postMessage payloads)
+// would decode to corrupted-but-plausible state instead of failing.
 export function deserializeState(hash: string): SigilData | undefined {
-  if (!hash) {
+  if (!hash || !B64_VALID.test(hash)) {
     return undefined;
   }
   try {
@@ -167,17 +181,11 @@ export function stateToPath(state: SigilData): string {
   return '/s/' + serializeState(state);
 }
 
-const B64_VALID = /^[A-Za-z0-9\-_]+$/;
-
 export function pathToState(pathname: string): SigilData | undefined {
   if (!pathname.startsWith('/s/')) {
     return undefined;
   }
-  const data = pathname.slice(3);
-  if (!data || !B64_VALID.test(data)) {
-    return undefined;
-  }
-  return deserializeState(data);
+  return deserializeState(pathname.slice(3));
 }
 
 let dirty = false;
