@@ -84,6 +84,28 @@ describe('decodeSample', () => {
     const result = await loader.decodeSample(ctx, 'autofetch.m4a');
     expect(result).toBe(decoded);
   });
+
+  test('failed decode is not cached — retry decodes again and succeeds', async () => {
+    const buf = new ArrayBuffer(16);
+    const loader = createSampleLoader(stubFetch(buf));
+
+    const decoded = { duration: 1, length: 44_100 };
+    let decodeCalls = 0;
+    const ctx = {
+      decodeAudioData: () => {
+        decodeCalls++;
+        return decodeCalls === 1
+          ? Promise.reject(new Error('decode failed'))
+          : Promise.resolve(decoded);
+      },
+    };
+
+    await expect(loader.decodeSample(ctx, 'retry.m4a')).rejects.toThrow('decode failed');
+
+    const result = await loader.decodeSample(ctx, 'retry.m4a');
+    expect(result).toBe(decoded);
+    expect(decodeCalls).toBe(2);
+  });
 });
 
 describe('clearCaches', () => {

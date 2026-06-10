@@ -801,6 +801,17 @@ export class AudioEngine {
     safeDisconnect(audioVoice.outputNode);
     safeDisconnect(audioVoice.outputGain);
     audioVoice.effectDispose?.();
+
+    // Cross-connections hold node references from this voice's graph, which is
+    // now stopped. Dispose them so reconciliation rebuilds the pairs against a
+    // replacement graph (rebuild) or drops them (deletion).
+    for (const [key, conn] of this._crossConnections) {
+      const sep = key.indexOf(':');
+      if (key.slice(0, sep) === audioVoice.shapeId || key.slice(sep + 1) === audioVoice.shapeId) {
+        this._disposeCrossConnection(conn);
+        this._crossConnections.delete(key);
+      }
+    }
   }
 
   _buildVoice(ctx: AudioContext, voice: Voice): AudioVoice {

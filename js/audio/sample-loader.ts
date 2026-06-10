@@ -80,6 +80,10 @@ export function createSampleLoader(fetchFn: typeof fetch): SampleLoader {
           decodedCache.set(filename, decoded);
           decodedPending.delete(filename);
           return decoded;
+        })
+        .catch((error) => {
+          decodedPending.delete(filename);
+          throw error;
         });
 
       decodedPending.set(filename, promise);

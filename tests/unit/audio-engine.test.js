@@ -1,175 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { AudioEngine } from '../../js/audio/engine.ts';
-import { createSampleLoader, setSampleLoader } from '../../js/audio/sample-loader.ts';
-
-// Set up a mock sample loader so decodeSample calls in the engine don't throw.
-setSampleLoader(
-  createSampleLoader(() =>
-    Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(16)) }),
-  ),
-);
-
-/** Default reverb config for tests: no reverb. */
-const TEST_REVERB = { ir: '', reverbMix: 0 };
-
-// Minimal Web Audio API stubs for testing voice reconciliation logic.
-// We only need enough to let _buildVoice wire up nodes and updateVoices
-// Track shape IDs — no actual audio output.
-
-function createStubAudioParam(initial = 0) {
-  return {
-    cancelScheduledValues() {},
-    linearRampToValueAtTime() {},
-    setValueAtTime(v) {
-      this.value = v;
-    },
-    setValueCurveAtTime() {},
-    value: initial,
-  };
-}
-
-function createStubNode(extraProps = {}) {
-  return {
-    connect() {},
-    disconnect() {},
-    ...extraProps,
-  };
-}
-
-// Stub Web Audio constructors on globalThis so production code using
-// `new GainNode(ctx, opts)` etc. works in the test environment.
-
-function stubAudioBuffer(opts = {}) {
-  const channels = opts.numberOfChannels ?? 1;
-  const length = opts.length ?? 1;
-  const sampleRate = opts.sampleRate ?? 44_100;
-  const channelData = [];
-  for (let i = 0; i < channels; i++) {
-    channelData.push(new Float32Array(length));
-  }
-  return {
-    duration: length / sampleRate,
-    getChannelData(ch) {
-      return channelData[ch];
-    },
-    length,
-    numberOfChannels: channels,
-    sampleRate,
-  };
-}
-
-globalThis.AudioBuffer = function (opts) {
-  return stubAudioBuffer(opts);
-};
-globalThis.AudioBufferSourceNode = function (_ctx, opts = {}) {
-  return createStubNode({ buffer: opts.buffer ?? null, start() {}, stop() {} });
-};
-globalThis.GainNode = function (_ctx, opts = {}) {
-  return createStubNode({ gain: createStubAudioParam(opts.gain ?? 1) });
-};
-globalThis.OscillatorNode = function (_ctx, opts = {}) {
-  return {
-    connect() {},
-    detune: createStubAudioParam(0),
-    disconnect() {},
-    frequency: createStubAudioParam(opts.frequency ?? 440),
-    start() {},
-    stop() {},
-    type: opts.type ?? 'sine',
-  };
-};
-globalThis.BiquadFilterNode = function (_ctx, opts = {}) {
-  return createStubNode({
-    Q: createStubAudioParam(opts.Q ?? 1),
-    frequency: createStubAudioParam(opts.frequency ?? 350),
-    gain: createStubAudioParam(opts.gain ?? 0),
-    type: opts.type ?? 'lowpass',
-  });
-};
-globalThis.DynamicsCompressorNode = function (_ctx, opts = {}) {
-  return createStubNode({
-    attack: createStubAudioParam(opts.attack ?? 0.003),
-    knee: createStubAudioParam(opts.knee ?? 30),
-    ratio: createStubAudioParam(opts.ratio ?? 12),
-    release: createStubAudioParam(opts.release ?? 0.25),
-    threshold: createStubAudioParam(opts.threshold ?? -24),
-  });
-};
-globalThis.StereoPannerNode = function (_ctx, opts = {}) {
-  return createStubNode({ pan: createStubAudioParam(opts.pan ?? 0) });
-};
-globalThis.WaveShaperNode = function (_ctx, opts = {}) {
-  return createStubNode({ curve: opts.curve ?? null, oversample: opts.oversample ?? 'none' });
-};
-globalThis.DelayNode = function (_ctx, opts = {}) {
-  return createStubNode({ delayTime: createStubAudioParam(opts.delayTime ?? 0) });
-};
-globalThis.ConstantSourceNode = function (_ctx, opts = {}) {
-  return {
-    connect() {},
-    disconnect() {},
-    offset: createStubAudioParam(opts.offset ?? 0),
-    start() {},
-    stop() {},
-  };
-};
-globalThis.ConvolverNode = function (_ctx) {
-  return createStubNode({ buffer: undefined });
-};
-globalThis.AnalyserNode = function (_ctx, opts = {}) {
-  return createStubNode({
-    fftSize: opts.fftSize ?? 256,
-    getFloatTimeDomainData() {},
-  });
-};
-globalThis.MediaStreamAudioDestinationNode = function (_ctx) {
-  return createStubNode({
-    stream: {
-      getTracks() {
-        return [];
-      },
-    },
-  });
-};
-
-function createStubAudioContext() {
-  return {
-    currentTime: 0,
-    destination: createStubNode(),
-    resume() {
-      return Promise.resolve();
-    },
-    sampleRate: 44_100,
-    state: 'running',
-  };
-}
-
-function makeVoice(id, waveform = 'sine', overrides = {}) {
-  const base = {
-    border: undefined,
-    effect: undefined,
-    fill: { h: 200, c: 0.2, l: 0.5, mode: 'solid' },
-    id,
-    size: 0.12,
-    waveform,
-    x: 0.5,
-    y: 0.5,
-    ...overrides,
-  };
-  if (waveform === 'pulse' || waveform === 'blend') {
-    base.timbre = overrides.timbre ?? 0;
-  }
-  return base;
-}
-
-function makeSigilState(voices, blend = 'screen') {
-  return {
-    blend,
-    envelope: { attack: 0.1, decay: 0.2, release: 0.4, sustain: 0.7 },
-    scene: 0,
-    voices,
-  };
-}
+import {
+  TEST_REVERB,
+  createStubAudioContext,
+  makeSigilState,
+  makeVoice,
+} from './helpers/web-audio-stubs.js';
 
 describe('AudioEngine.updateVoices — voice reconciliation', () => {
   let engine;
@@ -553,6 +389,97 @@ describe('AudioEngine — blend modes and FM synthesis', () => {
       expect(shadow.type).toBe('sine');
       expect(shadow.frequency.value).toBeGreaterThan(0);
     }
+  });
+
+  test('voice rebuild (border change) replaces its cross-connections', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'multiply');
+    const origConn = engine._crossConnections.get('a:b');
+    expect(origConn).toBeDefined();
+    const origVoice = engine.activeVoices.find((v) => v.shapeId === 'a');
+
+    // Border change tears down and rebuilds voice 'a' with the same ID
+    engine.update(
+      makeSigilState(
+        [
+          makeVoice('a', 'sine', {
+            border: { color: 'white', double: false, thickness: 0.5 },
+            size: 0.2,
+            x: 0.5,
+            y: 0.5,
+          }),
+          voices[1],
+        ],
+        'multiply',
+      ),
+      TEST_REVERB,
+    );
+
+    const rebuilt = engine.activeVoices.find((v) => v.shapeId === 'a');
+    expect(rebuilt).not.toBe(origVoice);
+    // The old connection was wired to the stopped graph's nodes; it must be
+    // replaced with one built from the rebuilt voice's nodes.
+    const newConn = engine._crossConnections.get('a:b');
+    expect(newConn).toBeDefined();
+    expect(newConn).not.toBe(origConn);
+  });
+
+  test('voice rebuild (effect change) replaces its cross-connections', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'multiply');
+    const origConn = engine._crossConnections.get('a:b');
+
+    engine.update(
+      makeSigilState(
+        [makeVoice('a', 'sine', { effect: 'tremolo', size: 0.2, x: 0.5, y: 0.5 }), voices[1]],
+        'multiply',
+      ),
+      TEST_REVERB,
+    );
+
+    const newConn = engine._crossConnections.get('a:b');
+    expect(newConn).toBeDefined();
+    expect(newConn).not.toBe(origConn);
+  });
+
+  test('voice rebuild preserves connections between unrelated pairs', async () => {
+    const voices = [
+      makeVoice('a', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('b', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+      makeVoice('c', 'sine', { x: 0.5, y: 0.5, size: 0.2 }),
+    ];
+    await startWith(voices, 'multiply');
+    const bcConn = engine._crossConnections.get('b:c');
+    expect(bcConn).toBeDefined();
+
+    // Rebuild 'a' — the b:c pair is untouched and must keep its connection
+    engine.update(
+      makeSigilState(
+        [
+          makeVoice('a', 'sine', {
+            border: { color: 'white', double: false, thickness: 0.5 },
+            size: 0.2,
+            x: 0.5,
+            y: 0.5,
+          }),
+          voices[1],
+          voices[2],
+        ],
+        'multiply',
+      ),
+      TEST_REVERB,
+    );
+
+    expect(engine._crossConnections.size).toBe(3);
+    expect(engine._crossConnections.get('b:c')).toBe(bcConn);
+    expect(engine._crossConnections.get('a:b')).toBeDefined();
+    expect(engine._crossConnections.get('a:c')).toBeDefined();
   });
 
   test('removing one voice from a 3-voice cluster preserves remaining pair', async () => {

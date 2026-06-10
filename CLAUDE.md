@@ -122,6 +122,8 @@ docs/                Design docs, diagrams
 docs/plans/          Implementation plans (YYYY-MM-DD-{topic}-{design|plan}.md)
 tests/
   unit/*.test.js              Unit tests (bun test, plain JS)
+  unit/helpers/
+    web-audio-stubs.js        Web Audio constructor stubs + voice/state factories
   integration/*.test.js       Playwright tests (Chromium + WebKit)
   integration/helpers/
     skip-splash.js            sessionStorage splash bypass
