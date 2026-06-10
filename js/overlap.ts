@@ -7,6 +7,7 @@
 
 import type { Voice } from './types.ts';
 import { voiceRotation } from './shapes.ts';
+import { get } from './voices/registry.ts';
 import { getStample } from './stamples/index.ts';
 import { computeOverlap } from './effects.ts';
 
@@ -132,15 +133,16 @@ function shapesOverlap(a: Voice, b: Voice): boolean {
   if (!HAS_OFFSCREEN_CANVAS) {
     return shapesOverlapFallback(a, b);
   }
-  // Bounding box pre-filter (circle-based, generous)
+  // Bounding-circle pre-filter. Per-shape radius coefficient: a square's
+  // corners reach size·√2/2 from center, beyond the naive size/2.
+  const ar = get(a.waveform).boundingRadiusCoeff * (a.size as number);
+  const br = get(b.waveform).boundingRadiusCoeff * (b.size as number);
   const dist = Math.hypot((a.x as number) - (b.x as number), (a.y as number) - (b.y as number));
-  if (dist > ((a.size as number) + (b.size as number)) / 2) {
+  if (dist > ar + br) {
     return false;
   }
 
   // Compute the bounding box intersection in normalized coordinates
-  const ar = (a.size as number) / 2;
-  const br = (b.size as number) / 2;
   const minX = Math.max((a.x as number) - ar, (b.x as number) - br);
   const maxX = Math.min((a.x as number) + ar, (b.x as number) + br);
   const minY = Math.max((a.y as number) - ar, (b.y as number) - br);

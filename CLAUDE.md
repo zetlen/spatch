@@ -353,7 +353,9 @@ When a test fails:
    - `index.ts`: Registry entry wiring UI + Player + serializer.
      Use `oscillatorSerializer` for oscillator voices, `sampleSerializer` for
      sample-based voices. Set `createVoice` factory with waveform-specific
-     field defaults.
+     field defaults, `rotationPeriod`, and `boundingRadiusCoeff` (farthest
+     rendered pixel from center as a multiple of size — 0.5 if inscribed in
+     the size circle, √2/2 if corners reach the size-box diagonal).
 2. Add import + `register()` call in `js/voices/registry.ts`.
 3. Add Voice variant in `types.ts`.
 4. Add toolbar button in `index.html`.

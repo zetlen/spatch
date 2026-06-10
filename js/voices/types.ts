@@ -112,6 +112,12 @@ export interface VoiceRegistryEntry {
   /** Bijection constant: degrees per full visual rotation cycle.
    *  0 means no rotation (sine, stamp). Read by both UI and audio mapping. */
   readonly rotationPeriod: number;
+  /** Bounding-circle radius as a multiple of voice size: the farthest any
+   *  rendered pixel can be from center at any rotation. 0.5 for shapes
+   *  inscribed in the size circle; √2/2 for shapes whose corners reach the
+   *  size×size box diagonal (square, stamp hulls). Used by the overlap
+   *  broad-phase. */
+  readonly boundingRadiusCoeff: number;
   readonly ui: VoiceUI;
   readonly player: VoicePlayer;
   readonly serializer: VoiceSerializer;

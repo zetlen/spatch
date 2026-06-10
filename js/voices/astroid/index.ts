@@ -8,6 +8,7 @@ const entry: VoiceRegistryEntry = {
   waveform: 'astroid',
   id: 3,
   rotationPeriod: 90,
+  boundingRadiusCoeff: 0.5,
   panels: { border: true, pattern: true, stample: false },
   ui,
   player,
