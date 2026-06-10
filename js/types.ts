@@ -227,7 +227,10 @@ export interface SigilData {
 
 // ---- Audio contracts ----
 
-/** An audio effect chain with connectable input/output nodes and cleanup. */
+/** An audio effect chain with connectable input/output nodes and cleanup.
+ *  Dispose must stop AND disconnect every internally-created modulation
+ *  source (LFOs and their gains) — the input/output chain is detached by
+ *  voice teardown, but modulation connections to AudioParams are not. */
 export interface AudioEffect {
   input: AudioNode;
   output: AudioNode;

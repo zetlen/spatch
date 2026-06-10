@@ -51,6 +51,19 @@ const player: VoicePlayer = {
     // Silent FM oscillator: participates in FM routing but produces no audible output.
     const fmOsc = new OscillatorNode(ctx, { type: 'sine', frequency: initFreq });
 
+    // Live trigger: refreshed in updateParams so tilting the stamp during
+    // playback affects phases that haven't fired yet. Attack/decay firings
+    // are scheduled at play time and cannot be unscheduled; the guard
+    // ensures the one-shot sample starts at most once per session.
+    let currentTrigger = getTrigger(initVoice);
+    let fired = false;
+    const fire = (time: number) => {
+      if (!fired) {
+        fired = true;
+        source.start(time);
+      }
+    };
+
     return {
       ...shared,
       hasSweep: false,
@@ -68,20 +81,20 @@ const player: VoicePlayer = {
           } catch {}
         }
         // Trigger=0 (Attack): fire sample immediately
-        if (getTrigger(initVoice) === 0) {
-          source.start(time);
+        if (currentTrigger === 0) {
+          fire(time);
         }
       },
       onDecay(time: number) {
         // Trigger=1 (Decay): fire sample at peak envelope (original behavior)
-        if (getTrigger(initVoice) === 1) {
-          source.start(time);
+        if (currentTrigger === 1) {
+          fire(time);
         }
       },
       onRelease(time: number) {
         // Trigger=2 (Release): fire sample on note-off
-        if (getTrigger(initVoice) === 2) {
-          source.start(time);
+        if (currentTrigger === 2) {
+          fire(time);
         }
       },
       stop(_time: number) {
@@ -92,6 +105,7 @@ const player: VoicePlayer = {
         }
       },
       updateParams(voice: Voice, now: number) {
+        currentTrigger = getTrigger(voice);
         const stample = getStample(getStampIndex(voice));
         const rate = yToPlaybackRate(voice.y, stample.referencePitch);
         const freq = yToFrequency(voice.y);

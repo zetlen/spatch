@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { AudioEngine } from '../../js/audio/engine.ts';
 import {
   TEST_REVERB,
@@ -839,5 +839,61 @@ describe('AudioEngine — solo mode', () => {
     await startWith([a, b]);
     expect(engine.activeVoices.find((v) => v.shapeId === 'a').gain.gain.value).toBeGreaterThan(0);
     expect(engine.activeVoices.find((v) => v.shapeId === 'b').gain.gain.value).toBe(0);
+  });
+});
+
+describe('AudioEngine — stamp trigger live updates', () => {
+  let engine;
+  let sources;
+  let OrigABSN;
+
+  beforeEach(() => {
+    engine = new AudioEngine();
+    engine.audioCtx = createStubAudioContext();
+    sources = [];
+    OrigABSN = globalThis.AudioBufferSourceNode;
+    globalThis.AudioBufferSourceNode = function (ctx, opts) {
+      const node = new OrigABSN(ctx, opts);
+      node.startCalls = [];
+      node.start = (t) => {
+        node.startCalls.push(t);
+      };
+      sources.push(node);
+      return node;
+    };
+  });
+
+  afterEach(() => {
+    globalThis.AudioBufferSourceNode = OrigABSN;
+  });
+
+  async function startWith(voices) {
+    const s = makeSigilState(voices);
+    await engine.play(s, s.envelope, TEST_REVERB);
+    return s;
+  }
+
+  test('release-trigger stamp fires exactly once, on release', async () => {
+    const state = await startWith([makeVoice('st', 'stamp', { trigger: 2 })]);
+    expect(sources[0].startCalls.length).toBe(0);
+    engine.release(state.envelope);
+    expect(sources[0].startCalls.length).toBe(1);
+  });
+
+  test('tilting away from release-trigger mid-play silences the release firing', async () => {
+    const state = await startWith([makeVoice('st', 'stamp', { trigger: 2 })]);
+    // Tilt to decay-phase mid-play. Decay already passed, so the sample
+    // must NOT fire at release — audio follows the visible trigger.
+    engine.update(makeSigilState([makeVoice('st', 'stamp', { trigger: 1 })]), TEST_REVERB);
+    engine.release(state.envelope);
+    expect(sources[0].startCalls.length).toBe(0);
+  });
+
+  test('sample never fires twice when trigger changes after it fired', async () => {
+    const state = await startWith([makeVoice('st', 'stamp', { trigger: 1 })]);
+    expect(sources[0].startCalls.length).toBe(1); // scheduled at decay
+    engine.update(makeSigilState([makeVoice('st', 'stamp', { trigger: 2 })]), TEST_REVERB);
+    engine.release(state.envelope);
+    expect(sources[0].startCalls.length).toBe(1);
   });
 });

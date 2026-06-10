@@ -276,3 +276,53 @@ describe('stateToPath / pathToState', () => {
     expect(pathToState('/other/path')).toBeUndefined();
   });
 });
+
+describe('out-of-range chroma packing', () => {
+  test('chroma above the 7-bit ceiling clamps without corrupting hue', () => {
+    // 7-bit chroma field ceiling: 127/320 = 0.396875. Values above it
+    // (possible from wide-gamut inputs) must clamp, not overflow into hue.
+    const fill = { mode: 'solid', h: 200, c: 0.45, l: 0.5 };
+    const state = makeState({ voices: [makeVoice({ fill })] });
+    const decoded = deserializeState(serializeState(state));
+    expect(decoded.voices[0].fill.h).toBeCloseTo(200, 0);
+    expect(decoded.voices[0].fill.c).toBeCloseTo(127 / 320, 3);
+  });
+
+  test('gradient fill chroma clamps on both color stops', () => {
+    const fill = {
+      mode: 'linear',
+      h: 100,
+      c: 0.45,
+      l: 0.5,
+      h2: 300,
+      c2: 0.5,
+      l2: 0.6,
+      gradAngle: 90,
+    };
+    const state = makeState({ voices: [makeVoice({ fill })] });
+    const decoded = deserializeState(serializeState(state));
+    expect(decoded.voices[0].fill.h).toBeCloseTo(100, 0);
+    expect(decoded.voices[0].fill.h2).toBeCloseTo(300, 0);
+    expect(decoded.voices[0].fill.c).toBeCloseTo(127 / 320, 3);
+    expect(decoded.voices[0].fill.c2).toBeCloseTo(127 / 320, 3);
+  });
+});
+
+describe('deserializeState input validation', () => {
+  test('rejects strings containing non-URL-safe-base64 characters', () => {
+    const encoded = serializeState(makeState({ voices: [makeVoice()] }));
+    const corrupted = encoded.slice(0, 5) + '+' + encoded.slice(6);
+    expect(deserializeState(corrupted)).toBeUndefined();
+  });
+
+  test('rejects whitespace and percent-encoding junk', () => {
+    expect(deserializeState('Cabc def')).toBeUndefined();
+    expect(deserializeState('Cabc%20def')).toBeUndefined();
+  });
+
+  test('unknown future version byte returns undefined', () => {
+    const encoded = serializeState(makeState({ voices: [makeVoice()] }));
+    const v3 = 'D' + encoded.slice(1);
+    expect(deserializeState(v3)).toBeUndefined();
+  });
+});

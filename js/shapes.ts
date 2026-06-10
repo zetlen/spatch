@@ -180,7 +180,7 @@ export function isInClippedCorner(
   ];
 
   for (const { r, cornerX, cornerY } of corners) {
-    if (r < 1) {
+    if (r <= 0) {
       continue;
     } // No rounding, no clipped region
     // Is the point in the corner's bounding square?

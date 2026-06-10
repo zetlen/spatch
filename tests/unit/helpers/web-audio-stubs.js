@@ -31,7 +31,9 @@ export function createStubAudioParam(initial = 0) {
 
 export function createStubNode(extraProps = {}) {
   return {
-    connect() {},
+    connect(target) {
+      return target;
+    },
     disconnect() {},
     ...extraProps,
   };
@@ -60,14 +62,21 @@ globalThis.AudioBuffer = function (opts) {
   return stubAudioBuffer(opts);
 };
 globalThis.AudioBufferSourceNode = function (_ctx, opts = {}) {
-  return createStubNode({ buffer: opts.buffer ?? null, start() {}, stop() {} });
+  return createStubNode({
+    buffer: opts.buffer ?? null,
+    playbackRate: createStubAudioParam(opts.playbackRate ?? 1),
+    start() {},
+    stop() {},
+  });
 };
 globalThis.GainNode = function (_ctx, opts = {}) {
   return createStubNode({ gain: createStubAudioParam(opts.gain ?? 1) });
 };
 globalThis.OscillatorNode = function (_ctx, opts = {}) {
   return {
-    connect() {},
+    connect(target) {
+      return target;
+    },
     detune: createStubAudioParam(0),
     disconnect() {},
     frequency: createStubAudioParam(opts.frequency ?? 440),
@@ -104,7 +113,9 @@ globalThis.DelayNode = function (_ctx, opts = {}) {
 };
 globalThis.ConstantSourceNode = function (_ctx, opts = {}) {
   return {
-    connect() {},
+    connect(target) {
+      return target;
+    },
     disconnect() {},
     offset: createStubAudioParam(opts.offset ?? 0),
     start() {},
@@ -132,6 +143,9 @@ globalThis.MediaStreamAudioDestinationNode = function (_ctx) {
 
 export function createStubAudioContext() {
   return {
+    createBuffer(numberOfChannels, length, sampleRate) {
+      return stubAudioBuffer({ length, numberOfChannels, sampleRate });
+    },
     currentTime: 0,
     destination: createStubNode(),
     resume() {
@@ -156,6 +170,10 @@ export function makeVoice(id, waveform = 'sine', overrides = {}) {
   };
   if (waveform === 'pulse' || waveform === 'blend') {
     base.timbre = overrides.timbre ?? 0;
+  }
+  if (waveform === 'stamp') {
+    base.stamp = overrides.stamp ?? 0;
+    base.trigger = overrides.trigger ?? 1;
   }
   return base;
 }

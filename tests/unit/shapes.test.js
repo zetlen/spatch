@@ -4,6 +4,7 @@ import {
   getDragTilt,
   hardSnapTrigger,
   hitTestADSRCorner,
+  isInClippedCorner,
   setDragTilt,
   snapTriggerTilt,
   voiceRotation,
@@ -166,5 +167,29 @@ describe('drag tilt override', () => {
     expect(getDragTilt('v1')).toBe(12.5);
     clearDragTilt('v1');
     expect(getDragTilt('v1')).toBeUndefined();
+  });
+});
+
+const env = (overrides = {}) => ({ attack: 0, decay: 0, release: 0, sustain: 1, ...overrides });
+
+describe('isInClippedCorner', () => {
+  test('returns false everywhere when no corner has a radius', () => {
+    expect(isInClippedCorner(env(), 0.01, 0.01, 1)).toBe(false);
+    expect(isInClippedCorner(env(), 0.99, 0.99, 1)).toBe(false);
+  });
+
+  test('detects a point in the clipped top-left corner region', () => {
+    // decay=1 → top-left r = 0.075 (maxR 0.15 × decay/2). The extreme corner
+    // point is inside the bounding square but outside the quarter-circle arc.
+    expect(isInClippedCorner(env({ decay: 1 }), 0.01, 0.01, 1)).toBe(true);
+  });
+
+  test('point inside the corner arc is not clipped', () => {
+    expect(isInClippedCorner(env({ decay: 1 }), 0.07, 0.07, 1)).toBe(false);
+  });
+
+  test('canvas center is never clipped even with all corners rounded', () => {
+    const full = env({ attack: 2, decay: 1, release: 3, sustain: 0 });
+    expect(isInClippedCorner(full, 0.5, 0.5, 1)).toBe(false);
   });
 });

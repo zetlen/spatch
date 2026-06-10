@@ -30,19 +30,29 @@ function dryWet(
   return { input, output, dry, wet };
 }
 
-/** Create an LFO oscillator routed through a gain node. */
+/**
+ * Create an LFO oscillator routed through a gain node, with a dispose that
+ * stops the LFO and disconnects both nodes — modulation sources must be fully
+ * detached from their target AudioParams on teardown so the graph is
+ * immediately collectable.
+ */
 function createLFO(
   ctx: AudioContext,
   freq: number,
   depth: number,
   target: AudioParam,
-): OscillatorNode {
+): { lfo: OscillatorNode; dispose: () => void } {
   const lfo = new OscillatorNode(ctx, { type: 'sine', frequency: freq });
   const gain = new GainNode(ctx, { gain: depth });
   lfo.connect(gain);
   gain.connect(target);
   lfo.start();
-  return lfo;
+  const dispose = () => {
+    lfo.stop();
+    lfo.disconnect();
+    gain.disconnect();
+  };
+  return { dispose, lfo };
 }
 
 function createChorus(ctx: AudioContext): AudioEffect {
@@ -51,7 +61,7 @@ function createChorus(ctx: AudioContext): AudioEffect {
   const lfo = createLFO(ctx, 1.5, 0.002, delay.delayTime);
   input.connect(delay);
   delay.connect(wet);
-  return { dispose: () => lfo.stop(), input, output };
+  return { dispose: lfo.dispose, input, output };
 }
 
 function createTremolo(ctx: AudioContext): AudioEffect {
@@ -61,7 +71,7 @@ function createTremolo(ctx: AudioContext): AudioEffect {
   const lfo = createLFO(ctx, 6, 0.3, tremoloGain.gain);
   input.connect(tremoloGain);
   tremoloGain.connect(output);
-  return { dispose: () => lfo.stop(), input, output };
+  return { dispose: lfo.dispose, input, output };
 }
 
 function createFlanger(ctx: AudioContext): AudioEffect {
@@ -73,7 +83,7 @@ function createFlanger(ctx: AudioContext): AudioEffect {
   delay.connect(feedback);
   feedback.connect(delay);
   delay.connect(wet);
-  return { dispose: () => lfo.stop(), input, output };
+  return { dispose: lfo.dispose, input, output };
 }
 
 function createPhaser(ctx: AudioContext): AudioEffect {
@@ -83,18 +93,29 @@ function createPhaser(ctx: AudioContext): AudioEffect {
     (freq) => new BiquadFilterNode(ctx, { type: 'allpass', frequency: freq, Q: 0.7 }),
   );
   const lfo = new OscillatorNode(ctx, { type: 'sine', frequency: 0.5 });
-  for (const f of filters) {
+  const lfoGains = filters.map((f) => {
     const lg = new GainNode(ctx, { gain: 500 });
     lfo.connect(lg);
     lg.connect(f.frequency);
-  }
+    return lg;
+  });
   lfo.start();
   input.connect(filters[0]!);
   for (let i = 0; i < filters.length - 1; i++) {
     filters[i]!.connect(filters[i + 1]!);
   }
   filters.at(-1)!.connect(wet);
-  return { dispose: () => lfo.stop(), input, output };
+  return {
+    dispose: () => {
+      lfo.stop();
+      lfo.disconnect();
+      for (const lg of lfoGains) {
+        lg.disconnect();
+      }
+    },
+    input,
+    output,
+  };
 }
 
 function makeBitcrushCurve(bits: number): Float32Array {
@@ -135,7 +156,7 @@ function createWahWah(ctx: AudioContext): AudioEffect {
   const lfo = createLFO(ctx, 3, 600, filter.frequency);
   input.connect(filter);
   filter.connect(wet);
-  return { dispose: () => lfo.stop(), input, output };
+  return { dispose: lfo.dispose, input, output };
 }
 
 // ---- Pattern definitions ----

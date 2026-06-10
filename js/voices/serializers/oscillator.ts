@@ -40,8 +40,13 @@ const THICKNESS_STEPS = 7; // 8 steps: 0-7
 
 // ---- Color packing ----
 
+// Chroma field is 7 bits; clamp so wide-gamut inputs can't overflow into hue.
+function packChroma(c: number): number {
+  return Math.min(127, Math.round(c * 320));
+}
+
 function packColor(h: number, c: number, l: number): string {
-  const val = (Math.round(h) << 14) | (Math.round(c * 320) << 7) | Math.round(l * 255);
+  const val = (Math.round(h) << 14) | (packChroma(c) << 7) | Math.round(l * 255);
   return encodeInt(val, 4);
 }
 
@@ -56,7 +61,7 @@ function unpackColor(str: string, idx: number): { h: number; c: number; l: numbe
 
 function packGradientColor(angle: number, h: number, c: number, l: number): string {
   const angleBits = Math.round(angle / 45) & 7;
-  const colorBits = (Math.round(h) << 14) | (Math.round(c * 320) << 7) | Math.round(l * 255);
+  const colorBits = (Math.round(h) << 14) | (packChroma(c) << 7) | Math.round(l * 255);
   return encodeInt((angleBits << 23) | colorBits, 5);
 }
 
