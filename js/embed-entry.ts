@@ -115,29 +115,38 @@ let playing = false;
 let playStartTime = 0;
 let releaseTimer: ReturnType<typeof setTimeout> | undefined;
 let audioUnlocked = false;
-let pendingPlay = false;
+let pendingPlay: 'pointer' | 'message' | undefined;
 
 // Pre-warm AudioContext on first qualifying gesture
-{
-  const warmUpEvents = ['touchend', 'click', 'keydown'] as const;
-  function onFirstGesture(): void {
-    audio.warmUp();
-    audioUnlocked = true;
-    if (audio.audioCtx) {
-      decodeStampSamples(audio.audioCtx);
-    }
-    for (const evt of warmUpEvents) {
-      document.removeEventListener(evt, onFirstGesture);
-    }
-    // If a play command was waiting for audio unlock, fire it now
-    if (pendingPlay) {
-      pendingPlay = false;
-      startPlay();
+const WARM_UP_EVENTS = ['touchend', 'click', 'keydown'] as const;
+function onUnlockGesture(): void {
+  audio.warmUp();
+  audioUnlocked = true;
+  if (audio.audioCtx) {
+    decodeStampSamples(audio.audioCtx);
+  }
+  for (const evt of WARM_UP_EVENTS) {
+    document.removeEventListener(evt, onUnlockGesture);
+  }
+  // The unlocking gesture's touchend/click never reaches the unlock overlay
+  // itself — it was appended mid-gesture, after the touch point was
+  // established — so the gesture that performs the unlock removes it here.
+  embed.querySelector('.audio-unlock')?.remove();
+  // If a play command was waiting for audio unlock, fire it now. A pointer-
+  // initiated pending play behaves like a completed tap (its pointerup has
+  // already passed): stopPlay() schedules the release at the minimum hold
+  // time. A postMessage play sustains until the embedder sends 'stop'.
+  const pending = pendingPlay;
+  pendingPlay = undefined;
+  if (pending) {
+    void startPlay(pending === 'message');
+    if (pending === 'pointer') {
+      stopPlay();
     }
   }
-  for (const evt of warmUpEvents) {
-    document.addEventListener(evt, onFirstGesture);
-  }
+}
+for (const evt of WARM_UP_EVENTS) {
+  document.addEventListener(evt, onUnlockGesture);
 }
 
 // Inject stamp symbols before first render
@@ -196,7 +205,7 @@ async function startPlay(fromMessage = false): Promise<void> {
       audio.warmUp();
       if (audio.audioCtx?.state === 'suspended') {
         showAudioOverlay();
-        pendingPlay = true;
+        pendingPlay = 'message';
         return;
       }
       audioUnlocked = true;
@@ -205,7 +214,7 @@ async function startPlay(fromMessage = false): Promise<void> {
       }
     } else {
       showAudioOverlay();
-      pendingPlay = true;
+      pendingPlay = 'pointer';
       return;
     }
   }
@@ -271,22 +280,18 @@ function doStop(): void {
 // ---- iOS audio unlock overlay ----
 
 function showAudioOverlay(): void {
-  if (embed.querySelector('.audio-unlock')) {
-    return;
+  if (!embed.querySelector('.audio-unlock')) {
+    const overlay = document.createElement('div');
+    overlay.className = 'audio-unlock';
+    overlay.textContent = 'tap to enable sound';
+    embed.appendChild(overlay);
   }
-  const overlay = document.createElement('div');
-  overlay.className = 'audio-unlock';
-  overlay.textContent = 'tap to enable sound';
-  embed.appendChild(overlay);
-  // The touchend/click listener in the warmup handler will unlock audio
-  // and trigger the pending play. Clean up overlay on unlock.
-  const cleanup = () => {
-    overlay.remove();
-    overlay.removeEventListener('touchend', cleanup);
-    overlay.removeEventListener('click', cleanup);
-  };
-  overlay.addEventListener('touchend', cleanup);
-  overlay.addEventListener('click', cleanup);
+  // Re-arm the unlock listeners: if the first gesture already happened while
+  // the context couldn't unlock (e.g. iOS interruption), they have removed
+  // themselves. addEventListener with the same handler is idempotent.
+  for (const evt of WARM_UP_EVENTS) {
+    document.addEventListener(evt, onUnlockGesture);
+  }
 }
 
 // ---- Press-to-play interaction (pointer events) ----

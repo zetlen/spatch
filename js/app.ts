@@ -82,6 +82,11 @@ let soloActive = false;
 const soloBtn = qel<HTMLButtonElement>('#btn-solo');
 
 function toggleSolo(): void {
+  // Arming solo requires a selected voice (otherwise the next selection
+  // would silently mute everything); disarming is always allowed.
+  if (!soloActive && selection.voiceId === undefined) {
+    return;
+  }
   soloActive = !soloActive;
   soloBtn.classList.toggle('solo-active', soloActive);
   if (soloActive) {

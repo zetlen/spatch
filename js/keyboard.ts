@@ -40,6 +40,16 @@ export function bindKeyboardShortcuts(deps: {
       return;
     }
 
+    // Modal overlays block pointer events but not key events — ignore global
+    // shortcuts while one is open. Each overlay handles its own Escape.
+    if (
+      document.querySelector(
+        '.tutorial-overlay:not(.hidden), #share-overlay:not(.hidden), #credits-overlay:not(.hidden)',
+      )
+    ) {
+      return;
+    }
+
     const mod = e.ctrlKey || e.metaKey;
 
     if (e.key === 'Delete' || e.key === 'Backspace') {

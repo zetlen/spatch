@@ -156,3 +156,40 @@ test.describe('Embed viewer', () => {
     expect(pathname).toBe(`/embed/${data}`);
   });
 });
+
+test.describe('Embed audio unlock overlay', () => {
+  test('unlocking gesture removes the overlay and pending play auto-releases', async ({ page }) => {
+    // Build a sigil in the main app and capture its serialized data
+    await page.addInitScript({ path: path.join(import.meta.dirname, 'helpers/skip-splash.js') });
+    await page.goto('/');
+    await page.waitForSelector('#sigil-canvas');
+    await page.click('[data-tool="circle"]');
+    const canvas = page.locator('#sigil-canvas');
+    const box = await canvas.boundingBox();
+    await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+    await page.waitForFunction(() => globalThis.location.pathname.startsWith('/s/'), undefined, {
+      timeout: 3000,
+    });
+    const data = await page.evaluate(() => globalThis.location.pathname.slice(3));
+
+    await page.goto(`/embed/${data}`);
+    await expect(page.locator('#embed')).toHaveClass(/ready/, { timeout: 5000 });
+
+    // Press without releasing: pointerdown fires but no click/touchend has
+    // happened yet, so audio is still locked and the overlay must appear
+    const embedBox = await page.locator('#embed').boundingBox();
+    await page.mouse.move(embedBox.x + embedBox.width / 2, embedBox.y + embedBox.height / 2);
+    await page.mouse.down();
+    await expect(page.locator('.audio-unlock')).toBeVisible();
+
+    // Releasing completes the gesture (click) — the unlocking gesture itself
+    // must remove the overlay, not require a second tap
+    await page.mouse.up();
+    await expect(page.locator('.audio-unlock')).toHaveCount(0);
+
+    // The pending pointer-initiated play fires on unlock and behaves like a
+    // completed tap: it auto-releases after the minimum hold, not a stuck drone
+    await expect(page.locator('#embed')).toHaveClass(/pressing/);
+    await expect(page.locator('#embed')).not.toHaveClass(/pressing/, { timeout: 5000 });
+  });
+});
