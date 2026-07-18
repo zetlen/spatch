@@ -60,13 +60,19 @@ function isOriginAllowed(origin: string): boolean {
 
 // ---- PostMessage helpers ----
 
+// Origin of the most recent command that passed isOriginAllowed(). Responses
+// and events are addressed to it; until the first command arrives (pure
+// URL-state embeds) the embedder's origin is unknown and emit falls back
+// to '*'.
+let commandOrigin: string | undefined;
+
 function emit(type: string, extra?: Record<string, unknown>): void {
   const msg = { source: 'spatch', type, ...extra };
   // Send to parent (iframe host) or opener (popup)
   const target =
     globalThis.parent !== (globalThis as unknown as Window) ? globalThis.parent : globalThis.opener;
   if (target) {
-    target.postMessage(msg, '*');
+    target.postMessage(msg, commandOrigin ?? '*');
   }
 }
 
@@ -315,6 +321,7 @@ globalThis.addEventListener('message', (e: MessageEvent) => {
   if (!isOriginAllowed(e.origin)) {
     return;
   }
+  commandOrigin = e.origin;
 
   switch (e.data.type) {
     case 'load': {
