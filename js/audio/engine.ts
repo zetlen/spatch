@@ -117,12 +117,15 @@ export class AudioEngine {
     // reduces how often we hit this state, but doesn't eliminate it.
     this.audioCtx.addEventListener('statechange', () => this._handleStateChange());
 
-    // Permanent listeners for qualifying gestures (touchend, click) that
-    // Resume the keep-alive <audio> if it was paused after a previous stop
-    // AND we're currently playing audio. This covers iOS Safari where play()
-    // Is called from pointerdown (non-qualifying) — the touchend/click that
-    // Follows in the same gesture will resume the element.
+    // Permanent listeners for qualifying gestures (touchend, click). warmUp()
+    // resumes the AudioContext itself — iOS only honors resume() from these
+    // gestures, and the context may have been created in a non-qualifying
+    // event (play-button pointerdown, embed postMessage). _tryPlayKeepAlive
+    // resumes the keep-alive <audio> if it was paused after a previous stop
+    // and we're currently playing — the touchend/click that follows a
+    // pointerdown play() resumes the element in the same gesture.
     const resumeKeepAlive = () => {
+      this.warmUp();
       this._tryPlayKeepAlive('gesture');
     };
     document.addEventListener('touchend', resumeKeepAlive);
@@ -162,9 +165,19 @@ export class AudioEngine {
     });
   }
 
-  /** Call from any user gesture to pre-warm the AudioContext. */
+  /** Call from any user gesture to pre-warm the AudioContext.
+   *  Also resumes an existing context that isn't running: _init() early-
+   *  returns when the context already exists, so a context first created in
+   *  a non-qualifying event (play-button pointerdown, embed postMessage)
+   *  would otherwise stay silent on iOS — qualifying gestures (touchend,
+   *  click, keydown) are the only place iOS Safari honors resume().
+   *  Best effort: resume() rejects without transient activation (e.g. an
+   *  embed postMessage before any gesture); callers check state after. */
   warmUp(): void {
     this._init();
+    if (this.audioCtx && this.audioCtx.state !== 'running') {
+      void this.audioCtx.resume().catch(() => {});
+    }
   }
 
   async play(
