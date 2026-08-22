@@ -15,9 +15,12 @@ function spatchPlugin(): Plugin {
       try {
         const pkg = JSON.parse(readFileSync(resolve(import.meta.dirname, 'package.json'), 'utf8'));
         const { version } = pkg;
-        const sha = execSync('git rev-parse --short HEAD', {
-          encoding: 'utf8',
-        }).trim();
+        // Image builds have no .git; bin/release.sh passes the sha in.
+        const sha =
+          process.env.GIT_SHA ??
+          execSync('git rev-parse --short HEAD', {
+            encoding: 'utf8',
+          }).trim();
 
         const distDir = resolve(import.meta.dirname, 'dist');
         const htmlFiles = readdirSync(distDir).filter((f) => f.endsWith('.html'));

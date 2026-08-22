@@ -1,3 +1,18 @@
 [tools]
 bun = "1.3.10"
 node = "24.13.1"
+
+# Build the release image locally (not pushed)
+[tasks.image]
+run = "docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) -t ghcr.io/zetlen/spatch:dev ."
+
+# Serve the local image on http://localhost:8080
+[tasks.preview-image]
+depends = ["image"]
+run = "docker run --rm -p 8080:80 --name spatch ghcr.io/zetlen/spatch:dev"
+
+# Owner-present release: bump CalVer, build, push to GHCR, print the estate pin.
+# mise run release            (next CalVer)
+# mise run release -- 2026.9.1
+[tasks.release]
+run = "bin/release.sh"

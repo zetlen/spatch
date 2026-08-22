@@ -1,0 +1,11 @@
+.git
+.gitea
+.worktrees
+node_modules
+dist
+tmp
+test-results
+.playwright-mcp
+docs
+*.tar.gz
+.env*

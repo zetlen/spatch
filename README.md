@@ -37,6 +37,21 @@ Install Playwright browsers if you haven't:
 bunx playwright install --with-deps
 ```
 
+## Deploy
+
+spatch ships as a container image, `ghcr.io/zetlen/spatch`, built by
+`Dockerfile` (bun build, then nginx with `nginx.conf` and `dist/` baked in).
+
+```bash
+mise run image               # build ghcr.io/zetlen/spatch:dev locally
+mise run preview-image       # serve it on http://localhost:8080
+mise run release             # owner-present: bump CalVer, push to GHCR, print the pin
+```
+
+`bin/release.sh` requires a clean, up-to-date `main` and a short-lived
+`docker login ghcr.io`; the infrastructure repo pins the printed
+`latest@digest`, and that pin-bump is the deploy.
+
 ## License
 
 [GPLv3](LICENSE)

@@ -37,6 +37,10 @@ bun.lock             Lockfile
 vite.config.ts       Vite build/dev (plugins, MPA input)
 playwright.config.ts Playwright config (Chromium + WebKit, no Firefox)
 nginx.conf           nginx: SPA fallback, security headers, cache headers
+Dockerfile           Release image: bun build → nginx + nginx.conf + dist/
+.dockerignore        Build context excludes (.git, node_modules, dist, …)
+bin/release.sh       Owner-present release to ghcr.io/zetlen/spatch (see CI/CD)
+mise.toml            Tool versions + tasks: image, preview-image, release
 tsconfig.json        TypeScript config
 bunfig.toml          Bun config
 .oxfmtrc.json        oxfmt config
@@ -160,14 +164,32 @@ Pre-commit hooks (lefthook): auto-formats with oxfmt, fixes lint, runs tsc.
   Courier New). Source: `../frontend-ci-image`.
 - CI: `.gitea/workflows/ci.yml` on PRs — typecheck, lint, format, unit tests,
   e2e (Chromium + WebKit), build.
-- Versioning: CalVer (`YYYY.MM.MICRO`), auto-bumped on deploy.
-- Deploy: `.gitea/workflows/deploy.yml` on push to `main` or
-  `workflow_dispatch`. Docker-copies `dist/` into nginx container, reloads.
-  Runs typecheck + lint + unit tests but not e2e. Site: `https://spatch.music`.
+- Versioning: CalVer (`YYYY.MM.MICRO`), bumped by `bin/release.sh` as a
+  commit on `main` (`vYYYY.MM.MICRO [skip ci]`) plus an annotated tag.
+- **Deploy is a release, not a push.** Nothing deploys on merge. The owner
+  runs `mise run release` on a clean, up-to-date `main`: it bumps CalVer,
+  builds the image from `Dockerfile` (bun build → nginx 1.29.8 with
+  `nginx.conf` and `dist/` baked in), pushes `ghcr.io/zetlen/spatch:<ver>`
+  and `:latest` (public package, anonymous pulls), tags, and prints the
+  `latest@digest` pin line. The estate repo pins that digest in
+  `compose/vps/docker-compose.yml`; a deploy is that pin-bump commit +
+  `bin/estate deploy vps` + the documented apply. Push auth to GHCR is
+  owner-present and short-lived (`gh auth refresh -s write:packages`; see
+  the script header) — there is no standing push credential anywhere.
+  Site: `https://spatch.music`.
+- Umami tracking values (`VITE_UMAMI_URL`, `VITE_UMAMI_SITE_ID`) are
+  `Dockerfile` build args with the production defaults; both are public
+  (they ship in the served HTML). The commit stamp in each HTML file comes
+  from the `GIT_SHA` build arg (no `.git` in the build context).
+- `mise run image` / `mise run preview-image` build and serve the image
+  locally on :8080 without pushing.
 - **Merge style: squash only.** The `main` branch is protected and only
   allows squash merges. Use `merge_style: "squash"` when merging via Gitea API.
 - Bot user `tiene`: admin collaborator, whitelisted for direct push to
-  protected `main`. Token in `PUSH_TOKEN` secret. Version bumps use `[skip ci]`.
+  protected `main`. Token in `PUSH_TOKEN` secret. Since the old push-to-main
+  deploy workflow was retired, the owner must also be on the push whitelist
+  for `bin/release.sh`'s version-bump commit to land (a rejected push aborts
+  the release before anything is published).
 - Gotcha: changing workflow triggers won't fire on the merge that introduces
   the change — Gitea evaluates from the target branch *before* merge lands.
 
